@@ -1,0 +1,55 @@
+stages:
+  - name: ingest
+    functions:
+      - name: local
+        input: null
+        return: Ingestion
+        params:
+          directory_path: "/Users/pranaviyer/Desktop/AstralisData"
+
+  - name: parse
+    functions:
+      - name: datalab
+        input: Ingestion
+        return: Document
+
+  - name: chunk
+    functions:
+      - name: sliding_window_chunking
+        input: Document
+        return: Document
+        params:
+          chunk_size: 600
+          overlap: 200
+          provider: "openai"
+          model: "gpt-4o"
+  
+  - name: embed
+    functions:
+      - name: embed
+        input: Entry
+        return: Embedding
+        params:
+          model: "text-embedding-3-large"
+          provider: "openai"
+          dimensions: 512
+  
+  - name: upsert
+    functions:
+      - name: upsert_embeddings
+        input: Embedding
+        return: Upsert
+        params:
+          collection_name: "test_collection"
+          dense_model_name: "text-embedding-3-large"
+          sparse_model_name: "bm25"
+          dimensions: 512
+
+pipeline:
+  version: "1.0"
+  description: "test_pipeline"
+  collection_name: "test_collection"
+
+storage:
+  type: "s3"
+  bucket_name: "astralis-data-4170a4f6"

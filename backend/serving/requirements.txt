@@ -1,0 +1,58 @@
+numpy
+aiofiles
+backoff
+beautifulsoup4  # for bs4
+aiohttp
+anthropic
+boto3
+cohere
+fastapi
+openai
+pandas
+pydantic
+qdrant-client
+requests
+sqlalchemy
+tenacity
+tiktoken
+transformers
+uvicorn
+crawl4ai
+python-dotenv  # for dotenv
+python-docx    # for docx
+fake-useragent
+fastembed
+feedparser
+filetype
+PyMuPDF       # for fitz
+ftfy
+gliner
+google-api-python-client # for googleapiclient
+httpx
+instructor
+joblib
+loguru
+networkx
+nltk
+ocrmypdf
+Pillow        # for PIL
+PyPDF2
+pypdfium2
+rapidfuzz
+scholarly
+scipy
+seaborn
+selenium
+sentence-transformers
+slack-sdk
+spacy
+torch
+tqdm
+urllib3
+voyageai
+PyYAML        # for yaml
+mysql-connector-python
+aiomysql
+gunicorn
+google-generativeai
+mistral_common

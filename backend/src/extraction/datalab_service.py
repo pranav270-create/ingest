@@ -1,0 +1,128 @@
+import sys
+from pathlib import Path
+import fitz
+import modal
+import io
+import pandas as pd
+from docx import Document as DocxDocument
+from PIL import Image
+
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+from src.pipeline.registry import FunctionRegistry
+from src.schemas.schemas import Document, Entry, Index, Ingestion, ParsedFeatureType, ParsingMethod, Scope, IngestionMethod
+from src.utils.datetime_utils import get_current_utc_datetime
+
+def convert_to_pdf(file_content, file_extension):
+    pdf_bytes = io.BytesIO()
+    if file_extension in ['.xlsx', '.xls']:
+        # Convert Excel to PDF
+        df = pd.read_excel(io.BytesIO(file_content))
+        df.to_pdf(pdf_bytes)
+    elif file_extension in ['.docx', '.doc']:
+        # Convert Word to PDF
+        doc = DocxDocument(io.BytesIO(file_content))
+        # This is a placeholder. You'll need a library like python-docx2pdf for actual conversion
+        # For now, we'll just extract text
+        full_text = "\n".join([para.text for para in doc.paragraphs])
+        pdf = fitz.open()
+        page = pdf.new_page()
+        page.insert_text((50, 50), full_text)
+        pdf.save(pdf_bytes)
+        pdf.close()
+    elif file_extension in ['.png', '.jpg', '.jpeg']:
+        # Convert Image to PDF
+        image = Image.open(io.BytesIO(file_content))
+        pdf = fitz.open()
+        page = pdf.new_page(width=image.width, height=image.height)
+        page.insert_image(page.rect, stream=file_content)
+        pdf.save(pdf_bytes)
+        pdf.close()
+    else:
+        # Assume it's already a PDF
+        return file_content
+    return pdf_bytes.getvalue()
+
+
+@FunctionRegistry.register("parse", "datalab")
+async def main_datalab(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Document]:
+    file_bytes = []
+    cls = modal.Cls.lookup("document-parsing-modal", "Model")
+    obj = cls()
+    for ingestion in ingestions:
+        ingestion.parsing_method = ParsingMethod.MARKER
+        ingestion.parsing_date = get_current_utc_datetime()
+        ingestion.parsed_feature_type = ParsedFeatureType.TEXT
+        # Update file reading to handle async
+        file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
+
+        # Convert to PDF if necessary
+        file_extension = Path(ingestion.file_path).suffix.lower()
+        pdf_content = convert_to_pdf(file_content, file_extension)
+        file_bytes.append(pdf_content)
+        
+        # Extract metadata
+        with fitz.open(stream=io.BytesIO(pdf_content), filetype="pdf") as pdf:
+            ingestion.metadata = pdf.metadata
+    
+    all_documents = []
+    async for ret in obj.parse_document.map.aio(file_bytes, return_exceptions=True):
+        document = Document(entries=[])
+        if isinstance(ret, Exception):
+            print(f"Error processing document: {ret}")
+            continue
+        for key, value in ret["result"].items():
+            page = Entry(ingestion=ingestion, string=value, index_numbers=[Index(primary=key)])
+            document.entries.append(page)
+        all_documents.append(document)
+    return all_documents
+
+
+@FunctionRegistry.register("parse", "datalab_batch")
+async def batch_datalab(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Document]:
+    cls = modal.Cls.lookup("document-parsing-modal", "Model")
+    obj = cls()
+
+    # Prepare all PDFs
+    all_pdf_bytes = []
+    documents = [Document(entries=[]) for _ in ingestions]
+
+    # First pass: collect all PDFs and process ingestions
+    for ing_idx, ingestion in enumerate(ingestions):
+        # Set up ingestion metadata
+        ingestion.parsing_method = ParsingMethod.MARKER
+        ingestion.parsing_date = get_current_utc_datetime()
+        ingestion.parsed_feature_type = ParsedFeatureType.TEXT
+
+        # Get file content and process
+        file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
+        
+        # Convert to PDF if necessary
+        file_extension = Path(ingestion.file_path).suffix.lower()
+        pdf_content = convert_to_pdf(file_content, file_extension)
+        all_pdf_bytes.append(pdf_content)
+
+        # Extract metadata
+        with fitz.open(stream=io.BytesIO(pdf_content), filetype="pdf") as pdf:
+            ingestion.metadata = pdf.metadata
+
+    # Process all PDFs in one batch
+    idx = 0
+    async for ret in obj.parse_document.map.aio(all_pdf_bytes, return_exceptions=True):
+        if isinstance(ret, Exception):
+            print(f"Error processing document {idx}: {ret}")
+            idx += 1
+            continue
+
+        # Create entries and add to correct document
+        for key, value in ret["result"].items():
+            entry = Entry(
+                ingestion=ingestions[idx],
+                string=value,
+                index_numbers=[Index(primary=key)]
+            )
+            documents[idx].entries.append(entry)
+        idx += 1
+
+    return [doc for doc in documents if doc.entries]  # Return only documents that have entries
+
