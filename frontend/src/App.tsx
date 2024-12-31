@@ -1,16 +1,37 @@
-import { Routes, Route, BrowserRouter, Outlet } from 'react-router-dom';
+import { Routes, Route, BrowserRouter, Outlet, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
 import InternalDashboard from './internal/InternalDashboard';
 import Header from './main/Header';
 import { Context } from "./main/Context";
+import Login from './main/Login';
 
 import './App.css';
 
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+  
+  return <>{children}</>;
+};
+
 const App: React.FC = () => {  
   const routes = [   
-    { path: '/', element: <InternalDashboard /> },
-    { path: '/internal/*', element: <InternalDashboard /> },
+    { 
+      path: '/', 
+      element: <ProtectedRoute><InternalDashboard /></ProtectedRoute> 
+    },
+    { 
+      path: '/internal/*', 
+      element: <ProtectedRoute><InternalDashboard /></ProtectedRoute> 
+    },
+    {
+      path: '/login',
+      element: <Login />
+    },
   ];
 
 	useEffect(() => {

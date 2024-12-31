@@ -7,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from serving.etl import router as etl_router
+from serving.routers.cron import router as cron_router
+from serving.routers.qdrant_flow import router as qdrant_router
+from serving.routers.sql_flow import router as sql_router
+from serving.routers.user import router as user_router
 from serving.middleware import base_middleware
 
 
@@ -21,7 +24,10 @@ app.add_middleware(
 )
 app.middleware("http")(base_middleware)
 
-app.include_router(etl_router, prefix="/api/ml")
+app.include_router(cron_router, prefix="/api/ml")
+app.include_router(qdrant_router, prefix="/api/ml")
+app.include_router(sql_router, prefix="/api/ml")
+app.include_router(user_router, prefix="/api/ml")
 
 @app.get("/api/ml/health")
 async def health_check():

@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "astralis-2024"
+  },
+  "targets": {
+    "astralis-2024": {
+      "hosting": {
+        "dev": [
+          "dev-astralis-2024"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

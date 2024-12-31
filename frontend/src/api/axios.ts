@@ -8,7 +8,7 @@ interface CustomAxiosRequestConfig extends AxiosRequestConfig {
 
 // Create axios instance with default config
 const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/ml',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://internal-app-curbnigfiq-uc.a.run.app/api/ml',
   timeout: 240000,
   headers: {
     'Content-Type': 'application/json',

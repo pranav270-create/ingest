@@ -35,19 +35,14 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends --allow-unauthentica
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Set PYTHONPATH to include the parent directory of src
+# Set PYTHONPATH to include both src and serving directories
 ENV PYTHONPATH="/app"
 
-# Copy requirements and install dependencies
-COPY requirements.txt .
 RUN pip install --upgrade pip
 
 # Core Python utilities and basic dependencies
 RUN pip install --no-cache-dir \
     numpy \
-    pandas \
-    scipy \
-    PyYAML \
     python-dotenv \
     aiofiles \
     backoff \
@@ -73,16 +68,6 @@ RUN pip install --no-cache-dir \
     aiomysql \
     boto3
 
-# ML and AI core
-RUN pip install --no-cache-dir \
-    torch \
-    transformers \
-    tiktoken \
-    spacy \
-    nltk \
-    networkx \
-    rapidfuzz
-
 # ML and AI models/services
 RUN pip install --no-cache-dir \
     anthropic \
@@ -95,36 +80,6 @@ RUN pip install --no-cache-dir \
     fastembed \
     qdrant-client \
     instructor
-
-# Document processing
-RUN pip install --no-cache-dir \
-    python-docx \
-    PyMuPDF \
-    PyPDF2 \
-    pypdfium2 \
-    Pillow \
-    ocrmypdf \
-    ftfy
-
-# Web scraping and automation
-RUN pip install --no-cache-dir \
-    beautifulsoup4 \
-    selenium \
-    fake-useragent \
-    feedparser \
-    filetype \
-    scholarly \
-    crawl4ai \
-    slack-sdk \
-    gliner
-
-# Data visualization
-RUN pip install --no-cache-dir \
-    seaborn
-
-# Math and optimization
-RUN pip install --no-cache-dir \
-    ortools
 
 # Security and authentication
 RUN pip install --no-cache-dir \
@@ -139,36 +94,28 @@ RUN pip install --no-cache-dir \
     fastapi-utils \
     typing-inspect
 
-# Eval code
+# Google Cloud
 RUN pip install --no-cache-dir \
-    autoevals
-
-# S3 code
-RUN pip install --no-cache-dir \
-    aioboto3 \
-    termcolor
-
-# Gmail code
-RUN pip install --no-cache-dir \
-    google-api-python-client \
-    google-auth-oauthlib \
+    aiohttp \
+    cloud-sql-python-connector \
     google-auth \
-    python-dateutil \
-    sentence-transformers
-
-# Eval code
-RUN pip install --no-cache-dir \
-    umap-learn
+    google-cloud-storage \
+    pg8000 \
+    psycopg2-binary
+    
 
 # Copy the source code
-COPY . /app/src
+COPY . .
 
-WORKDIR /app/src
+WORKDIR /app
 
-EXPOSE 8000
+# print pwd
+RUN pwd
+
+EXPOSE 8080
 
 CMD exec gunicorn serving.main_prod:app \
-    --bind :8000 \
+    --bind :8080 \
     --workers 1 \
     --timeout 300 \
     --worker-class uvicorn.workers.UvicornWorker \
