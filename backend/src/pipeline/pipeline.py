@@ -47,7 +47,6 @@ class PipelineOrchestrator:
         for stage in self.config.get('stages', []):
             for function in stage.get('functions', []):
                 FunctionRegistry.register(stage['name'], function['name'])
-        print(f"Registered functions: {FunctionRegistry._registry}")
 
     def setup_storage(self):
         storage_config = self.config.get('storage', {})

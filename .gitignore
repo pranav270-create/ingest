@@ -24,6 +24,7 @@ wheels/
 
 # DATA
 *.json
+*.jsonl
 *.csv
 *.xlsx
 *.xls
