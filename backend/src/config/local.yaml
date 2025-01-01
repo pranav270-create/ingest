@@ -9,7 +9,7 @@ stages:
 
   - name: parse
     functions:
-      - name: datalab
+      - name: datalab_batch
         input: Ingestion
         return: Document
 
@@ -24,6 +24,19 @@ stages:
           provider: "openai"
           model: "gpt-4o"
   
+  - name: featurize
+    functions:
+      - name: featurize_model
+        input: Document
+        return: Entry
+        params:
+          feature_class_name: "summarize_entry"
+          basemodel_name: "Entry"
+          provider: "openai"
+          functionality: "chat"
+          model: "gpt-4o-mini"
+          max_tokens: 1000
+
   - name: embed
     functions:
       - name: embed
@@ -49,6 +62,9 @@ pipeline:
   version: "1.0"
   description: "test_pipeline"
   collection_name: "test_collection"
+  # pipeline_id: 25
+  # resume_from_step: 2
+  # fork_pipeline: true
 
 storage:
   type: "s3"

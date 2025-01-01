@@ -15,9 +15,14 @@ from serving.middleware import base_middleware
 
 
 app = FastAPI()
+origins = [
+    "http://localhost:5173",
+    "http://localhost:8080",
+    "https://dev.astralis.sh"
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify allowed origins
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

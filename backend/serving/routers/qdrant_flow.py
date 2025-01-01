@@ -28,12 +28,7 @@ async def gather_qdrant_stats(output_file: str):
         "timestamp": datetime.now().isoformat(),
         "collections": await fetch_collection_metadata(client)
     }
-
-    # Ensure directory exists
-    output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=4)
     print(f"Qdrant statistics saved to {output_file}")
 

@@ -8,8 +8,7 @@ fi
 if [ -z "$1" ]; then
     echo "Running with Uvicorn..."
     source .env
-    cd serving
-    uvicorn main_prod:app --reload --port 8080 --host 0.0.0.0
+    uvicorn serving.main_prod:app --reload --port 8000 --host 0.0.0.0
 else
     echo "Running with Docker..."
     # Check if Dockerfile exists

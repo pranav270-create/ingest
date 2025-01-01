@@ -6,6 +6,7 @@ import io
 import pandas as pd
 from docx import Document as DocxDocument
 from PIL import Image
+import os
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -53,6 +54,12 @@ async def main_datalab(ingestions: list[Ingestion], write=None, read=None, **kwa
         ingestion.parsing_method = ParsingMethod.MARKER
         ingestion.parsing_date = get_current_utc_datetime()
         ingestion.parsed_feature_type = ParsedFeatureType.TEXT
+
+        # Set parsed_file_path (similar to ocr_service.py)
+        if not ingestion.parsed_file_path:
+            base_path = os.path.splitext(ingestion.file_path)[0]
+            ingestion.parsed_file_path = f"{base_path}_datalab.txt"
+
         # Update file reading to handle async
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
 
@@ -71,9 +78,22 @@ async def main_datalab(ingestions: list[Ingestion], write=None, read=None, **kwa
         if isinstance(ret, Exception):
             print(f"Error processing document: {ret}")
             continue
+
+        # Collect all text for saving to file
+        all_text = []
         for key, value in ret["result"].items():
             page = Entry(ingestion=ingestion, string=value, index_numbers=[Index(primary=key)])
             document.entries.append(page)
+            all_text.append(value)
+
+        # Save combined text to file (similar to ocr_service.py)
+        combined_text = "\n\n=== PAGE BREAK ===\n\n".join(all_text)
+        if write:
+            await write(ingestion.parsed_file_path, combined_text, mode="w")
+        else:
+            with open(ingestion.parsed_file_path, "w", encoding='utf-8') as f:
+                f.write(combined_text)
+
         all_documents.append(document)
     return all_documents
 
@@ -86,6 +106,7 @@ async def batch_datalab(ingestions: list[Ingestion], write=None, read=None, **kw
     # Prepare all PDFs
     all_pdf_bytes = []
     documents = [Document(entries=[]) for _ in ingestions]
+    document_texts = {idx: [] for idx in range(len(ingestions))}  # Track texts for each document
 
     # First pass: collect all PDFs and process ingestions
     for ing_idx, ingestion in enumerate(ingestions):
@@ -93,6 +114,11 @@ async def batch_datalab(ingestions: list[Ingestion], write=None, read=None, **kw
         ingestion.parsing_method = ParsingMethod.MARKER
         ingestion.parsing_date = get_current_utc_datetime()
         ingestion.parsed_feature_type = ParsedFeatureType.TEXT
+
+        # Set parsed_file_path (similar to ocr_service.py)
+        if not ingestion.parsed_file_path:
+            base_path = os.path.splitext(ingestion.file_path)[0]
+            ingestion.parsed_file_path = f"{base_path}_datalab.txt"
 
         # Get file content and process
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
@@ -122,6 +148,17 @@ async def batch_datalab(ingestions: list[Ingestion], write=None, read=None, **kw
                 index_numbers=[Index(primary=key)]
             )
             documents[idx].entries.append(entry)
+            document_texts[idx].append(value)  # Collect text for saving
+
+        # Save combined text to file (similar to ocr_service.py)
+        if document_texts[idx]:
+            combined_text = "\n\n=== PAGE BREAK ===\n\n".join(document_texts[idx])
+            if write:
+                await write(ingestions[idx].parsed_file_path, combined_text, mode="w")
+            else:
+                with open(ingestions[idx].parsed_file_path, "w", encoding='utf-8') as f:
+                    f.write(combined_text)
+
         idx += 1
 
     return [doc for doc in documents if doc.entries]  # Return only documents that have entries

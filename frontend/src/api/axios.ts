@@ -8,22 +8,12 @@ interface CustomAxiosRequestConfig extends AxiosRequestConfig {
 
 // Create axios instance with default config
 const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://internal-app-curbnigfiq-uc.a.run.app/api/ml',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/ml',
   timeout: 240000,
   headers: {
     'Content-Type': 'application/json',
   }
 });
-
-// Store the token setter function
-let setTokenCallback: ((token: string | null) => void) | null = null;
-
-// Function to initialize the axios instance with auth context
-export const initializeApi = (
-  setToken: (token: string | null) => void
-) => {
-  setTokenCallback = setToken;
-};
 
 // Request interceptor
 api.interceptors.request.use(
@@ -59,11 +49,6 @@ api.interceptors.response.use(
         (error.response?.data?.detail?.includes('Invalid token') || 
          error.response?.data?.detail?.includes('expired') ||
          error.response?.data?.detail?.includes('Not authenticated'))) {
-      // Clear token and redirect to login
-      localStorage.removeItem('authToken');
-      if (setTokenCallback) {
-        setTokenCallback(null);
-      }
       // Only redirect if not already on login page
       if (!window.location.pathname.includes('/login')) {
         window.location.pathname = '/login';
@@ -77,44 +62,25 @@ api.interceptors.response.use(
   }
 );
 
-// Helper function to get current token
-export const getAuthToken = () => localStorage.getItem('authToken');
-
 export const apiService = {
   get: <T>(path: string, config: CustomAxiosRequestConfig = {}) =>
     api.get<any, T>(path, {
       ...config,
-      headers: {
-        ...config.headers,
-        Authorization: `Bearer ${getAuthToken()}`
-      }
     }),
 
   post: <T>(path: string, data?: any, config: CustomAxiosRequestConfig = {}) =>
     api.post<any, T>(path, data, {
       ...config,
-      headers: {
-        ...config.headers,
-        Authorization: `Bearer ${getAuthToken()}`
-      }
     }),
 
   put: <T>(path: string, data?: any, config: CustomAxiosRequestConfig = {}) =>
     api.put<any, T>(path, data, {
       ...config,
-      headers: {
-        ...config.headers,
-        Authorization: `Bearer ${getAuthToken()}`
-      }
     }),
 
   delete: <T>(path: string, config: CustomAxiosRequestConfig = {}) =>
     api.delete<any, T>(path, {
       ...config,
-      headers: {
-        ...config.headers,
-        Authorization: `Bearer ${getAuthToken()}`
-      }
     }),
 };
 
