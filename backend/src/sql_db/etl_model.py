@@ -12,8 +12,6 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.sql_db.database import get_gcp_engine
-
 
 class Base(DeclarativeBase):
     pass
@@ -266,8 +264,9 @@ if __name__ == '__main__':
     from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
     from sqlalchemy.future import select
     from sqlalchemy import text
+    from src.sql_db.database_simple import get_engine
 
-    engine = get_gcp_engine("tinypipeline")
+    engine = get_engine("tinypipeline")
     Session = sessionmaker(bind=engine)
     session = Session()
 

@@ -5,7 +5,7 @@ from sqlalchemy import delete
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.sql_db.database import get_async_session
+from src.sql_db.database_simple import get_async_session
 from src.sql_db.etl_model import Entry, Ingest, ProcessingPipeline, ProcessingStep, ingest_pipeline
 from src.vector_db.qdrant_utils import remove_points_by_filter
 from src.vector_db.qdrant_utils import get_qdrant_client

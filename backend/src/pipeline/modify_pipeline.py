@@ -10,7 +10,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.schemas.schemas import ContentType
 from src.vector_db.qdrant_utils import async_get_qdrant_client, async_update_payload_by_filter
-from src.sql_db.database import get_async_session, get_async_session_maker
+from src.sql_db.database_simple import get_async_session
 from src.sql_db.etl_model import Entry, Ingest
 
 
@@ -24,11 +24,8 @@ async def update_content_type(collection_name: str, old_type: ContentType, new_t
     # Get Qdrant client
     qdrant_client = await async_get_qdrant_client()
 
-    # Get session maker
-    session_maker = get_async_session_maker("research_etl")
-
     try:
-        async with session_maker() as session:
+        async with get_async_session() as session:
             try:
                 print("Updating entries in SQL database...")
                 # Query Ingest directly

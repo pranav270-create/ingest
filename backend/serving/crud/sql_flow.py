@@ -8,7 +8,7 @@ import logging
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from src.sql_db.database import get_async_session
+from src.sql_db.database_simple import get_async_session
 from src.vector_db.qdrant_utils import remove_points_by_filter, get_qdrant_client
 
 base_path = Path(__file__).parent.parent

@@ -21,7 +21,7 @@ from src.sql_db.etl_crud import (
     get_specific_processing_step,
     update_ingests_from_results,
 )
-from src.sql_db.database import get_async_session
+from src.sql_db.database_simple import get_async_session
 
 
 def parse_args():

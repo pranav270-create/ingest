@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from src.llm_utils.utils import Provider
 from src.retrieval.embed_text import async_embed_text
 from src.schemas.schemas import EmbeddedFeatureType, FormattedScoredPoints, Ingestion
-from src.sql_db.database import get_async_session
+from src.sql_db.database_simple import get_async_session
 from src.sql_db.etl_model import Entry
 from src.vector_db.qdrant_utils import get_bm25_model
 

@@ -8,7 +8,7 @@ import logging
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from src.sql_db.database import get_async_session
+from src.sql_db.database_simple import get_async_session
 from serving.routers.qdrant_flow import gather_qdrant_stats
 from serving.routers.sql_flow import get_overview_stats
 from serving.crud.sql_flow import generate_distribution_stats
