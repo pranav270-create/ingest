@@ -22,7 +22,7 @@ def get_engine(db_name: str):
     return create_engine(get_database_url(db_name), echo=True)
 
 # Create the async engine
-engine = get_engine(os.environ.get('ETL_DB_NAME'))
+engine = get_engine("energy_data")
 SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 
 # Dependency to get a session for the energy database
