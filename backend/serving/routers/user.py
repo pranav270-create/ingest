@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from jose import jwt
@@ -24,7 +24,6 @@ class LoginResponse(BaseModel):
 
 @router.post("/user/login", response_model=LoginResponse)
 async def login(user: User) -> LoginResponse:
-    print(user)
     if user.username == "admin@astralis.sh" and user.password == "astralis&admin":
         # Create token with expiration
         token = jwt.encode(
@@ -41,7 +40,4 @@ async def login(user: User) -> LoginResponse:
             token=token
         )
     else:
-        return LoginResponse(
-            status="error",
-            message="Invalid credentials"
-        )
+        raise HTTPException(status_code=401, detail="Invalid credentials")

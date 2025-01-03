@@ -53,15 +53,15 @@ stages:
         input: Embedding
         return: Upsert
         params:
-          collection_name: "test_collection"
+          collection_name: "test_collection_kia"
           dense_model_name: "text-embedding-3-large"
           sparse_model_name: "bm25"
           dimensions: 512
 
 pipeline:
   version: "1.0"
-  description: "test_pipeline"
-  collection_name: "test_collection"
+  description: "test_pipeline_kia"
+  collection_name: "test_collection_kia"
   # pipeline_id: 25
   # resume_from_step: 2
   # fork_pipeline: true
