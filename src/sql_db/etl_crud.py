@@ -213,7 +213,7 @@ async def clone_pipeline(session: AsyncSession,
     # Clone ingest associations using explicit relationships
     for ingest in ingests:
         # Create the relationship using the association table
-        stmt = insert(ingest_pipeline).values({
+        stmt = pg_insert(ingest_pipeline).values({
             "ingest_id": ingest.id,
             "pipeline_id": new_pipeline.id
         }).on_conflict_do_nothing()

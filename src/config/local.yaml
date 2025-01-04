@@ -60,11 +60,11 @@ stages:
 
 pipeline:
   version: "1.0"
-  description: "test_pipeline_kia"
+  description: "test_pipeline_kia_new"
   collection_name: "test_collection_kia"
-  # pipeline_id: 25
-  # resume_from_step: 2
-  # fork_pipeline: true
+  pipeline_id: 64
+  resume_from_step: 3
+  fork_pipeline: true
 
 storage:
   type: "s3"
