@@ -1,13 +1,12 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
-from src.sql_db.etl_model import Ingest, ProcessingStep, Entry, ProcessingPipeline, ingest_pipeline, StepType
+from sqlalchemy import insert, select, inspect, and_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 import hashlib
 from datetime import datetime
 import json
-from sqlalchemy import insert, select, inspect, and_
-from sqlalchemy.orm import selectinload
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from src.sql_db.etl_model import Ingest, ProcessingStep, Entry, ProcessingPipeline, ingest_pipeline, StepType
 
 async def create_or_update_ingest(session: AsyncSession, data: dict, pipeline=None) -> Ingest:
     # Get all column names of the Ingest model

@@ -1,11 +1,10 @@
-from sqlalchemy import DateTime, String, Text, func, BigInteger, Float, Integer, null, ForeignKey, JSON, Boolean, Enum as SQLAlchemyEnum, text
+from sqlalchemy import DateTime, String, Text, func, BigInteger, Integer, ForeignKey, JSON, Boolean, Enum as SQLAlchemyEnum, text, Table, Column
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.schema import UniqueConstraint, Index
 from sqlalchemy.orm import validates
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from datetime import datetime
 from typing import Any, Optional, List
-from sqlalchemy import Table, Column
 from enum import Enum as PythonEnum
 import sys
 from pathlib import Path

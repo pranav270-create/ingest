@@ -1,4 +1,3 @@
-from datetime import datetime
 from google_labs_html_chunker.html_chunker import HtmlChunker
 import sys
 from pathlib import Path
@@ -7,6 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.schemas.schemas import Document, Entry, Ingestion, ParsedFeatureType, ParsingMethod
 from src.pipeline.registry import FunctionRegistry
+from src.utils.datetime_utils import get_current_utc_datetime
 
 
 @FunctionRegistry.register("parse", "google_labs_html_chunker")
@@ -31,7 +31,7 @@ async def parse_html(ingestions: list[Ingestion], max_words_per_aggregate_passag
             with open(parsed_file_path, "w") as f:
                 f.write(all_text)
         ingestion.parsing_method = ParsingMethod.GOOGLE_LABS_HTML_CHUNKER
-        ingestion.parsing_date = datetime.now().isoformat()
+        ingestion.parsing_date = get_current_utc_datetime()
         ingestion.parsed_feature_type = ParsedFeatureType.TEXT
         ingestion.parsed_file_path = parsed_file_path
         entry = Entry(ingestion=ingestion, string=all_text, index_numbers=None, citations=None)

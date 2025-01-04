@@ -7,8 +7,7 @@ import asyncio
 import json
 import requests
 import logging
-import os
-import PyPDF2
+import fitz
 import io
 import random
 from urllib.parse import urlparse, urlunparse
@@ -80,7 +79,7 @@ async def handle_pdf(url: str, write=None, content_type=ContentType.OTHER, creat
     # wget the url
     pdf_content = requests.get(url).content
     pdf_file = io.BytesIO(pdf_content)
-    pdf_reader = PyPDF2.PdfReader(pdf_file)
+    pdf_reader = fitz.open(stream=pdf_file, filetype="pdf")
     metadata = pdf_reader.metadata
     pdf_path = f"{urlparse(url).netloc}-{random.randint(1000, 9999)}.pdf"
     if write:

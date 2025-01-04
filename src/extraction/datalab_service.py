@@ -1,11 +1,11 @@
 import sys
 from pathlib import Path
-import fitz
 import modal
 import io
 import pandas as pd
 from docx import Document as DocxDocument
 from PIL import Image
+import fitz
 import os
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))

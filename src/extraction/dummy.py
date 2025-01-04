@@ -1,5 +1,3 @@
-from datetime import datetime
-from google_labs_html_chunker.html_chunker import HtmlChunker
 import sys
 from pathlib import Path
 

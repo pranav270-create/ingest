@@ -1,4 +1,3 @@
-import asyncio
 import yaml
 import sys
 from pathlib import Path

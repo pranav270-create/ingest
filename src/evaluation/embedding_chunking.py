@@ -1,12 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import json
-import time
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from sqlalchemy.dialects.mysql import JSON
-from sqlalchemy.sql import func, cast
 import sys
 from pathlib import Path
 

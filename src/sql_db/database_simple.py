@@ -2,7 +2,6 @@ import os
 from sqlalchemy import create_engine    
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import scoped_session
-import psycopg2
 from sqlalchemy import create_engine
 
 DB_HOST = os.environ.get('AWS_DB_HOST')

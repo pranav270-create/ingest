@@ -9,7 +9,6 @@ import pandas as pd
 from openai import AsyncOpenAI
 from qdrant_client import AsyncQdrantClient
 from tqdm import tqdm
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))

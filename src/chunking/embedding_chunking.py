@@ -1,11 +1,8 @@
 from typing import Any
 from functools import lru_cache
 import numpy as np
-import nltk
 from sentence_transformers import SentenceTransformer
 import sys
-import re
-import spacy
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))

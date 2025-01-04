@@ -1,10 +1,8 @@
 import sys
 from pathlib import Path
 import fitz
-import modal
 import io
 import os
-from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 

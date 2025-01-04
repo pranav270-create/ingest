@@ -1,10 +1,9 @@
-import base64
-import re
-from io import BytesIO
 import modal
-from marker.convert import convert_single_pdf
-from marker.models import load_all_models
 from modal import App, build, enter, method
+from marker.converters.pdf import PdfConverter
+from marker.models import create_model_dict
+from marker.output import text_from_rendered
+from marker.config.parser import ConfigParser
 
 app = App("document-parsing-modal")
 MINUTES = 60  # seconds
@@ -35,8 +34,6 @@ image = (
     )
 )
 
-
-# TODO: Fix for cuDNN error on the backend
 @app.cls(
     gpu="A100",
     image=image,
@@ -47,33 +44,26 @@ image = (
     timeout=24 * HOURS,
 )
 class Model:
-    model_list: list = None
+    config = {
+        "use_llm": True,
+        "output_format": "json",
+    }
+    config_parser = ConfigParser(config)
 
     @build()
     @enter()
     def load_model(self):
-        model_lst = load_all_models()
-        self.model_list = model_lst
+        self.converter = PdfConverter(
+            config=self.config_parser.generate_config_dict(),
+            artifact_dict=create_model_dict(),
+            processor_list=self.config_parser.get_processors(),
+            renderer=self.config_parser.get_renderer(),
+        )
 
     @method()
     def parse_document(self, fname: bytes) -> dict:
-        full_text, images, out_meta = convert_single_pdf(
-            fname, self.model_list, max_pages=None, langs=["English"], batch_multiplier=1, start_page=1
-        )
-
-        # Find all page numbers and their corresponding text
-        page_pattern = r"\[ Page Number: (\d+) \]\n-{17}\n\n([\s\S]*?)(?=\[ Page Number: \d+ \]|\Z)"
-        matches = re.findall(page_pattern, full_text, re.DOTALL)
-
-        # Create a dictionary of page numbers and their corresponding text
-        text_by_page = {int(page_num) + 1: text.strip() for page_num, text in matches}
-
-        # Convert images to base64 encoded strings
-        image_strings = {}
-        for filename, image in images.items():
-            buffered = BytesIO()
-            image.save(buffered, format="PNG")
-            img_str = base64.b64encode(buffered.getvalue()).decode()
-            image_strings[filename] = img_str
-
-        return {"result": text_by_page, "images": image_strings, "metadata": out_meta}
+        # save the file to a temp folder
+        with open("temp.pdf", "wb") as f:
+            f.write(fname)
+        rendered = self.converter("temp.pdf")
+        return rendered.model_dump_json(exclude=["metadata"], indent=2)

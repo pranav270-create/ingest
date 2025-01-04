@@ -4,7 +4,6 @@ from itertools import chain
 from pathlib import Path
 from typing import Optional, Union
 
-from fastapi import HTTPException
 from fastembed import SparseEmbedding
 from httpx import ReadTimeout
 from qdrant_client import AsyncQdrantClient
@@ -153,9 +152,9 @@ async def get_scored_points(
         return results
     except (ResponseHandlingException, ReadTimeout) as e:
         error_message = f"Error during Qdrant search: {str(e)}"
-        raise HTTPException(status_code=500, detail=error_message) from e
+        raise ValueError(error_message) from e
     except ValueError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise ValueError(str(e)) from e
 
 
 async def search_vector_db(

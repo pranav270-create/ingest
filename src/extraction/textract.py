@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -72,6 +71,7 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
     response = textract_client.analyze_document(Document={"Bytes": image_bytes}, FeatureTypes=["TABLES", "LAYOUT"])
 
     doc = trp.Document(response)
+    doc_pages, block_map = doc._parseDocumentPagesAndBlockMap()
     parsed_elements = []
 
     for page in doc.pages:
@@ -115,7 +115,7 @@ def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> di
     Process a PDF file: extract Ingestion data, convert to images, and extract content.
     """
     ingestion_data = get_ingestion_data(pdf_path, scope, content_type)
-    image_paths = convert_pdf_to_images(pdf_path, output_dir)
+    image_paths = convert_pdf_to_images(pdf_path, "output")
 
     page_contents = []
     with ThreadPoolExecutor(max_workers=20) as executor:
@@ -125,3 +125,10 @@ def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> di
     return ingestion_data, page_contents
 
 
+if __name__ == "__main__":
+    pdf_path = "ColbertV2.pdf"
+    scope = Scope.EXTERNAL
+    content_type = ContentType.OTHER_ARTICLES
+    ingestion_data, page_contents = textract_parse(pdf_path, scope, content_type)
+    print(ingestion_data)
+    print(page_contents)
