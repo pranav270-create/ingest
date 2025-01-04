@@ -8,6 +8,7 @@ setup(
     python_requires=">=3.9",
     install_requires=[
         "sqlalchemy~=2.0.36",
+        "psycopg2-binary",
         "qdrant-client",
         "anthropic~=0.42.0",
         "google-generativeai>=0.7.0",
@@ -24,6 +25,7 @@ setup(
         "numpy",
         "pandas",
         "tqdm",
+        "modal",
         "marker-pdf",
         "instructor",
         "aiofiles",
@@ -35,6 +37,7 @@ setup(
         "crawl4ai",
         "python-dotenv",
         "sentence-transformers~=3.3.1",
+        "spacy",
         "nltk",
         "scikit-learn",
         "umap-learn",

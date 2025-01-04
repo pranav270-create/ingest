@@ -9,7 +9,7 @@ stages:
 
   - name: parse
     functions:
-      - name: datalab_batch
+      - name: ocr2_0_batch
         input: Ingestion
         return: Document
 
