@@ -297,6 +297,7 @@ class Entry(BaseModel):
         None  # Null if we embed whole document or cross-doc summary. Represents range for continous time items; int for discrete. # noqa
     )
     bounding_box: Optional[BoundingBox] = None
+    block_type: Optional[str] = None
 
 
 @SchemaRegistry.register("Document")

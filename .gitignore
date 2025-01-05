@@ -29,6 +29,7 @@ wheels/
 *.xlsx
 *.xls
 *.pdf
+*.png
 
 # Virtual Environment
 venv/

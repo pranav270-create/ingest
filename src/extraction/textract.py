@@ -4,10 +4,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from datetime import datetime
-
+import json
 import boto3
 import fitz
 import trp
+from PIL import Image, ImageDraw, ImageFont
+import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod
@@ -54,6 +56,71 @@ def convert_pdf_to_images(pdf_path: str, output_dir: str) -> list[str]:
     return image_paths
 
 
+def visualize_page_results(image_path: str, parsed_elements: list[Entry], output_path: str = None) -> None:
+    """
+    Visualize the parsed elements by drawing bounding boxes over the original image.
+    """
+    # Open the image
+    image = Image.open(image_path)
+    draw = ImageDraw.Draw(image)
+    
+    # Get image dimensions
+    width, height = image.size
+    
+    # Try to load a font, fall back to default if not available
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
+    except:
+        font = ImageFont.load_default()
+
+    # Colors for different types of elements
+    colors = {
+        "figure": "red",
+        "table": "blue",
+        "text": "green",
+        "word": "yellow",
+        "line": "orange",
+        "title": "purple",
+        "header": "cyan",
+        "footer": "magenta",
+        "section_header": "pink",
+        "page_number": "brown",
+        "list": "teal",
+        "key_value": "lime",
+        "combined_text": "white"  # Won't be visible since bounding box is 0
+    }
+    
+    for element in parsed_elements:
+        # Skip elements with zero bounding box (combined text)
+        if element.bounding_box.width == 0 and element.bounding_box.height == 0:
+            continue
+            
+        # Convert relative coordinates to absolute pixels
+        left = element.bounding_box.left * width
+        top = element.bounding_box.top * height
+        right = left + (element.bounding_box.width * width)
+        bottom = top + (element.bounding_box.height * height)
+        
+        # Get color based on block_type, default to white if not found
+        color = colors.get(element.block_type, "white")
+            
+        # Draw rectangle
+        draw.rectangle([left, top, right, bottom], outline=color, width=2)
+        
+        # Add label with block type and text
+        label = element.block_type
+        draw.text((left, max(0, top-20)), label, fill=color, font=font)
+    
+    # Display or save the result
+    if output_path:
+        image.save(output_path)
+    else:
+        plt.figure(figsize=(20, 20))
+        plt.imshow(image)
+        plt.axis('off')
+        plt.show()
+
+
 def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any]:
     """
     Extract content from a single page image using AWS Textract.
@@ -68,45 +135,77 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
     with open(image_path, "rb") as image_file:
         image_bytes = image_file.read()
 
-    response = textract_client.analyze_document(Document={"Bytes": image_bytes}, FeatureTypes=["TABLES", "LAYOUT"])
+    response = textract_client.analyze_document(Document={"Bytes": image_bytes}, FeatureTypes=["LAYOUT"])
 
     doc = trp.Document(response)
     doc_pages, block_map = doc._parseDocumentPagesAndBlockMap()
+    # dump to json for debugging
+    with open(f"output_{page_number}.json", "w") as f:
+        json.dump(doc_pages, f, indent=2)
+    
     parsed_elements = []
-
+    
     for page in doc.pages:
         combined_text = ""
         element_index = 1
+        
         for block in page.blocks:
             bbox = block["Geometry"]["BoundingBox"]
-            if block["BlockType"] == "LINE":
-                combined_text += block["Text"] + " "
-            elif block["BlockType"] == "LAYOUT_FIGURE":
+            block_type = block["BlockType"].lower()  # Convert to lowercase for consistency
+            
+            # Handle different block types
+            if block_type in ["line", "word"]:
                 parsed_elements.append(
                     Entry(
-                        string="figure",
+                        string=block["Text"],
                         index_numbers=[Index(primary=page_number, secondary=element_index)],
-                        bounding_box=BoundingBox(left=bbox["Left"], top=bbox["Top"], width=bbox["Width"], height=bbox["Height"]),
+                        bounding_box=BoundingBox(
+                            left=bbox["Left"], 
+                            top=bbox["Top"], 
+                            width=bbox["Width"], 
+                            height=bbox["Height"]
+                        ),
+                        block_type=block_type
+                    )
+                )
+                if block_type == "line":
+                    combined_text += block["Text"] + " "
+                element_index += 1
+            
+            # Handle all LAYOUT types
+            elif block_type.startswith("layout_"):
+                layout_type = block_type.replace("layout_", "")
+                display_text = block.get("Text", layout_type.upper())  # Use block text if available, otherwise type
+                
+                parsed_elements.append(
+                    Entry(
+                        string=display_text,
+                        index_numbers=[Index(primary=page_number, secondary=element_index)],
+                        bounding_box=BoundingBox(
+                            left=bbox["Left"], 
+                            top=bbox["Top"], 
+                            width=bbox["Width"], 
+                            height=bbox["Height"]
+                        ),
+                        block_type=layout_type
                     )
                 )
                 element_index += 1
-            elif block["BlockType"] == "LAYOUT_TABLE":
-                parsed_elements.append(
-                    Entry(
-                        string="table",
-                        index_numbers=[Index(primary=page_number, secondary=element_index)],
-                        bounding_box=BoundingBox(left=bbox["Left"], top=bbox["Top"], width=bbox["Width"], height=bbox["Height"]),
-                    )
-                )
-                element_index += 1
+        
+        # Add combined text as a special entry
         parsed_elements.append(
             Entry(
-                string=combined_text,
-                index_numbers=[Index(primary=page_number, secondary=element_index)],
-                # make this a random bounding box that is always first
+                string=combined_text.strip(),
+                index_numbers=[Index(primary=page_number, secondary=0)],
                 bounding_box=BoundingBox(left=0, top=0, width=0, height=0),
+                block_type="combined_text"
             )
         )
+    
+    # Visualize results
+    output_path = f"output/page_{page_number}_annotated.png"
+    visualize_page_results(image_path, parsed_elements, output_path)
+    
     return parsed_elements
 
 
@@ -118,7 +217,7 @@ def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> di
     image_paths = convert_pdf_to_images(pdf_path, "output")
 
     page_contents = []
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(aws_extract_page_content, image_path, i + 1) for i, image_path in enumerate(image_paths)]
         for future in futures:
             page_contents.extend(future.result())
@@ -127,8 +226,8 @@ def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> di
 
 if __name__ == "__main__":
     pdf_path = "ColbertV2.pdf"
+    pdf_path = "/Users/pranaviyer/Desktop/IngestOutline.pdf"
+    pdf_path = "/Users/pranaviyer/Apeiron/apeiron-ml/data/Other/Content/Foundation Docs/Exercise Foundation Protocol.pdf"
     scope = Scope.EXTERNAL
     content_type = ContentType.OTHER_ARTICLES
     ingestion_data, page_contents = textract_parse(pdf_path, scope, content_type)
-    print(ingestion_data)
-    print(page_contents)
