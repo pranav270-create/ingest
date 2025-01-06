@@ -140,7 +140,7 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
     doc = trp.Document(response)
     doc_pages, block_map = doc._parseDocumentPagesAndBlockMap()
     # dump to json for debugging
-    with open(f"output_{page_number}.json", "w") as f:
+    with open(f"output_textract/output_{page_number}.json", "w") as f:
         json.dump(doc_pages, f, indent=2)
     
     parsed_elements = []
@@ -203,7 +203,7 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
         )
     
     # Visualize results
-    output_path = f"output/page_{page_number}_annotated.png"
+    output_path = f"output_textract/page_{page_number}_annotated.png"
     visualize_page_results(image_path, parsed_elements, output_path)
     
     return parsed_elements
@@ -214,7 +214,7 @@ def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> di
     Process a PDF file: extract Ingestion data, convert to images, and extract content.
     """
     ingestion_data = get_ingestion_data(pdf_path, scope, content_type)
-    image_paths = convert_pdf_to_images(pdf_path, "output")
+    image_paths = convert_pdf_to_images(pdf_path, "output_textract")
 
     page_contents = []
     with ThreadPoolExecutor(max_workers=10) as executor:

@@ -42,19 +42,30 @@ def visualize_page_results(image_path: str, parsed_elements: list, output_path: 
     # Colors for different types of elements
     colors = {
         "Figure": "red",
-        "Picture": "red",
         "FigureGroup": "red",
+        "Picture": "red",
+        "PictureGroup": "red",
         "Table": "blue",
         "TableGroup": "blue",
         "Text": "green",
         "Page": "yellow",
         "PageHeader": "orange",
+        "PageFooter": "orange",
         "SectionHeader": "purple",
         "ListGroup": "cyan",
         "ListItem": "magenta",
         "Footnote": "pink",
         "Equation": "brown",
-        "TextInlineMath": "teal"
+        "TextInlineMath": "teal",
+        "Line": "gray",
+        "Span": "lightgray",
+        "Caption": "darkgreen",
+        "Code": "darkblue",
+        "Form": "darkred",
+        "Handwriting": "violet",
+        "TableOfContents": "navy",
+        "Document": "white",
+        "ComplexRegion": "olive"
     }
     
     for element in parsed_elements:
@@ -106,6 +117,7 @@ def convert_pdf_to_images(pdf_path: str, output_dir: str) -> list[str]:
 def main(file: str):
     config = {
         "use_llm": True,
+        "disable_image_extraction": True,
         "output_format": "json",
     }
     config_parser = ConfigParser(config)
@@ -132,6 +144,7 @@ def main(file: str):
         with open("output_datalab/output.json", "w") as f:
             json.dump(metadata, f, indent=4)
     elif config["output_format"] == "json":
+        # print the keys
         text = rendered.model_dump_json(exclude=["metadata"], indent=2)
         with open("output_datalab/output.json", "w") as f:
             f.write(text)
@@ -188,4 +201,5 @@ def visualize(file: str):
 
 if __name__ == '__main__':
     file = "/Users/pranaviyer/Apeiron/apeiron-ml/data/Other/Content/Foundation Docs/Exercise Foundation Protocol.pdf"
+    file = "/Users/pranaviyer/Desktop/AstralisData/ColbertV2.pdf"
     main(file)
