@@ -79,13 +79,13 @@ def visualize_page_results(image_path: str, parsed_elements: list, output_path: 
         bottom = top + bbox["height"]
         
         # Get color based on block_type, default to white if not found
-        color = colors.get(element["block_type"], "white")
+        color = colors.get(element["parsed_feature_type"], "white")
             
         # Draw rectangle
         draw.rectangle([left, top, right, bottom], outline=color, width=2)
         
         # Add label with block type
-        label = element["block_type"]
+        label = element["parsed_feature_type"]
         draw.rectangle([left, max(0, top-10), left + 10, max(0, top-10) + 10], fill="white")
         draw.text((left, max(0, top-10)), label, fill=color, font=font)
     
@@ -117,6 +117,7 @@ def convert_pdf_to_images(pdf_path: str, output_dir: str) -> list[str]:
 def main(file: str):
     config = {
         "use_llm": True,
+        "force_ocr": True,
         "disable_image_extraction": True,
         "output_format": "json",
     }
@@ -141,7 +142,7 @@ def main(file: str):
         with open("output_datalab/output.md", "w") as f:
             f.write(text)
         # Save metadata to json file
-        with open("output_datalab/output.json", "w") as f:
+        with open("output_datalab/metadata.json", "w") as f:
             json.dump(metadata, f, indent=4)
     elif config["output_format"] == "json":
         # print the keys
@@ -157,14 +158,14 @@ def main(file: str):
             elements = []
             # Add the page itself
             elements.append({
-                "block_type": page["block_type"],
+                "parsed_feature_type": page["block_type"],
                 "polygon": page["polygon"]
             })
             # Add all child elements
             if page.get("children"):
                 for child in page["children"]:
                     elements.append({
-                        "block_type": child["block_type"],
+                        "parsed_feature_type": child["block_type"],
                         "polygon": child["polygon"]
                     })
             # Visualize the page
@@ -202,4 +203,8 @@ def visualize(file: str):
 if __name__ == '__main__':
     file = "/Users/pranaviyer/Apeiron/apeiron-ml/data/Other/Content/Foundation Docs/Exercise Foundation Protocol.pdf"
     file = "/Users/pranaviyer/Desktop/AstralisData/ColbertV2.pdf"
+    file = "/Users/pranaviyer/Downloads/Zoning-Map-05-10-18.pdf"
+    file = "/Users/pranaviyer/Downloads/12-05-24-Regular-Meeting.pdf"
+    file = "/Users/pranaviyer/Downloads/NistLegacyMini.pdf"
+    os.makedirs("output_datalab", exist_ok=True)
     main(file)

@@ -102,13 +102,13 @@ def visualize_page_results(image_path: str, parsed_elements: list[Entry], output
         bottom = top + (element.bounding_box.height * height)
         
         # Get color based on block_type, default to white if not found
-        color = colors.get(element.block_type, "white")
+        color = colors.get(element.parsed_feature_type, "white")
             
         # Draw rectangle
         draw.rectangle([left, top, right, bottom], outline=color, width=2)
         
         # Add label with block type and text
-        label = element.block_type
+        label = element.parsed_feature_type
         draw.text((left, max(0, top-20)), label, fill=color, font=font)
     
     # Display or save the result
@@ -165,7 +165,7 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
                             width=bbox["Width"], 
                             height=bbox["Height"]
                         ),
-                        block_type=block_type
+                        parsed_feature_type=block_type
                     )
                 )
                 if block_type == "line":
@@ -187,7 +187,7 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
                             width=bbox["Width"], 
                             height=bbox["Height"]
                         ),
-                        block_type=layout_type
+                        parsed_feature_type=layout_type
                     )
                 )
                 element_index += 1
@@ -198,7 +198,7 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
                 string=combined_text.strip(),
                 index_numbers=[Index(primary=page_number, secondary=0)],
                 bounding_box=BoundingBox(left=0, top=0, width=0, height=0),
-                block_type="combined_text"
+                parsed_feature_type="combined_text"
             )
         )
     
@@ -228,6 +228,9 @@ if __name__ == "__main__":
     pdf_path = "ColbertV2.pdf"
     pdf_path = "/Users/pranaviyer/Desktop/IngestOutline.pdf"
     pdf_path = "/Users/pranaviyer/Apeiron/apeiron-ml/data/Other/Content/Foundation Docs/Exercise Foundation Protocol.pdf"
+    pdf_path = "/Users/pranaviyer/Downloads/Zoning-Map-05-10-18.pdf"
+    pdf_path = "/Users/pranaviyer/Downloads/12-05-24-Regular-Meeting.pdf"
+    pdf_path = "/Users/pranaviyer/Downloads/NistLegacyShort.pdf"
     scope = Scope.EXTERNAL
     content_type = ContentType.OTHER_ARTICLES
     ingestion_data, page_contents = textract_parse(pdf_path, scope, content_type)

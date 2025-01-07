@@ -2,7 +2,6 @@ import sys
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union
-
 from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -16,6 +15,14 @@ class Scope(str, Enum):
 
 
 class ContentType(str, Enum):
+    # Legal
+    ZONING_MAP = "zoning_map"
+    MEETING_MINUTES = "meeting_minutes"
+    LOCAL_ORDINANCE = "local_ordinance"
+    STATE_LAW = "state_law"
+    FEDERAL_LAW = "federal_law"
+    OTHER_LAW = "other_law"
+    # Articles
     GOLD_ARTICLES = "gold_articles"
     OTHER_ARTICLES = "other_articles"
     BLOG = "blog"
@@ -138,10 +145,45 @@ class ParsingMethod(str, Enum):
 
 
 class ParsedFeatureType(str, Enum):
+    # Basic content types
     TEXT = "text"
     IMAGE = "image"
-    TABLE = "table"
     FORM = "form"
+    TABLE = "table"
+    # Document structure
+    PAGE = "page"
+    PAGE_HEADER = "page_header"
+    PAGE_FOOTER = "page_footer"
+    TABLE_OF_CONTENTS = "table_of_contents"
+    # Text elements
+    PARAGRAPH = "paragraph"
+    LIST_GROUP = "list_group"
+    LIST_ITEM = "list_item"
+    FOOTNOTE = "footnote"
+    CAPTION = "caption"
+    # Special content
+    EQUATION = "equation"
+    MATH_INLINE = "math_inline"
+    CODE = "code"
+    HANDWRITING = "handwriting"
+    # Figures and media
+    FIGURE = "figure"
+    FIGURE_GROUP = "figure_group"
+    PICTURE = "picture"
+    # Complex elements
+    COMPLEX_REGION = "complex_region"
+    # Textract-specific elements
+    WORD = "word"
+    LINE = "line"
+    TITLE = "title"  # Changed from "title"
+    HEADER = "header"  # Changed from "header"
+    FOOTER = "footer"  # Changed from "footer"
+    LIST = "list"  # Changed from "list"
+    PAGE_NUMBER = "page_number"  # Changed from "page_number"
+    KEY_VALUE = "key_value"  # Changed from "key_value"
+    SECTION_HEADER = "section_header"  # Added new
+    # Catch-all
+    COMBINED_TEXT = "combined_text"  # Changed from "combined_text"
     OTHER = "other"
 
 
@@ -297,7 +339,7 @@ class Entry(BaseModel):
         None  # Null if we embed whole document or cross-doc summary. Represents range for continous time items; int for discrete. # noqa
     )
     bounding_box: Optional[BoundingBox] = None
-    block_type: Optional[str] = None
+    parsed_feature_type: Optional[ParsedFeatureType] = None
 
 
 @SchemaRegistry.register("Document")
