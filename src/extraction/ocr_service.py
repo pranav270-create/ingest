@@ -35,7 +35,7 @@ async def main_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs)
             continue
         ingestion.parsing_method = ParsingMethod.OCR2_0
         ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = ParsedFeatureType.TEXT
+        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
 
         # Set parsed_file_path (similar to simple.py)
         if not ingestion.parsed_file_path:
@@ -112,7 +112,7 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
         # Set up ingestion metadata
         ingestion.parsing_method = ParsingMethod.OCR2_0
         ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = ParsedFeatureType.TEXT
+        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
 
         if not ingestion.parsed_file_path:
             base_path = os.path.splitext(ingestion.file_path)[0]

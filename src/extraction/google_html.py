@@ -32,7 +32,7 @@ async def parse_html(ingestions: list[Ingestion], max_words_per_aggregate_passag
                 f.write(all_text)
         ingestion.parsing_method = ParsingMethod.GOOGLE_LABS_HTML_CHUNKER
         ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = ParsedFeatureType.TEXT
+        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
         ingestion.parsed_file_path = parsed_file_path
         entry = Entry(ingestion=ingestion, string=all_text, index_numbers=None, citations=None)
         document = Document(

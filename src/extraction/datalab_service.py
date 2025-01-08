@@ -53,7 +53,7 @@ async def main_datalab(ingestions: list[Ingestion], write=None, read=None, **kwa
     for ingestion in ingestions:
         ingestion.parsing_method = ParsingMethod.MARKER
         ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = ParsedFeatureType.TEXT
+        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
 
         # Set parsed_file_path (similar to ocr_service.py)
         if not ingestion.parsed_file_path:

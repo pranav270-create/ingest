@@ -50,7 +50,7 @@ async def main_simple(ingestions: list[Ingestion], write=None, read=None, **kwar
             continue
         ingestion.parsing_method = ParsingMethod.SIMPLE
         ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = ParsedFeatureType.TEXT
+        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
         ingestion.parsed_file_path = os.path.basename(ingestion.file_path).replace(".pdf", "_parsed.txt")
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
         document, all_text = process_pdf(file_content, ingestion)

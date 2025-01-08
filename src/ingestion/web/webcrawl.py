@@ -303,7 +303,7 @@ async def run_crawler(config, write=None, visited_urls=None, lock=None):
                 ingestion_method=IngestionMethod.URL_SCRAPE,
                 parsing_method=ParsingMethod.NONE,
                 parsing_date=current_time,
-                parsed_feature_type=ParsedFeatureType.IMAGE,
+                parsed_feature_type=[ParsedFeatureType.IMAGE],
                 unprocessed_citations=None,
                 embedded_feature_type=None,
             )

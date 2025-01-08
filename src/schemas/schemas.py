@@ -196,6 +196,7 @@ class ChunkingMethod(str, Enum):
     FIXED_LENGTH = "fixed_length"
     DISTANCE = "distance"
     GENERATIVE = "generative"
+    TEXTRACT = "textract"
     NONE = "none"
 
 
@@ -338,8 +339,8 @@ class Entry(BaseModel):
     index_numbers: Optional[list[Index]] = (
         None  # Null if we embed whole document or cross-doc summary. Represents range for continous time items; int for discrete. # noqa
     )
-    bounding_box: Optional[BoundingBox] = None
-    parsed_feature_type: Optional[ParsedFeatureType] = None
+    bounding_box: Optional[list[BoundingBox]] = None   # since we may cross page boundaries
+    parsed_feature_type: Optional[list[ParsedFeatureType]] = None  # since we may have multiple feature types in a single entry
 
 
 @SchemaRegistry.register("Document")

@@ -9,7 +9,7 @@ stages:
 
   - name: parse
     functions:
-      - name: ocr2_0_batch
+      - name: textract
         input: Ingestion
         return: Document
 

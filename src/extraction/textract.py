@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod, Document
+from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod, Document, ParsedFeatureType
 
 
 def get_ingestion_data(pdf_path: str, scope: Scope, content_type: ContentType) -> dict[str, Any]:
@@ -92,23 +92,23 @@ def visualize_page_results(image_path: str, parsed_elements: list[Entry], output
     
     for element in parsed_elements:
         # Skip elements with zero bounding box (combined text)
-        if element.bounding_box.width == 0 and element.bounding_box.height == 0:
+        if element.bounding_box[0].width == 0 and element.bounding_box[0].height == 0:
             continue
             
         # Convert relative coordinates to absolute pixels
-        left = element.bounding_box.left * width
-        top = element.bounding_box.top * height
-        right = left + (element.bounding_box.width * width)
-        bottom = top + (element.bounding_box.height * height)
+        left = element.bounding_box[0].left * width
+        top = element.bounding_box[0].top * height
+        right = left + (element.bounding_box[0].width * width)
+        bottom = top + (element.bounding_box[0].height * height)
         
         # Get color based on block_type, default to white if not found
-        color = colors.get(element.parsed_feature_type, "white")
+        color = colors.get(element.parsed_feature_type[0], "white")
             
         # Draw rectangle
         draw.rectangle([left, top, right, bottom], outline=color, width=2)
         
         # Add label with block type and text
-        label = element.parsed_feature_type
+        label = element.parsed_feature_type[0]
         draw.text((left, max(0, top-20)), label, fill=color, font=font)
     
     # Display or save the result
@@ -159,13 +159,13 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
                     Entry(
                         string=block["Text"],
                         index_numbers=[Index(primary=page_number, secondary=element_index)],
-                        bounding_box=BoundingBox(
+                        bounding_box=[BoundingBox(
                             left=bbox["Left"], 
                             top=bbox["Top"], 
                             width=bbox["Width"], 
                             height=bbox["Height"]
-                        ),
-                        parsed_feature_type=block_type
+                        )],
+                        parsed_feature_type=[block_type]
                     )
                 )
                 if block_type == "line":
@@ -181,13 +181,13 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
                     Entry(
                         string=display_text,
                         index_numbers=[Index(primary=page_number, secondary=element_index)],
-                        bounding_box=BoundingBox(
+                        bounding_box=[BoundingBox(
                             left=bbox["Left"], 
                             top=bbox["Top"], 
                             width=bbox["Width"], 
                             height=bbox["Height"]
-                        ),
-                        parsed_feature_type=layout_type
+                        )],
+                        parsed_feature_type=[layout_type]
                     )
                 )
                 element_index += 1
@@ -197,8 +197,8 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
             Entry(
                 string=combined_text.strip(),
                 index_numbers=[Index(primary=page_number, secondary=0)],
-                bounding_box=BoundingBox(left=0, top=0, width=0, height=0),
-                parsed_feature_type="combined_text"
+                bounding_box=[BoundingBox(left=0, top=0, width=0, height=0)],
+                parsed_feature_type=[ParsedFeatureType.COMBINED_TEXT]
             )
         )
     

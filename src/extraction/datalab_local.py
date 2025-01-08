@@ -147,6 +147,7 @@ def main(file: str):
     elif config["output_format"] == "json":
         # print the keys
         text = rendered.model_dump_json(exclude=["metadata"], indent=2)
+        text = text.encode("utf-8", errors='replace').decode("utf-8")
         with open("output_datalab/output.json", "w") as f:
             f.write(text)
         # Convert PDF to images first
@@ -205,6 +206,6 @@ if __name__ == '__main__':
     file = "/Users/pranaviyer/Desktop/AstralisData/ColbertV2.pdf"
     file = "/Users/pranaviyer/Downloads/Zoning-Map-05-10-18.pdf"
     file = "/Users/pranaviyer/Downloads/12-05-24-Regular-Meeting.pdf"
-    file = "/Users/pranaviyer/Downloads/NistLegacyMini.pdf"
+    file = "/Users/pranaviyer/Downloads/NistLegacyShort.pdf"
     os.makedirs("output_datalab", exist_ok=True)
     main(file)
