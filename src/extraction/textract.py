@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod
+from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod, Document
 
 
 def get_ingestion_data(pdf_path: str, scope: Scope, content_type: ContentType) -> dict[str, Any]:
@@ -209,28 +209,29 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
     return parsed_elements
 
 
-def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> dict[str, Any]:
+def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> Document:
     """
     Process a PDF file: extract Ingestion data, convert to images, and extract content.
+    Returns a Document object containing the ingestion metadata and parsed entries.
     """
     ingestion_data = get_ingestion_data(pdf_path, scope, content_type)
     image_paths = convert_pdf_to_images(pdf_path, "output_textract")
 
-    page_contents = []
+    entries = []
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(aws_extract_page_content, image_path, i + 1) for i, image_path in enumerate(image_paths)]
         for future in futures:
-            page_contents.extend(future.result())
-    return ingestion_data, page_contents
+            page_entries = future.result()
+            # Add ingestion data to each entry
+            for entry in page_entries:
+                entry.ingestion = ingestion_data
+            entries.extend(page_entries)
+
+    return Document(entries=entries)
 
 
 if __name__ == "__main__":
-    pdf_path = "ColbertV2.pdf"
-    pdf_path = "/Users/pranaviyer/Desktop/IngestOutline.pdf"
-    pdf_path = "/Users/pranaviyer/Apeiron/apeiron-ml/data/Other/Content/Foundation Docs/Exercise Foundation Protocol.pdf"
-    pdf_path = "/Users/pranaviyer/Downloads/Zoning-Map-05-10-18.pdf"
-    pdf_path = "/Users/pranaviyer/Downloads/12-05-24-Regular-Meeting.pdf"
-    pdf_path = "/Users/pranaviyer/Downloads/NistLegacyShort.pdf"
+    pdf_path = "/Users/kiaghods/Desktop/Academics/Princeton/Internships/astralis/astralisData/LegalRAG.pdf"
     scope = Scope.EXTERNAL
     content_type = ContentType.OTHER_ARTICLES
-    ingestion_data, page_contents = textract_parse(pdf_path, scope, content_type)
+    document = textract_parse(pdf_path, scope, content_type)
