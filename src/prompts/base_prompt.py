@@ -1,13 +1,11 @@
-import re
-from abc import ABC, abstractmethod
-from typing import Any
-from pydantic import BaseModel, Field
 import sys
+from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Any
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.prompts.parser import structured_text_cost_parser, text_cost_parser
+from src.llm_utils.utils import text_cost_parser
 
 
 class BasePrompt(ABC):
