@@ -5,7 +5,9 @@ from openai import AsyncOpenAI
 from tqdm.asyncio import tqdm_asyncio
 
 from src.evaluation.chunking_evaluation import ExtractionMethod, evaluate_extraction_chunking
+from src.featurization.get_features import featurize
 from src.llm_utils.utils import text_cost_parser
+from src.prompts.evaluation_prompts import ChunkEvaluationPrompt
 from src.schemas.schemas import ChunkingMethod, Entry
 
 client = AsyncOpenAI()
@@ -116,6 +118,12 @@ async def run_single_evaluation(pdf_path: str, extraction: ExtractionMethod, chu
     """Run evaluation for a single extraction + chunking combination."""
     chunks, metrics = await evaluate_extraction_chunking(pdf_path=pdf_path, extraction_method=extraction, chunking_method=chunking, **kwargs)
 
+    results = await featurize(chunks, "chunk_evaluation", "Entry")
+
+    print(results)
+
+    exit()
+
     # Evaluate chunks in parallel batches
     batch_size = 5  # Adjust based on rate limits
     quality_scores = []
@@ -137,3 +145,7 @@ async def run_single_evaluation(pdf_path: str, extraction: ExtractionMethod, chu
         "quality_scores": quality_scores,
         "num_chunks": len(chunks),
     }
+
+
+if __name__ == "__main__":
+    asyncio.run(run_single_evaluation("C:/Users/marka/fun/ingest/2407.10701v1.pdf", ExtractionMethod.TEXTRACT, ChunkingMethod.SLIDING_WINDOW))

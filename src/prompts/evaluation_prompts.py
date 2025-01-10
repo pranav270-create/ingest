@@ -4,8 +4,11 @@ from pydantic import BaseModel, Field
 
 from src.llm_utils.utils import text_cost_parser
 from src.prompts.base_prompt import BasePrompt
+from src.prompts.registry import PromptRegistry
+from src.schemas.schemas import Entry
 
 
+@PromptRegistry.register("chunk_evaluation")
 class ChunkEvaluationPrompt(BasePrompt):
     system_prompt = """You are a highly capable image analysis assistant.
     Analyze the provided image and answer questions about it accurately and concisely."""
@@ -26,15 +29,19 @@ class ChunkEvaluationPrompt(BasePrompt):
         organization: int = Field(..., description="Rating from 1-5 for organization")
 
     @classmethod
-    def format_prompt(cls, question: str) -> dict[str, str]:
+    async def format_prompt(cls, entry: BaseModel, read=None) -> dict[str, str]:
         """Format the prompt with the given question."""
-        return {
-            "system": cls.system_prompt,
-            "user": cls.user_prompt.format(question=question)
-        }
+        return [
+            {"role": "system", "content": cls.system_prompt},
+            {"role": "user", "content": cls.user_prompt.format(chunk=entry.string)},
+        ]
 
     @staticmethod
-    def parse_response(response: Any) -> tuple[dict[str, int], float]:
+    def parse_response(basemodels: list[Entry], responses: Any) -> tuple[dict[str, int], float]:
         """Parse the response into a structured output."""
-        response, cost = text_cost_parser(response)
-        return response.model_dump(), cost
+        for basemodel, response in zip(basemodels, responses):
+            parsed_response, cost = text_cost_parser(response)
+            if not basemodel.added_featurization:
+                basemodel.added_featurization = {}
+            basemodel.added_featurization["chunk_evaluation"] = parsed_response
+        return basemodels

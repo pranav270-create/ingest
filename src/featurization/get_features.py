@@ -103,7 +103,7 @@ async def featurize(
             basemodels = [entry for document in documents for entry in document.entries]
 
     # format prompts
-    messages_list = [await feature_class.format_prompt(basemodel, read=read) for basemodel in basemodels]
+    messages_list = await asyncio.gather(*(feature_class.format_prompt(basemodel, read=read) for basemodel in basemodels))
 
     kwargs = {
         "max_tokens": max_tokens,
@@ -122,6 +122,4 @@ async def featurize(
     ]
     responses = await asyncio.gather(*tasks)
 
-    # add the response to the entries/ingestions/documents
-    basemodel_responses = {i: json.loads(text_cost_parser(response)[0]) for i, response in enumerate(responses)}
-    return feature_class.parse_response(basemodels, basemodel_responses)
+    return feature_class.parse_response(basemodels, responses)
