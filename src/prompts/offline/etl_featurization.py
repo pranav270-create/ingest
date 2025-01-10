@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from src.prompts.parser import structured_text_cost_parser
+from src.llm_utils.utils import text_cost_parser
 from src.prompts.registry import PromptRegistry
 from src.schemas.schemas import Document, Entry, Ingestion
 
@@ -355,7 +355,7 @@ class ExtractClaimsPrompt:
 
     @classmethod
     def parse_response(cls, response: DataModel, model: str) -> tuple[list[str], list[str], float]:
-        text, cost = structured_text_cost_parser(response, model)
+        text, cost = text_cost_parser(response)
         return text.claims, cost
 
 
@@ -392,5 +392,5 @@ class LabelClustersPrompt:
 
     @classmethod
     def parse_response(cls, response: DataModel, model: str) -> tuple[dict[str, str], float]:
-        text, cost = structured_text_cost_parser(response, model)
+        text, cost = text_cost_parser(response, model)
         return {"description": text.description, "subtopic": text.subtopic}, cost

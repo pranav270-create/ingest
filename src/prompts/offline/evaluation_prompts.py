@@ -5,8 +5,8 @@ from typing import Any
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
+from src.llm_utils.utils import text_cost_parser
 from src.prompts.registry import PromptRegistry
-from src.prompts.parser import structured_text_cost_parser, text_cost_parser
 from src.retrieval.retrieve_new import FormattedScoredPoints
 
 
@@ -83,5 +83,5 @@ class SyntheticAnswerPrompt:
 
     @staticmethod
     def parse_response(response: Any, model: str) -> tuple[str, float]:
-        response, _ = text_cost_parser(response, model)
+        response, _ = text_cost_parser(response)
         return response
