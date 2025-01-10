@@ -5,14 +5,14 @@ from enum import Enum
 from typing import Any, NamedTuple, Union
 
 from instructor import Mode
+from litellm import completion_cost
 
 
 class Provider(str, Enum):
     OPENAI = "openai"
-    VERTEXAI = "vertexai"
+    VERTEXAI = "vertex_ai" # vertexai for instructor, vertex_ai for litellm
     ANTHROPIC = "anthropic"
     ANYSCALE = "anyscale"
-    TOGETHER = "together"
     GROQ = "groq"
     MISTRAL = "mistral"
     COHERE = "cohere"
@@ -20,6 +20,20 @@ class Provider(str, Enum):
     DATABRICKS = "databricks"
     VOYAGE = "voyage"
     UNKNOWN = "unknown"
+    AZURE = "azure"
+    AZURAI = "azure_ai"
+    SAGEMAKER = "sagemaker"
+    BEDROCK = "bedrock"
+    CODESTRAL = "text-completion-codestral"
+    HUGGINGFACE = "huggingface"
+    DEEPGRAM = "deepgram"
+    XAI = "xai"
+    CEREBRAS = "cerebras"
+    TRITON = "triton"
+    PERPLEXITY = "perplexity"
+    DEEPSEEK = "deepseek"
+    TOGETHERAI = "together_ai"
+    OPENROUTER = "openrouter"
 
 
 # Usage; calculated differently for chat vs. embedding models
@@ -292,28 +306,6 @@ class Functionality(Enum):
     EMBEDDING = "embedding"
 
 
-def get_chat_cost(completion: Any, model_name: str) -> float:
-    """
-    Calculates the cost of a given completion based on the model name.
-    """
-    if model_mapping[model_name].provider == Provider.ANTHROPIC:
-        prompt_toks = completion.usage.input_tokens
-        completion_toks = completion.usage.output_tokens
-    elif model_mapping[model_name].provider == Provider.VOYAGE:
-        return model_mapping[model_name].cost.input * completion.total_tokens
-    elif model_mapping[model_name].provider == Provider.COHERE:
-        return model_mapping[model_name].cost.search * completion.meta.billed_units.search_units
-    elif model_mapping[model_name].provider == Provider.GEMINI:
-        prompt_toks = completion.usage_metadata.prompt_token_count
-        completion_toks = completion.usage_metadata.candidates_token_count
-    else:
-        # get usage
-        prompt_toks = completion.usage.prompt_tokens
-        completion_toks = completion.usage.completion_tokens
-
-    return (model_mapping[model_name].cost.prompt * prompt_toks) + (model_mapping[model_name].cost.completion * completion_toks)
-
-
 def get_chat_cost_dictionary(completion: dict[str, Any], model_name: str) -> float:
     """
     Calculates the cost of a given completion based on the model name, using a dictionary input.
@@ -385,39 +377,26 @@ def save_prompts_to_jsonl(prompts: Union[list[dict[str, Any]], dict[str, Any]], 
             f.write(json.dumps(prompt) + "\n")
 
 
-def get_provider(base_url: str) -> Provider:
-    if "anyscale" in str(base_url):
-        return Provider.ANYSCALE
-    elif "together" in str(base_url):
-        return Provider.TOGETHER
-    elif "anthropic" in str(base_url):
-        return Provider.ANTHROPIC
-    elif "groq" in str(base_url):
-        return Provider.GROQ
-    elif "voyage" in str(base_url):
-        return Provider.VOYAGE
-    elif "openai" in str(base_url):
-        return Provider.OPENAI
-    elif "mistral" in str(base_url):
-        return Provider.MISTRAL
-    elif "cohere" in str(base_url):
-        return Provider.COHERE
-    elif "gemini" in str(base_url):
-        return Provider.GEMINI
-    elif "databricks" in str(base_url):
-        return Provider.DATABRICKS
-    elif "vertexai" in str(base_url):
-        return Provider.VERTEXAI
-    return Provider.UNKNOWN
+def get_api_key(provider: Provider):
+    """
+    Fetches the API key for a given model provider
+    """
+    model_to_api_key = {
+        Provider.OPENAI: os.getenv("OPENAI_API_KEY"),
+        Provider.ANTHROPIC: os.getenv("ANTHROPIC_API_KEY"),
+        Provider.ANYSCALE: os.getenv("ANYSCALE_API_KEY"),
+        Provider.COHERE: os.getenv("COHERE_API_KEY"),
+        Provider.VOYAGE: os.getenv("VOYAGE_API_KEY"),
+        Provider.GROQ: os.getenv("GROQ_API_KEY"),
+        Provider.MISTRAL: os.getenv("MISTRAL_API_KEY"),
+        Provider.GEMINI: os.getenv("GOOGLE_API_KEY"),
+    }
+    assert provider in model_to_api_key, f"Provider '{provider}' is not recognized."
+    return model_to_api_key[provider]
 
 
-def parse_chat_response(completion: Any, model: str) -> tuple[str, float]:
+def text_cost_parser(completion: Any) -> tuple[str, float]:
     """
-    Returns the chat response and the cost
+    Given LLM chat completion, return the text and the cost
     """
-    if model_mapping[model].provider == Provider.ANTHROPIC:
-        return completion.content[0].text, get_chat_cost(completion, model)
-    elif model_mapping[model].provider == Provider.GEMINI:
-        return completion.text, get_chat_cost(completion, model)
-    else:
-        return completion.choices[0].message.content, get_chat_cost(completion, model)
+    return completion.choices[0].message.content, completion_cost(completion)
