@@ -1,22 +1,23 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import json
 import asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+import json
 import sys
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.sql_db.database_simple import get_async_session
-from src.sql_db.etl_model import ProcessingStep, StepType, Status, ProcessingPipeline
 from src.pipeline.storage_backend import StorageFactory
+from src.sql_db.database_simple import get_async_session
+from src.sql_db.etl_model import ProcessingPipeline, ProcessingStep, Status, StepType
 
 
 async def get_latest_embedding_chunking_step(session: AsyncSession) -> ProcessingStep:
     stmt = select(ProcessingStep)
-    result = session.execute(stmt)    
+    result = session.execute(stmt)
     all_steps = result.scalars().all()
     chunk_step = [step for step in all_steps if step.step_type == StepType.CHUNK.value and step.status == Status.COMPLETED.value]
     chunk_step = sorted(chunk_step, key=lambda x: x.date, reverse=False) if chunk_step else None
@@ -50,10 +51,10 @@ async def get_chunking_step_by_pipeline_id(session: AsyncSession, pipeline_id: i
 
 def plot_similarity_data(output_data):
     plt.figure(figsize=(15, 8))
-    
+
     # Create a colormap for different documents
     colors = plt.cm.rainbow(np.linspace(0, 1, len(output_data)))
-    
+
     for doc_idx, doc in enumerate(output_data):
         if doc.get('metadata') and 'sentence_indices' in doc['metadata'] and 'similarities' in doc['metadata']:
             plt.plot(
@@ -63,7 +64,7 @@ def plot_similarity_data(output_data):
                 color=colors[doc_idx],
                 alpha=0.7  # Some transparency to help see overlapping lines
             )
-    
+
     plt.title('Sentence Similarities Across All Documents')
     plt.xlabel('Sentence Index')
     plt.ylabel('Similarity')
@@ -87,7 +88,7 @@ async def main(pipeline_id=None):
         if step.output_path is None:
             print("No output path found for the embedding chunking step.")
             return
-        
+
         # print the pipeline attributes
         for attr, value in pipeline.__dict__.items():
             print(f"{attr}: {value}")
