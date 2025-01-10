@@ -5,12 +5,12 @@ from collections import defaultdict
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Document, Entry, Index, ChunkingMethod, ParsedFeatureType
+from src.schemas.schemas import Document, Entry, Index, ChunkingMethod, ParsedFeatureType, BoundingBox
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.pipeline.registry import FunctionRegistry
 from src.chunking.chunk_utils import document_to_content, chunks_to_entries
 
-@FunctionRegistry.register("chunk", "textract_chunking")
+@FunctionRegistry.register("chunk", ChunkingMethod.TEXTRACT.value)
 async def textract_chunks(document: list[Document], **kwargs) -> list[Entry]:
     """
     Chunks documents while preserving textract-specific features (tables, forms, etc.)
@@ -30,67 +30,83 @@ async def textract_chunks(document: list[Document], **kwargs) -> list[Entry]:
         new_docs.append(doc)
     return new_docs
 
+def combine_bounding_boxes(boxes: list[BoundingBox]) -> BoundingBox:
+    """Combine multiple bounding boxes into one encompassing box."""
+    if not boxes:
+        return None
+    
+    return BoundingBox(
+        left=min(box.left for box in boxes),
+        top=min(box.top for box in boxes),
+        width=max(box.left + box.width for box in boxes) - min(box.left for box in boxes),
+        height=max(box.top + box.height for box in boxes) - min(box.top for box in boxes)
+    )
+
 def textract_chunking(content: list[dict[str, Any]], chunk_size: int = 1000) -> list[dict[str, Any]]:
     """
-    Chunks content while preserving textract-specific features.
-    Returns list of chunks with 'text', 'pages', and 'feature_types' keys.
+    Chunks content while preserving textract-specific features and parent-child relationships.
     """
     chunks = []
     current_chunk = []
     current_length = 0
     current_pages = set()
-    current_feature_types = set()  # Track feature types for current chunk
+    current_feature_types = set()
+    current_bounding_boxes = []
     
     for item in content:
         text = item["text"]
         pages = item["pages"]
-        feature_types = item.get("feature_types", [])  # Get feature types from content
+        feature_types = item.get("feature_types", [])
+        bounding_boxes = item.get("bounding_boxes", [])
         
-        # Handle special feature types separately
-        if any(feature in text for feature in ["TABLE:", "FORM:", "KEY_VALUE:"]):
+        # Always keep container elements as single chunks
+        if any(ft in ['table', 'figure', 'form'] for ft in feature_types):
             if current_chunk:
-                # Save accumulated text chunk
                 chunks.append({
                     "text": " ".join(current_chunk),
                     "pages": sorted(list(current_pages)),
-                    "feature_types": list(current_feature_types)
+                    "feature_types": list(current_feature_types),
+                    "bounding_boxes": current_bounding_boxes
                 })
                 current_chunk = []
                 current_length = 0
                 current_pages = set()
                 current_feature_types = set()
+                current_bounding_boxes = []
             
-            # Add special element as its own chunk
             chunks.append({
                 "text": text,
                 "pages": pages,
-                "feature_types": feature_types
+                "feature_types": feature_types,
+                "bounding_boxes": bounding_boxes
             })
             continue
-            
-        # Handle regular text
+        
         if current_length + len(text) > chunk_size and current_chunk:
             chunks.append({
                 "text": " ".join(current_chunk),
                 "pages": sorted(list(current_pages)),
-                "feature_types": list(current_feature_types)
+                "feature_types": list(current_feature_types),
+                "bounding_boxes": current_bounding_boxes
             })
             current_chunk = []
             current_length = 0
             current_pages = set()
             current_feature_types = set()
-            
+            current_bounding_boxes = []
+        
         current_chunk.append(text)
         current_length += len(text)
         current_pages.update(pages)
         current_feature_types.update(feature_types)
+        current_bounding_boxes.extend(bounding_boxes)
     
-    # Add any remaining text
     if current_chunk:
         chunks.append({
             "text": " ".join(current_chunk),
             "pages": sorted(list(current_pages)),
-            "feature_types": list(current_feature_types)
+            "feature_types": list(current_feature_types),
+            "bounding_boxes": current_bounding_boxes
         })
     
     return chunks

@@ -13,7 +13,7 @@ from src.chunking.chunk_utils import document_to_content, chunks_to_entries, spa
 from src.llm_utils.tokenize_utils import detokenize_embed_input, tokenize_embed_input
 
 
-@FunctionRegistry.register("chunk", "embedding_chunking")
+@FunctionRegistry.register("chunk", ChunkingMethod.EMBEDDING.value)
 async def embedding_chunks(document: list[Document], **kwargs) -> tuple[list[Entry], dict[str, Any]]:
     threshold = kwargs.get("threshold", 0.5)
     embedding_model = kwargs.get("embedding_model", "all-MiniLM-L6-v2")

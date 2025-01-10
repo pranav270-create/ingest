@@ -36,27 +36,23 @@ def document_to_content(doc: Document) -> list[dict[str, Any]]:
             # Ensure we capture all parsed feature types
             feature_types = []
             if entry.parsed_feature_type:
-                # Convert enum values to strings if they're enums
                 feature_types = [
                     ft.value if hasattr(ft, 'value') else ft 
                     for ft in entry.parsed_feature_type
                 ]
             
-            # Special handling for layout types from textract
-            if any(ft.startswith('layout_') for ft in feature_types):
-                # Strip the 'layout_' prefix for consistency
-                feature_types = [ft.replace('layout_', '') for ft in feature_types]
+            # Get bounding boxes if they exist
+            bounding_boxes = []
+            if entry.bounding_box:
+                bounding_boxes = entry.bounding_box
             
             content.append({
                 "text": entry.string,
                 "pages": [idx.primary for idx in entry.index_numbers] if entry.index_numbers else [],
-                "feature_types": feature_types
+                "feature_types": feature_types,
+                "bounding_boxes": bounding_boxes
             })
-            
-            # Special handling for tables, forms, and key-value pairs
-            if any(ft in ['table', 'form', 'key_value'] for ft in feature_types):
-                content[-1]["text"] = f"{feature_types[0].upper()}: {entry.string}"
-                
+    
     return content
 
 

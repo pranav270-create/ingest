@@ -341,6 +341,10 @@ class Entry(BaseModel):
     )
     bounding_box: Optional[list[BoundingBox]] = None   # since we may cross page boundaries
     parsed_feature_type: Optional[list[ParsedFeatureType]] = None  # since we may have multiple feature types in a single entry
+    # Add fields for parent-child relationships in textract parsing
+    id: Optional[str] = None  # Unique identifier for this entry
+    parent_id: Optional[str] = None  # ID of the parent entry (e.g., table containing cells)
+    child_ids: Optional[list[str]] = None  # IDs of child entries (e.g., cells in a table)
 
 
 @SchemaRegistry.register("Document")

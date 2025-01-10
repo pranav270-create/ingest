@@ -8,7 +8,7 @@ from src.llm_utils.tokenize_utils import detokenize_embed_input, tokenize_embed_
 from src.llm_utils.utils import Provider
 
 
-@FunctionRegistry.register("chunk", "sliding_window_chunking")
+@FunctionRegistry.register("chunk", ChunkingMethod.SLIDING_WINDOW.value)
 async def sliding_chunks(document: list[Document], **kwargs) -> list[Entry]:
     chunk_size = kwargs.get("chunk_size", 500)
     overlap = kwargs.get("overlap", 50)
