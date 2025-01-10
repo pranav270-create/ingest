@@ -79,6 +79,7 @@ async def featurize(
         basemodel_name: Ingestion, Document, or Entry
     """
 
+    # get prompt
     feature_class = PromptRegistry.get(feature_class_name)
 
     # grab kwargs from yaml
@@ -102,7 +103,7 @@ async def featurize(
             basemodels = [entry for document in documents for entry in document.entries]
 
     # format prompts
-    system_prompts, user_prompts = zip(*[await feature_class.format_prompt(entry, read=read) for entry in basemodels])
+    messages_list = [await feature_class.format_prompt(basemodel, read=read) for basemodel in basemodels]
 
     kwargs = {
         "max_tokens": max_tokens,
@@ -114,10 +115,10 @@ async def featurize(
     tasks = [
         router.acompletion(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": sp}, {"role": "user", "content": up}],
+            messages=messages,
             **kwargs,
         )
-        for sp, up in zip(system_prompts, user_prompts)
+        for messages in messages_list
     ]
     responses = await asyncio.gather(*tasks)
 

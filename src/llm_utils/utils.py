@@ -400,3 +400,25 @@ def text_cost_parser(completion: Any) -> tuple[str, float]:
     Given LLM chat completion, return the text and the cost
     """
     return completion.choices[0].message.content, completion_cost(completion)
+
+
+def structure_image_prompt(system_prompt: str, user_prompt: str, base64_image: str) -> str:
+
+    return [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": user_prompt,
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": base64_image,
+                    },
+                },
+            ],
+        },
+    ]
