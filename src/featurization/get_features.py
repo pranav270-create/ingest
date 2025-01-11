@@ -1,18 +1,16 @@
 import asyncio
-import json
 import os
 import sys
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 
 sys.path.append(str(Path(__file__).parents[2]))
 
 from litellm import Router
 
-from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry import FunctionRegistry
 from src.prompts.registry import PromptRegistry
-from src.schemas.schemas import Document, Entry, Ingestion
+from src.schemas.schemas import BaseModelListType, Ingestion
 from src.utils.datetime_utils import get_current_utc_datetime
 
 model_list = [
@@ -62,14 +60,14 @@ def update_metadata(obj: Ingestion, model: str, feature_class_name: str) -> None
 
 @FunctionRegistry.register("featurize", "featurize_model")
 async def featurize(
-    basemodels: Union[list[Ingestion], list[Document], list[Entry]],
+    basemodels: BaseModelListType,
     feature_class_name: str,
     basemodel_name: Optional[Literal["Ingestion", "Document", "Entry"]] = None,
     write=None,  # noqa
     read=None,
     sql_only=False,
     **kwargs,
-) -> Union[list[Ingestion], list[Document], list[Entry]]:
+) -> BaseModelListType:
     """
     Use LiteLLM to featurize the data contained in an Ingestion, Document, or Entry
 
