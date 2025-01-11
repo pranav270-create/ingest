@@ -1,14 +1,14 @@
 import asyncio
 import sys
 from pathlib import Path
+
 from sqlalchemy import delete
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.sql_db.database_simple import get_async_session
-from src.sql_db.etl_model import Entry, Ingest, ProcessingPipeline, ProcessingStep, ingest_pipeline
-from src.vector_db.qdrant_utils import remove_points_by_filter
-from src.vector_db.qdrant_utils import get_qdrant_client
+from src.sql_db.etl_model import Entry, ProcessingPipeline, ProcessingStep, ingest_pipeline
+from src.vector_db.qdrant_utils import get_qdrant_client, remove_points_by_filter
 
 
 async def remove_pipeline_data(collection_name: str, pipeline_id: int):
@@ -33,12 +33,7 @@ async def remove_pipeline_data(collection_name: str, pipeline_id: int):
         # 2. Remove from Qdrant
         try:
             print("Removing entries from Qdrant...")
-            remove_points_by_filter(
-                client=qdrant_client,
-                collection=collection_name,
-                key="pipeline_id",
-                value=pipeline_id
-            )
+            remove_points_by_filter(client=qdrant_client, collection=collection_name, key="pipeline_id", value=pipeline_id)
         except Exception as e:
             print(f"Error removing entries from Qdrant: {str(e)}")
             raise
@@ -81,6 +76,7 @@ async def remove_pipeline_data(collection_name: str, pipeline_id: int):
 if __name__ == "__main__":
     import argparse
     import warnings
+
     warnings.filterwarnings("ignore", category=ResourceWarning)
 
     parser = argparse.ArgumentParser(description="Remove pipeline data from SQL and vector databases")
