@@ -1,26 +1,35 @@
 import sys
 from pathlib import Path
 from typing import Optional
-from pydantic import BaseModel
-from requests import Session
-from datetime import datetime
-import re
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.schemas.schemas import Ingestion
 
+
 def update_ingestion_with_metadata(ingestion: Ingestion, added_metadata: Optional[dict]) -> Ingestion:
     """
-    Update the Ingestion object with additional metadata.
-    Updates fields that exist in the Ingestion object directly,
-    and adds other fields to the metadata dictionary.
+    Update an Ingestion object with additional metadata, handling both direct field updates and metadata dictionary entries.
+
+    Args:
+        ingestion: The Ingestion object to update
+        added_metadata: Dictionary containing new metadata key-value pairs to add
+
+    Returns:
+        The updated Ingestion object
+
+    For each key-value pair in added_metadata:
+    - If the key matches an existing Ingestion field (that isn't itself a BaseModel),
+      updates that field directly
+    - Otherwise, adds the key-value pair to ingestion.metadata dictionary
+    - If added_metadata is None, returns the original ingestion unchanged
     """
     if added_metadata is None:
         return ingestion
+
     for key, value in added_metadata.items():
-        if hasattr(ingestion, key) and not isinstance(getattr(ingestion, key), BaseModel):
+        if hasattr(ingestion, key):
             setattr(ingestion, key, value)
         else:
-            ingestion.metadata[key] = value
+            ingestion.metadata.setdefault(key, value)
     return ingestion
