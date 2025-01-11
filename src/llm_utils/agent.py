@@ -27,7 +27,6 @@ class Agent:
         provider: Union[Provider, str],
         model: str,
         variables: dict[str, Any],
-        image_path: Optional[Union[str, Path]] = None
     ) -> dict[str, Any]:
         """Extract and prepare LLM kwargs from variables"""
         if isinstance(provider, Provider):
@@ -40,35 +39,9 @@ class Agent:
             if key in variables:
                 llm_kwargs[key] = variables.pop(key)
 
-        formatted_prompt = self.prompt_class.format_prompt(**variables)
+        llm_kwargs["messages"] = self.prompt_class.format_prompt(**variables)
 
         # Add image to the prompt if provided
-        if image_path:
-            base64_image = self._encode_image(image_path)
-            llm_kwargs["messages"] = [
-                {"role": "system", "content": formatted_prompt["system"]},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": formatted_prompt["user"],
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            },
-                        },
-                    ],
-                },
-            ]
-        else:
-            llm_kwargs["messages"] = [
-                {"role": "system", "content": formatted_prompt["system"]},
-                {"role": "user", "content": formatted_prompt["user"]},
-            ]
-
         if self.data_model:
             llm_kwargs["response_format"] = self.data_model
 
