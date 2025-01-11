@@ -1,19 +1,20 @@
-from abc import ABC, abstractmethod
-import os
-import boto3
-import io
-from typing import Any, Union
 import asyncio
+import io
+import os
+from abc import ABC, abstractmethod
+from typing import Literal, Union
+
 import aiofiles
+import boto3
 
 
 class StorageBackend(ABC):
     @abstractmethod
-    async def write(self, file_path: str, content: str, mode: str) -> None:
+    async def write(self, file_path: str, content: Union[str, bytes]) -> None:
         pass
 
     @abstractmethod
-    async def read(self, file_path: str, mode: str = 'rb') -> Union[str, bytes]:
+    async def read(self, file_path: str) -> Union[str, bytes]:
         pass
 
 
@@ -22,16 +23,18 @@ class LocalStorageBackend(StorageBackend):
         self.base_path = base_path
         os.makedirs(self.base_path, exist_ok=True)
 
-    async def write(self, file_path: str, content: str, mode: str = 'w') -> None:
+    async def write(self, file_path: str, content: Union[str, bytes]) -> None:
         full_path = os.path.join(self.base_path, file_path)
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        mode = "wb" if isinstance(content, bytes) else "w"
         async with aiofiles.open(full_path, mode) as f:
             await f.write(content)
 
-    async def read(self, file_path: str, mode: str = 'r') -> str:
+    async def read(self, file_path: str) -> str:
         full_path = os.path.join(self.base_path, file_path)
-        async with aiofiles.open(full_path, mode) as f:
-            return await f.read()
+        async with aiofiles.open(full_path, 'rb') as f:
+            content = await f.read()
+            return content.decode('utf-8')
 
 
 class S3StorageBackend(StorageBackend):
@@ -47,11 +50,9 @@ class S3StorageBackend(StorageBackend):
         )
         self.bucket_name = bucket_name
 
-    async def write(self, file_path: str, content: Any, mode: str = 'wb') -> None:
+    async def write(self, file_path: str, content: Union[str, bytes]) -> None:
         if isinstance(content, str):
             content = content.encode('utf-8')
-        elif not isinstance(content, bytes):
-            content = io.BytesIO(content)
 
         await asyncio.get_event_loop().run_in_executor(
             None,
@@ -61,27 +62,23 @@ class S3StorageBackend(StorageBackend):
             file_path
         )
 
-    async def read(self, file_path: str, mode: str = 'rb') -> Union[str, bytes]:
+    async def read(self, file_path: str) -> Union[str, bytes]:
         response = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: self.s3.get_object(Bucket=self.bucket_name, Key=file_path)
         )
-        content = await asyncio.get_event_loop().run_in_executor(
-            None,
-            response['Body'].read
-        )
+        content = await asyncio.get_event_loop().run_in_executor(None, response['Body'].read)
 
-        if 'b' not in mode:
+        try:
             return content.decode('utf-8')
-        return content
+        except UnicodeDecodeError:
+            return content
 
 
 class StorageFactory:
     @staticmethod
-    def create(type: str, **kwargs) -> StorageBackend:
+    def create(type: Literal["local", "s3"], **kwargs) -> StorageBackend:
         if type == "local":
             return LocalStorageBackend(base_path=kwargs.get("base_path", "/tmp/s3"))
         elif type == "s3":
             return S3StorageBackend(bucket_name=kwargs["bucket_name"])
-        else:
-            raise ValueError(f"Unsupported storage type: {type}")
