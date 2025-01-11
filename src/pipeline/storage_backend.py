@@ -75,14 +75,16 @@ class S3StorageBackend(StorageBackend):
             return content
 
 
+
+
 class StorageFactory:
     @staticmethod
-    def create(type: Literal["local", "s3"], **kwargs) -> StorageBackend:
-        if type == "local":
+    def create(storage_type: Literal["local", "s3"], **kwargs) -> StorageBackend:
+        if storage_type == "local":
             if "base_path" not in kwargs:
                 print("creating tmp directory for local storage")
             return LocalStorageBackend(base_path=kwargs.get("base_path", "/tmp/s3"))
-        elif type == "s3":
+        elif storage_type == "s3":
             if "bucket_name" not in kwargs:
                 raise ValueError("bucket_name is required for S3 storage")
             return S3StorageBackend(bucket_name=kwargs["bucket_name"])

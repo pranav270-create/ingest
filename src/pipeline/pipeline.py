@@ -1,7 +1,8 @@
-import yaml
 import sys
+import yaml
+
 from pathlib import Path
-from typing import Any
+
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry import FunctionRegistry
