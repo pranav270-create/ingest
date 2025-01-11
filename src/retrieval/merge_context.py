@@ -1,7 +1,6 @@
 import sys
-from pathlib import Path
-from typing import List
 from itertools import groupby
+from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -11,8 +10,8 @@ from src.schemas.schemas import (
 
 
 def merge_overlapping_context(
-    points: List[FormattedScoredPoints],
-) -> List[FormattedScoredPoints]:
+    points: list[FormattedScoredPoints],
+) -> list[FormattedScoredPoints]:
     """
     Merges overlapping context from FormattedScoredPoints by removing duplicate text
     from lower-ranked results when they share the same source and are consecutive.

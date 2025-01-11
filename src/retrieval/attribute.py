@@ -1,10 +1,10 @@
 import re
 from typing import Any
+
 import nltk
 
 from src.prompts.online.citation_prompts import TextChunkWithAttribution
 from src.schemas.schemas import FormattedScoredPoints
-
 
 nltk.data.find("tokenizers/punkt")
 sentence_tokenizer = nltk.sent_tokenize
