@@ -82,7 +82,7 @@ class SyntheticAnswerPrompt:
             "user": cls.user_prompt.format(question=question, evidence=evidence),
         }
 
-    @staticmethod
+    @classmethod
     def parse_response(response: Any, model: str) -> tuple[str, float]:
         response, _ = text_cost_parser(response)
         return response

@@ -1,7 +1,7 @@
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field
 
@@ -280,9 +280,7 @@ class BoundingBox(BaseModel):
     height: float
 
 
-"""
-These are the core models
-"""
+# ------------------------------ CORE MODELS ------------------------------ #
 
 
 @SchemaRegistry.register("Ingestion")
@@ -422,3 +420,8 @@ class FormattedScoredPoints(BaseModel):
     title: str = ""
     date: str = ""
     rerank_score: Optional[float] = 0.0
+
+
+BaseModelListType = TypeVar('BaseModelListType', list[Entry], list[Document], list[Ingestion])
+"""Type variable for list of database models (list[Entry], list[Document], or list[Ingestion])"""
+

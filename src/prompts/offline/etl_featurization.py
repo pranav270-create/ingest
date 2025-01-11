@@ -75,8 +75,8 @@ class FilterIndexingPrompt:
             document = base_model.string
         return cls.system_prompt, cls.user_prompt.format(entry=document)
 
-    @classmethod
-    def parse_response(cls, base_models: list[BaseModel], parsed_items: dict[str, BaseModel]) -> list[BaseModel]:
+    @staticmethod
+    def parse_response(base_models: list[BaseModel], parsed_items: dict[str, BaseModel]) -> list[BaseModel]:
         # add the "summary" field to the entry.string in the front
         new_base_models = []
         for i, basemodel in enumerate(base_models):
@@ -126,8 +126,8 @@ class SummarizeIngestionPrompt:
                 document = f.read()
         return cls.system_prompt, cls.user_prompt.format(entry=document)
 
-    @classmethod
-    def parse_response(cls, ingestions: list[Ingestion], parsed_ingestions: dict[str, DataModel]) -> bool:
+    @staticmethod
+    def parse_response(ingestions: list[Ingestion], parsed_ingestions: dict[str, DataModel]) -> bool:
         # add the "summary" field to the entry.string in the front
         for i, ingestion in enumerate(ingestions):
             ingestion.metadata["summary"] = parsed_ingestions.get(i).get("summary", "")
@@ -179,8 +179,8 @@ class SummarizeEntryPrompt:
                 document = f.read()
         return cls.system_prompt, cls.user_prompt.format(entry=entry.string, document=document)
 
-    @classmethod
-    def parse_response(cls, entries: list[Entry], parsed_entries: dict[str, DataModel]) -> bool:
+    @staticmethod
+    def parse_response(entries: list[Entry], parsed_entries: dict[str, DataModel]) -> bool:
         # add the "summary" field to the entry.string in the front
         for i, entry in enumerate(entries):
             entry.context_summary_string = parsed_entries.get(i).get("summary", "")
@@ -245,8 +245,8 @@ class CleanEntryPrompt:
             document = base_model.string
         return cls.system_prompt, cls.user_prompt.format(entry=document)
 
-    @classmethod
-    def parse_response(cls, base_models: list[BaseModel], parsed_items: dict[str, BaseModel]) -> list[BaseModel]:
+    @staticmethod
+    def parse_response(base_models: list[BaseModel], parsed_items: dict[str, BaseModel]) -> list[BaseModel]:
         # add the "summary" field to the entry.string in the front
         new_base_models = []
         for i, basemodel in enumerate(base_models):
@@ -305,8 +305,8 @@ class KeywordPrompt:
     def format_prompt(cls, entry: str) -> str:
         return cls.system_prompt, cls.user_prompt.format(entry=entry)
 
-    @classmethod
-    def parse_response(cls, entries: list[Entry], parsed_entries: dict[str, DataModel]) -> bool:
+    @staticmethod
+    def parse_response(entries: list[Entry], parsed_entries: dict[str, DataModel]) -> bool:
         for i, entry in enumerate(entries):
             try:
                 entry.keywords = parsed_entries.get(i).get("keywords")
@@ -336,8 +336,8 @@ class ImageDescriptionPrompt:
         return structure_image_prompt(cls.system_prompt, cls.user_prompt, image)
 
 
-    @classmethod
-    def parse_response(cls, entries: list[Entry], parsed_entries: dict[str, Entry]) -> bool:
+    @staticmethod
+    def parse_response(entries: list[Entry], parsed_entries: dict[str, Entry]) -> bool:
         for i, entry in enumerate(entries):
             entry.string = parsed_entries.get(i).get("description")
         return entries
@@ -373,8 +373,8 @@ class ExtractClaimsPrompt:
     def format_prompt(cls, text):
         return {"system": cls.system, "user": cls.user.format(chunk=text)}
 
-    @classmethod
-    def parse_response(cls, response: DataModel, model: str) -> tuple[list[str], list[str], float]:
+    @staticmethod
+    def parse_response(response: DataModel, model: str) -> tuple[list[str], list[str], float]:
         text, cost = text_cost_parser(response)
         return text.claims, cost
 
@@ -410,7 +410,7 @@ class LabelClustersPrompt:
             "user": cls.user.format(claims=claims),
         }
 
-    @classmethod
-    def parse_response(cls, response: DataModel, model: str) -> tuple[dict[str, str], float]:
+    @staticmethod
+    def parse_response(response: DataModel, model: str) -> tuple[dict[str, str], float]:
         text, cost = text_cost_parser(response, model)
         return {"description": text.description, "subtopic": text.subtopic}, cost

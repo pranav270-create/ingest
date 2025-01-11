@@ -36,7 +36,7 @@ class ChunkEvaluationPrompt(BasePrompt):
             {"role": "user", "content": cls.user_prompt.format(chunk=entry.string)},
         ]
 
-    @staticmethod
+    @classmethod
     def parse_response(basemodels: list[Entry], responses: Any) -> tuple[dict[str, int], float]:
         """Parse the response into a structured output."""
         for basemodel, response in zip(basemodels, responses):
