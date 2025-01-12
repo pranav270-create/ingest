@@ -1,20 +1,20 @@
-"""
-Author: Pranav Iyer
-Date: 2024-10-02
-Description: This script demonstrates how to ingest local files from a directory.
-"""
 import mimetypes
 import os
 import sys
 from pathlib import Path
+
 from rapidfuzz import process
 
 sys.path.append(str(Path(__file__).parents[3]))
 
-from src.schemas.schemas import ContentType, FileType, Ingestion, IngestionMethod, Scope
 from src.pipeline.registry import FunctionRegistry
+from src.schemas.schemas import ContentType, FileType, Ingestion, IngestionMethod, Scope
 from src.utils.datetime_utils import get_current_utc_datetime, parse_datetime
 from src.utils.ingestion_utils import update_ingestion_with_metadata
+
+FUZZY_MATCH_THRESHOLD = 50
+CONTENT_FOLDER_NAME = "Content"
+DEFAULT_CREATOR = "Astralis"
 
 
 def get_content_type(file_path: str) -> ContentType:
@@ -24,7 +24,7 @@ def get_content_type(file_path: str) -> ContentType:
     """
     path_components = file_path.split(os.path.sep)
     try:
-        content_index = path_components.index("Content")
+        content_index = path_components.index(CONTENT_FOLDER_NAME)
         if len(path_components) > content_index + 1:
             target_folder = path_components[content_index + 1]
             # Normalize the target folder name: lowercase and replace spaces/special chars
@@ -32,7 +32,7 @@ def get_content_type(file_path: str) -> ContentType:
             content_type_values = [ct.value for ct in ContentType]
             best_match, score, _ = process.extractOne(target_folder, content_type_values)
             print(f"Best match for {target_folder}: {best_match} with score {score}")
-            if score >= 50:  # Increased threshold for more accurate matching
+            if score >= FUZZY_MATCH_THRESHOLD:  # Increased threshold for more accurate matching
                 return ContentType(best_match)
     except Exception:
         pass
@@ -105,8 +105,8 @@ async def ingest_local_files(directory_path: str, added_metadata: dict = {},  wr
 
 
 if __name__ == "__main__":
-    import sys
     import asyncio
+    import sys
     if len(sys.argv) > 1:
         directory_path = sys.argv[1]
         asyncio.run(ingest_local_files(directory_path))

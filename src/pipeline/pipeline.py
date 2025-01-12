@@ -7,8 +7,8 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry import FunctionRegistry
 from src.pipeline.storage_backend import StorageFactory
-from src.prompts.registry import PromptRegistry
-from src.schemas.registry import SchemaRegistry
+from src.pipeline.registry import PromptRegistry
+from src.pipeline.registry import SchemaRegistry
 
 # # import all prompts
 # import src.prompts

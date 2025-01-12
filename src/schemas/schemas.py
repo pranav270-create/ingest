@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.registry import SchemaRegistry
+from src.pipeline.registry import SchemaRegistry
 
 
 class Scope(str, Enum):

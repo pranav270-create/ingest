@@ -9,7 +9,7 @@ sys.path.append(str(Path(__file__).parents[2]))
 from litellm import Router
 
 from src.pipeline.registry import FunctionRegistry
-from src.prompts.registry import PromptRegistry
+from src.pipeline.registry import PromptRegistry
 from src.schemas.schemas import BaseModelListType, Ingestion
 from src.utils.datetime_utils import get_current_utc_datetime
 

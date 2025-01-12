@@ -1,13 +1,37 @@
-# src/pipeline/ingestion.py
+import importlib
+import pkgutil
 import sys
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Union
 
+from pydantic import BaseModel
+
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.pipeline.registry_base import RegistryBase
 from src.pipeline.storage_backend import StorageBackend
+from src.prompts.base_prompt import BasePrompt
+
+
+class RegistryBase:
+    _registry: dict = {}
+
+    @classmethod
+    def autodiscover(cls, package_name: str) -> None:
+        """
+        Automatically discover and import all modules in a package.
+
+        Usage:
+        FunctionRegistry.autodiscover('src.featurization')
+        SchemaRegistry.autodiscover('src.schemas')
+        PromptRegistry.autodiscover('src.prompts')
+        """
+        package = importlib.import_module(package_name)
+        package_path = Path(package.__file__).parent
+
+        for _, module_name, _ in pkgutil.iter_modules([str(package_path)]):
+            full_module_name = f"{package_name}.{module_name}"
+            importlib.import_module(full_module_name)
 
 
 class FunctionRegistry(RegistryBase):
@@ -52,3 +76,55 @@ class FunctionRegistry(RegistryBase):
     @classmethod
     def get(cls, stage: str, name: str) -> Callable:
         return cls._registry[stage].get(name)
+
+
+class PromptRegistry(RegistryBase):
+    _registry: dict[str, type[BasePrompt]] = {}
+
+    @classmethod
+    def register(cls, name: str) -> Callable[[type[BasePrompt]], type[BasePrompt]]:
+        """
+        A decorator that registers a prompt template class.
+
+        Usage:
+        @PromptRegistry.register.register("client_qa")
+        class ClientQAPrompt:
+            ...
+        """
+        def decorator(prompt_class: type[BasePrompt]) -> type[BasePrompt]:
+            if name in cls._registry:
+                raise KeyError(f"Prompt template with name '{name}' already exists.")
+            cls._registry[name] = prompt_class
+            return prompt_class
+        return decorator
+
+    @classmethod
+    def get(cls, name: str) -> type[BasePrompt]:
+        """Retrieve a prompt template class by its name."""
+        return cls._registry.get(name)
+
+
+class SchemaRegistry(RegistryBase):
+    _registry: dict[str, type[BaseModel]] = {}
+
+    @classmethod
+    def register(cls, name: str) -> Callable[[type[BaseModel]], type[BaseModel]]:
+        """
+        A decorator that registers a schema class.
+
+        Usage:
+        @SchemaRegistry.register("my_schema")
+        class MySchema(BaseModel):
+            ...
+        """
+        def decorator(schema_class: type[BaseModel]) -> type[BaseModel]:
+            if name in cls._registry:
+                raise KeyError(f"Schema with name '{name}' already exists.")
+            cls._registry[name] = schema_class
+            return schema_class
+        return decorator
+
+    @classmethod
+    def get(cls, name: str) -> type[BaseModel]:
+        """Retrieve a schema class by its name."""
+        return cls._registry.get(name)

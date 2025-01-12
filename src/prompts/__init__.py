@@ -1,4 +1,4 @@
-from src.prompts.registry import PromptRegistry
-from src.prompts.offline.etl_featurization import SummarizeEntryPrompt, SummarizeIngestionPrompt
-from src.prompts.offline.evaluation_prompts import SyntheticQAPairPrompt
+from src.pipeline.registry import PromptRegistry
+from src.prompts.etl_featurization import SummarizeEntryPrompt, SummarizeIngestionPrompt
+from src.prompts.evaluation_prompts import SyntheticQAPairPrompt
 from src.prompts.evaluation_prompts import ChunkEvaluationPrompt
