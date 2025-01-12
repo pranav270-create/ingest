@@ -138,7 +138,6 @@ class ExtractionMethod(str, Enum):
     MARKER = "marker"
     UNSTRUCTURED = "unstructured"
     OCR2_0 = "ocr2_0"
-    GLINER = "gliner"
     WHISPER = "whisper"
     BS4 = "bs4"
     GOOGLE_LABS_HTML_CHUNKER = "google_labs_html_chunker"
@@ -189,12 +188,8 @@ class ExtractedFeatureType(str, Enum):
 
 
 class ChunkingMethod(str, Enum):
-    REGEX = "regex"
-    NLP_SENTENCE = "nlp_sentence"
     TOPIC_SEGMENTATION = "topic_segmentation"
-    EMBEDDING = "embedding"
     SLIDING_WINDOW = "sliding_window"
-    FIXED_LENGTH = "fixed_length"
     DISTANCE = "distance"
     GENERATIVE = "generative"
     TEXTRACT = "textract"
@@ -271,7 +266,8 @@ class Index(BaseModel):
 
 class BoundingBox(BaseModel):
     """
-    This is the bounding box of the extracted data.
+    This is the bounding box of the extracted data. This will be in the pixel space of a page image.
+    0, 0 is the top left corner of the page.
     """
 
     left: float
@@ -286,9 +282,11 @@ class BoundingBox(BaseModel):
 @SchemaRegistry.register("Ingestion")
 class Ingestion(BaseModel):
     schema__: str = Field(default="Ingestion", alias="schema__")
-    # Ingestion fields
+    document_hash: str  # This is the hash of the document
+    # Processing fields
     ingestion_id: Optional[int] = None  # Needed for SQL mode
     pipeline_id: Optional[int] = None  # Needed for SQL mode
+    # Document fields
     document_title: Optional[str] = None  # We may want a LLM to title the document
     scope: Scope  # You must know the scope of the document before you can ingest it.
     content_type: Optional[ContentType] = None  # We may eventually want to infer this
@@ -300,26 +298,23 @@ class Ingestion(BaseModel):
     creation_date: Optional[str] = None
     ingestion_method: IngestionMethod  # Source of ingestion (e.g., 'slack', 'youtube', 'wix', etc.)
     ingestion_date: str
-    summary: Optional[str] = None  # This is a summary of the document
-    keywords: Optional[list[str]] = None  # This is a list of keywords that we have extracted
-    metadata: Optional[dict[str, Any]] = None  # This is for any metadata that we have not captured in other fields yet
+    # Added fields
+    document_summary: Optional[str] = None  # This is a summary of the document
+    document_keywords: Optional[list[str]] = None  # This is a list of keywords that we have extracted
+    document_metadata: Optional[dict[str, Any]] = None  # This is for any metadata that we have not captured in other fields yet
     # Extraction fields
     extraction_method: Optional[ExtractionMethod] = None
     extraction_date: Optional[str] = None
+    # TODO: Should this be default of type .json of page_numer and content?
     extracted_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
     # Chunking fields
     chunking_method: Optional[ChunkingMethod] = None
     chunking_metadata: Optional[dict[str, Any]] = None
     chunking_date: Optional[str] = None
-    # Featurization fields -> name of prompt from PromptRegistry
+    # Featurization fields -> feature_models = name of model used, feature_types = name of prompt from PromptRegistry, feature_dates = date of prompt from PromptRegistry
     feature_models: Optional[list[str]] = None
     feature_dates: Optional[list[str]] = None
     feature_types: Optional[list[str]] = None
-    # Embedding fields
-    embedded_feature_type: Optional[EmbeddedFeatureType] = None  # This is the type of feature that is being embedded
-    embedding_date: Optional[str] = None
-    embedding_model: Optional[str] = None
-    embedding_dimensions: Optional[int] = None
     # Unprocessed citations
     unprocessed_citations: Optional[dict[str, Any]] = None  # This is for citations that have not been processed yet
 
@@ -327,19 +322,37 @@ class Ingestion(BaseModel):
 @SchemaRegistry.register("Entry")
 class Entry(BaseModel):
     schema__: str = Field(default="Entry", alias="schema__")
+    # For unique hash identification
+    uuid: str
+
+    # Core fields
     ingestion: Optional[Ingestion] = None  # null for cross document only, citations must be there
     string: Optional[str] = None  # If we embed a document or image, we don't need the original text
     context_summary_string: Optional[str] = None  # only if we generate a summary of the entry wrt the broader document # noqa
     added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
     keywords: Optional[list[str]] = None  # This is for any keywords that we have not captured in other fields yet
+
+    # Indexing fields and Reconstruction fields
     index_numbers: Optional[list[Index]] = None  # Null if embed whole document or cross-doc summary. range for continous time; int for discrete. # noqa
+    min_primary_index: Optional[int] = None  # This is the minimum primary index for the entry
+    max_primary_index: Optional[int] = None  # This is the maximum primary index for the entry
     bounding_box: Optional[list[BoundingBox]] = None   # since we may cross page boundaries
+
+    # Extracted field
     extracted_feature_type: Optional[list[ExtractedFeatureType]] = None  # since we may have multiple feature types in a single entry
+    # Embedding fields -> embedded_feature_type = type of feature being embedded, embedding_date = date of embedding, embedding_model = name of model used, embedding_dimensions = dimensions of embedding
+    embedded_feature_type: Optional[EmbeddedFeatureType] = None  # This is the type of feature that is being embedded
+    embedding_date: Optional[str] = None
+    embedding_model: Optional[str] = None
+    embedding_dimensions: Optional[int] = None
+
     # Add fields for parent-child relationships in textract extraction
     id: Optional[str] = None  # Unique identifier for this entry
     parent_id: Optional[str] = None  # ID of the parent entry (e.g., table containing cells)
     child_ids: Optional[list[str]] = None  # IDs of child entries (e.g., cells in a table)
+    # Graph DB
     citations: Optional[dict[str, str]] = None  # This is for citations that we have not processed yet
+
 
 @SchemaRegistry.register("Embedding")
 class Embedding(Entry):
@@ -355,18 +368,15 @@ class Upsert(BaseModel):
     uuid: str
     # From Entry
     keywords: Optional[list[str]] = None
-    index_numbers: Optional[list[Index]] = (
-        None  # Null if we embed whole document or cross-doc summary. Represents range for continous time items; int for discrete. # noqa
-    )
+    index_numbers: Optional[list[Index]] = None  # Null if we embed whole document or cross-doc summary. Represents range for continous time items; int for discrete. # noqa
     string: Optional[str] = None
-    context_summary_string: Optional[str] = (
-        None  # This is only if we are generating a summary of the entry wrt the broader document # noqa
-    )
+    context_summary_string: Optional[str] = None  # This is only if we are generating a summary of the entry wrt the broader document # noqa
     added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
     # From Embedding
     sparse_vector: dict[str, Union[list[float], list[int]]]  # Changed this line
     dense_vector: Union[list[float], float]  # This is the actual embedding
     # From Ingestion, Also what is up in the VDB as Payload
+    document_hash: str
     ingestion_id: Optional[int] = None  # Needed for SQL mode
     pipeline_id: Optional[int] = None  # Needed for SQL mode
     document_title: Optional[str] = None  # We may want a LLM to title the document
@@ -383,7 +393,6 @@ class Upsert(BaseModel):
     # Extraction fields
     extraction_method: Optional[ExtractionMethod] = None
     extraction_date: Optional[str] = None
-    extracted_feature_type: Optional[ExtractedFeatureType] = None  # This is the type of feature that was extracted
     extracted_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
     # Chunking fields
     chunking_method: Optional[ChunkingMethod] = None
@@ -392,7 +401,8 @@ class Upsert(BaseModel):
     feature_models: Optional[list[str]] = None
     feature_dates: Optional[list[str]] = None
     feature_types: Optional[list[str]] = None
-    # Embedding fields
+    # From Entry
+    extracted_feature_type: Optional[ExtractedFeatureType] = None  # This is the type of feature that was extracted
     embedded_feature_type: Optional[EmbeddedFeatureType] = None  # This is the type of feature that is being embedded
     embedding_date: Optional[str] = None
     embedding_model: Optional[str] = None
@@ -412,4 +422,3 @@ class FormattedScoredPoints(BaseModel):
 
 BaseModelListType = TypeVar('BaseModelListType', list[Entry], list[Ingestion])
 """Type variable for list of database models (list[Entry] or list[Ingestion])"""
-

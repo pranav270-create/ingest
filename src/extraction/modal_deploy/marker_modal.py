@@ -57,6 +57,9 @@ class Model:
         )
 
     @method()
+    def warmup(self): return
+
+    @method()
     def parse_document(self, fname: bytes) -> dict:
         with open("temp.pdf", "wb") as f:
             f.write(fname)

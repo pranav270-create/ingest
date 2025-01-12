@@ -73,6 +73,9 @@ class Model:
         self.tokenizer = tokenizer
 
     @method()
+    def warmup(self): return
+
+    @method()
     def ocr_document(self, image_data) -> dict:
         image_bytes, mode = image_data
         # Convert bytes to PIL Image
