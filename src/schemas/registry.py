@@ -2,9 +2,11 @@ from typing import Callable, TypeVar
 
 from pydantic import BaseModel
 
+from src.pipeline.registry_base import RegistryBase
+
 T = TypeVar('T', bound=BaseModel)
 
-class SchemaRegistry:
+class SchemaRegistry(RegistryBase):
     _registry: dict[str, type[BaseModel]] = {}
 
     @classmethod

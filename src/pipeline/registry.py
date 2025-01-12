@@ -6,10 +6,11 @@ from typing import Any, Callable, Union
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
+from src.pipeline.registry_base import RegistryBase
 from src.pipeline.storage_backend import StorageBackend
 
 
-class FunctionRegistry:
+class FunctionRegistry(RegistryBase):
     _registry: dict[str, dict[str, Callable]] = {
         "ingest": {},
         "parse": {},

@@ -1,9 +1,10 @@
 from typing import Callable
 
+from src.pipeline.registry_base import RegistryBase
 from src.prompts.base_prompt import BasePrompt
 
 
-class PromptRegistry:
+class PromptRegistry(RegistryBase):
     _registry: dict[str, type[BasePrompt]] = {}
 
     @classmethod
