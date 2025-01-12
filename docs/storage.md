@@ -7,10 +7,10 @@ The StorageFactory is a simple factory class that creates storage backends for t
 
 ```python
 # Create a local storage backend
-storage = StorageFactory.create(type="local", base_path="/tmp/s3")
+storage = StorageFactory.create(storage_type="local", base_path="/tmp/s3")
 
 # Create an S3 storage backend
-storage = StorageFactory.create(type="s3", bucket_name="my-bucket")
+storage = StorageFactory.create(storage_type="s3", bucket_name="my-bucket")
 ```
 
 ## How It Works
