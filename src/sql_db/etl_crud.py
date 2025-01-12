@@ -366,15 +366,6 @@ async def update_ingests_from_results(input_data, session):
                 for k in inspect(Ingest).columns.keys() 
                 if hasattr(item.ingestion, k) and getattr(item.ingestion, k) is not None
             }
-        elif item.schema__ == "Document":
-            if item.entries:
-                ingestion_id = item.entries[0].ingestion.ingestion_id
-                update_data = {
-                    k: getattr(item.entries[0].ingestion, k) 
-                    for k in inspect(Ingest).columns.keys() 
-                    if hasattr(item.entries[0].ingestion, k) and getattr(item.entries[0].ingestion, k) is not None
-                }
-        
         if ingestion_id and update_data:
             ingestion_updates[ingestion_id] = update_data
 

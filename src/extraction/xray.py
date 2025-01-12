@@ -3,67 +3,35 @@ import logging
 import os
 import time
 import urllib
-
-from groundx import Groundx
+from groundx import Document, GroundX
 
 # Configure logging to show up in terminal
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-groundx = Groundx(api_key=os.environ.get("GROUNDX_API_KEY"))
+groundx = GroundX(api_key=os.environ.get("GROUNDX_API_KEY"))
 
 
-def ingest_papers_to_groundx(
-    bucket_id: str, base_path: str, pdf_filepaths: list[str], papers_metadata: list[dict[str, str]]
-) -> list[str]:
+def ingest_pdfs_to_groundx(bucket_id: str, pdf_folder: str) -> list[str]:
     """
-    Ingest downloaded documents with GroundX
-
-    :param bucket_id: GroundX bucket ID to ingest the papers into
-    :param pdf_filepaths: list of directory paths to PDF files
-    :param papers_metadata: list of metadata dictionaries for each paper
-    :return: list of ingestion responses
+    Ingest PDF files from a folder into GroundX
     """
     ingestion_results = []
-
-    pdf_filepaths_sort = sorted(pdf_filepaths)
-    papers_metadata = sorted(papers_metadata, key=lambda x: x["link"])
-
-    for pdf_path, paper_metadata in zip(pdf_filepaths_sort, papers_metadata):
-        file_name = os.path.basename(pdf_path)
-        code = paper_metadata["link"].split("/")[-1]
-        assert file_name.rsplit(".", 1)[0] == code, f"file name {file_name} does not match code {code}"
-
-        search_data = {
-            "title": paper_metadata["title"],
-            "link": paper_metadata["link"],
-            "authors": paper_metadata["authors"],
-            "tags": paper_metadata["tags"],
-            "abstract": paper_metadata["abstract"],
-            "arxiv_id": paper_metadata["id"],
-        }
-
+    for filename in os.listdir(pdf_folder):
+        if not filename.lower().endswith('.pdf'):
+            continue
+        file_path = os.path.join(pdf_folder, filename)
         try:
-            response = groundx.documents.ingest_local(
-                body=[
-                    {
-                        "blob": open(f"{base_path}/{file_name}", "rb"),
-                        "metadata": {
-                            "bucketId": bucket_id,
-                            "fileName": file_name,
-                            "fileType": "pdf",
-                            "searchData": search_data,
-                        },
-                    },
-                ]
+            document = Document(
+                bucket_id=bucket_id,
+                file_name=filename,
+                file_path=file_path,
+                file_type="pdf"
             )
-            if response.status == 200:  # save ids for later
-                ingestion_results.append(response.body["ingest"]["processId"])
-                logging.info(f"Ingested {file_name}")
-            elif response.status == 413:
-                logging.error(f"{file_name}: ")
+            response = groundx.ingest(documents=[document])
+            ingestion_results.append(response.ingest.process_id)
+            logging.info(f"Ingested {filename}")
         except Exception as e:
-            logging.error(f"Error ingesting {file_name}: {str(e)}")
-
+            logging.error(f"Error ingesting {filename}: {str(e)}")
     return ingestion_results
 
 
@@ -74,12 +42,19 @@ def wait_for_ingestion_completion(ingestion_responses: list[str]):
     for process_id in ingestion_responses:
         while True:
             logging.info(f"Checking status of {process_id}")
-            ingest = groundx.documents.get_processing_status_by_id(process_id=process_id)
-            if ingest.body["ingest"]["status"] == "complete":
+            response = groundx.documents.get_processing_status_by_id(process_id=process_id)
+            # Check the main status field
+            status = response.ingest.status
+            if status == "complete":
                 break
-            if ingest.body["ingest"]["status"] == "error":
-                raise ValueError("Error Ingesting Document")
-            print(ingest.body["ingest"]["status"])
+            if status == "error":
+                raise ValueError(f"Error Ingesting Document: {response.ingest.status_message}")
+            # Print current status for monitoring
+            print(f"Current status: {status}")
+            if response.ingest.progress and response.ingest.progress.processing:
+                docs = response.ingest.progress.processing.documents
+                if docs:
+                    print(f"Document status: {docs[0].status}")
             time.sleep(5)
 
 
@@ -87,26 +62,79 @@ def make_groundx_bucket(bucket_name: str):
     """
     Create a new bucket in GroundX, returns bucket_id
     """
+    # Updated to match documentation format
     bucket_response = groundx.buckets.create(name=bucket_name)
-    bucket_id = bucket_response.body["bucket"]["bucketId"]
-    return bucket_id
+    return bucket_response.bucket.bucket_id
 
 
-def get_xray_responses(ingestion_ids: list[str]):
-    ingestion_id_set = set(ingestion_ids)
-    xray_urls = [r["xrayUrl"] for r in documents_response.body["documents"] if r["processId"] in ingestion_id_set]
+def delete_groundx_bucket(bucket_id: str):
+    """
+    Delete a bucket in GroundX
+    """
+    groundx.buckets.delete(bucket_id=bucket_id)
+
+
+def get_xray_responses(documents_response):
+    """
+    Extract and fetch X-Ray data from document responses
+    Args:
+        documents_response: DocumentLookupResponse object containing document details
+    Returns:
+        list of parsed X-Ray JSON data
+    """
     data = []
-    for url in xray_urls:
-        with urllib.request.urlopen(url) as url:
+    for doc in documents_response.documents:
+        with urllib.request.urlopen(doc.xray_url) as url:
             xray_data = json.loads(url.read().decode())
             data.append(xray_data)
-            logging.info(f"Got X-Ray response for {url}")
+            logging.info(f"Got X-Ray response for {doc.file_name}")
     return data
 
 
+def get_bucket_id(bucket_name: str):
+    buckets_response = groundx.buckets.list()
+    bucket_id = next((b.bucket_id for b in buckets_response.buckets if b.name == bucket_name), None)
+    return bucket_id
+
+
+def ingest_pdfs_from_folder(file_path: str, bucket_name: str):
+    bucket_id = get_bucket_id(bucket_name)
+    if bucket_id is None:
+        bucket_id = make_groundx_bucket(bucket_name)
+    else:
+        print(f"Bucket {bucket_name} already exists with ID {bucket_id}")
+    # Ingest PDFs to GroundX
+    ingestion_responses = ingest_pdfs_to_groundx(bucket_id, file_path)
+    # Wait for processing to complete
+    wait_for_ingestion_completion(ingestion_responses)
+
+
+def process_xray_data_from_bucket(bucket_name: str):
+    bucket_id = get_bucket_id(bucket_name)
+    documents_response = groundx.documents.lookup(id=bucket_id)
+    xray_responses = get_xray_responses(documents_response)
+    for xray_data in xray_responses:
+        with open(f"{xray_data['fileName']}.json", "w") as f:
+            json.dump(xray_data, f, indent=4)
+        # process_xray_data(xray_data)
+
+
+# RENDERING FUNCTIONS
+def process_xray_data(data):
+    xray_highlight(data)
+    for page in data["documentPages"]:
+        xray_page(page)
+    # Example of extracting all tables
+    # tables = [chunk for page in data['documentPages'] for chunk in page['chunks'] if 'table' in chunk['contentType']]
+    # print(f"\nTotal Tables Found: {len(tables)}")
+    # Example of extracting all figures
+    # figures = [chunk for page in data['documentPages'] for chunk in page['chunks'] if 'figure' in chunk['contentType']]
+    # print(f"Total Figures Found: {len(figures)}")
+
+
 def xray_highlight(data):
-    # print(f"fileType: {data['fileType']}")
-    # print(f"language: {data['language']}")
+    print(f"fileType: {data['fileType']}")
+    print(f"language: {data['language']}")
     print(f"fileName: {data['fileName']}")
     print(f"fileKeywords: {data['fileKeywords']}")
     print(f"fileSummary: {data['fileSummary']}")
@@ -115,7 +143,7 @@ def xray_highlight(data):
 
 def xray_page(page):
     print(f"\033[91m\nPage {page['pageNumber']}\033[0m -> Dim: {page['height']} x {page['width']}, {len(page['chunks'])} Chunks")
-    # print(f"Page URL: {page['pageUrl']}")
+    print(f"Page URL: {page['pageUrl']}")
 
     for chunk in page["chunks"]:
         xray_chunk(chunk)
@@ -146,40 +174,8 @@ def xray_chunk(chunk, show_bounding_boxes: bool = False):
                 print(f"    Figure Description: {chunk['narrative']}")
 
 
-def process_xray_data(data):
-    xray_highlight(data)
-
-    for page in data["documentPages"]:
-        xray_page(page)
-
-    # Example of extracting all tables
-    # tables = [chunk for page in data['documentPages'] for chunk in page['chunks'] if 'table' in chunk['contentType']]
-    # print(f"\nTotal Tables Found: {len(tables)}")
-
-    # Example of extracting all figures
-    # figures = [chunk for page in data['documentPages'] for chunk in page['chunks'] if 'figure' in chunk['contentType']]
-    # print(f"Total Figures Found: {len(figures)}")
-
-
 if __name__ == "__main__":
-    # fetch new paper ids
-    new_papers = [{"": ""}]  # list of dicts containing metadata and an id for each document
-    # download papers
-    pdf_localpaths = [""]  # download the pdfs
-    download_folder = ""  # root folder
-    # get groundx bucket id or create bucket
-    bucket_name = "al-internal"
-    bucket_id = next((b["bucketId"] for b in groundx.buckets.list().body["buckets"] if b["name"] == bucket_name), None)
-    if bucket_id is None:
-        bucket_id = make_groundx_bucket(bucket_name)
-    # Ingest papers into GroundX
-    ingestion_responses = ingest_papers_to_groundx(bucket_id, download_folder, pdf_localpaths, new_papers)
-    # get rid of erroneous ingestion responses
-    pruned_ingestion_responses = [i for i in ingestion_responses if isinstance(i, str)]
-    # Check status of ingestion
-    wait_for_ingestion_completion(pruned_ingestion_responses)
-    # Getting parsed documents from the bucket
-    documents_response = groundx.documents.lookup(id=bucket_id)
-    # Getting the X-Ray parsing results for documents
-    xray_responses = get_xray_responses(pruned_ingestion_responses)
-    process_xray_data(xray_responses[0])
+    file_path = "/Users/pranaviyer/Desktop/AstralisData"
+    bucket_name = "pdf-analysis"
+    # ingest_pdfs_from_folder(file_path, bucket_name)
+    process_xray_data_from_bucket(bucket_name)

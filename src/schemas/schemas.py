@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.pipeline.registry import SchemaRegistry
+from src.pipeline.registry.schema_registry import SchemaRegistry
 
 
 class Scope(str, Enum):
@@ -410,6 +410,6 @@ class FormattedScoredPoints(BaseModel):
     rerank_score: Optional[float] = 0.0
 
 
-BaseModelListType = TypeVar('BaseModelListType', list[Entry], list[Document], list[Ingestion])
-"""Type variable for list of database models (list[Entry], list[Document], or list[Ingestion])"""
+BaseModelListType = TypeVar('BaseModelListType', list[Entry], list[Ingestion])
+"""Type variable for list of database models (list[Entry] or list[Ingestion])"""
 
