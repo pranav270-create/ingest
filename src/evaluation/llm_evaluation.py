@@ -1,13 +1,14 @@
 from typing import List
+from base64 import b64encode
+import asyncio
+from tqdm.asyncio import tqdm_asyncio
+from openai import AsyncOpenAI
+
 from src.schemas.schemas import Entry, ChunkingMethod
-from src.llm_utils.client_factory import AsyncOpenAI
 from src.llm_utils.utils import Provider
 from src.prompts.parser import text_cost_parser
 from src.llm_utils.api_requests import get_api_key
 from src.evaluation.chunking_evaluation import ExtractionMethod, evaluate_extraction_chunking
-from base64 import b64encode
-import asyncio
-from tqdm.asyncio import tqdm_asyncio
 
 client = AsyncOpenAI(api_key=get_api_key(Provider.OPENAI))
 

@@ -26,12 +26,20 @@ dependencies = [
     "scikit-learn==1.2.2",
     "sentencepiece==0.1.99",
     "einops==0.6.1", "einops-exts==0.0.4", "timm==0.6.13",
+    "ninja",
 ]
 
 image = (
     modal.Image.debian_slim(python_version="3.9")
     .apt_install("build-essential", "curl", "libgl1-mesa-glx", "libglib2.0-0", "libsm6", "libxext6", "libxrender-dev", "git")
     .pip_install(*dependencies)
+    # .run_commands(
+    #     # Set up CUDA environment
+    #     "export CUDA_HOME=/usr/local/cuda",
+    #     "export PATH=$CUDA_HOME/bin:$PATH",
+    #     "export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+    # )
+    # .pip_install("flash-attn==2.5.8")
 )
 
 @app.cls(

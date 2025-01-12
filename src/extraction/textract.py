@@ -232,6 +232,7 @@ def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> Do
 
 if __name__ == "__main__":
     pdf_path = "/Users/kiaghods/Desktop/Academics/Princeton/Internships/astralis/astralisData/LegalRAG.pdf"
+    pdf_path = "/Users/pranaviyer/Downloads/real-estate-market-update-data-centers-summer-2024.pdf"
     scope = Scope.EXTERNAL
     content_type = ContentType.OTHER_ARTICLES
     document = textract_parse(pdf_path, scope, content_type)

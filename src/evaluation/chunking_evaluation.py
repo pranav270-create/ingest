@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from src.schemas.schemas import Document, Entry, Scope, ContentType, Ingestion, FileType, ParsingMethod
 from src.pipeline.registry import FunctionRegistry
 from src.extraction.textract import textract_parse
-from src.extraction.ocr import ocr_parse
+from src.extraction.ocr_service import main_ocr
 from src.schemas.schemas import ChunkingMethod 
 
 class ExtractionMethod(Enum):
@@ -41,7 +41,8 @@ async def evaluate_extraction_chunking(
             ingestion_date=datetime.now(timezone.utc).isoformat(),
             parsing_method=ParsingMethod.OCR2_0
         )
-        document = await ocr_parse(pdf_path, scope=scope, content_type=content_type)
+        documents = await main_ocr([ingestion])
+        document = documents[0]
         if not document:
             raise ValueError("OCR parsing failed to return a document")
     

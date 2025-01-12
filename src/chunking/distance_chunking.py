@@ -28,7 +28,7 @@ async def distance_chunks(document: list[Document], **kwargs) -> list[Document]:
         "similarity_metric": "cosine",
     }
 
-    all_entries = []
+    new_docs = []
     for doc in document:
         content = document_to_content(doc)
         chunks, similarity_data = distance_chunking(  # noqa
@@ -40,12 +40,13 @@ async def distance_chunks(document: list[Document], **kwargs) -> list[Document]:
         )
         # Convert chunks to entries and add to flat list
         entries = chunks_to_entries(doc, chunks, "distance", chunking_metadata)
-        # Store similarity data in each entry's metadata
-        # for entry in entries:
-        #     entry.metadata.update(similarity_data)
-        all_entries.extend(entries)
-
-    return all_entries
+        doc.entries = entries
+        metadata = {}
+        metadata['sentence_indices'] = similarity_data['sentence_indices']
+        metadata['similarities'] = similarity_data['similarities']
+        doc.metadata = metadata
+        new_docs.append(doc)
+    return new_docs
 
 
 @lru_cache(maxsize=1)
