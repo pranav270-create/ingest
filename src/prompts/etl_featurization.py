@@ -20,7 +20,7 @@ async def base_model_to_encoded_image(base_model: BaseModel, read=None):
         content = await read_content(base_model.file_path, read)
 
     elif isinstance(base_model, Document):
-        filepath = base_model.entries[0].ingestion.parsed_file_path
+        filepath = base_model.entries[0].ingestion.extracted_file_path
         content = await read_content(filepath, read)
 
     elif isinstance(base_model, Entry):
@@ -69,7 +69,7 @@ class FilterIndexingPrompt:
         if isinstance(base_model, Ingestion):
             document = await read_content(base_model.file_path, read)  # Call the class method using cls
         elif isinstance(base_model, Document):
-            filepath = base_model.entries[0].ingestion.parsed_file_path
+            filepath = base_model.entries[0].ingestion.extracted_file_path
             document = await read_content(filepath, read)  # Call the class method using cls
         elif isinstance(base_model, Entry):
             document = base_model.string
@@ -173,9 +173,9 @@ class SummarizeEntryPrompt:
     @classmethod
     async def format_prompt(cls, entry: Entry, read=None):
         if read is not None:
-            document = await read(entry.ingestion.parsed_file_path)
+            document = await read(entry.ingestion.extracted_file_path)
         else:
-            with open(entry.ingestion.parsed_file_path) as f:
+            with open(entry.ingestion.extracted_file_path) as f:
                 document = f.read()
         return cls.system_prompt, cls.user_prompt.format(entry=entry.string, document=document)
 
@@ -239,7 +239,7 @@ class CleanEntryPrompt:
         if isinstance(base_model, Ingestion):
             document = await read_content(base_model.file_path, read)  # Call the class method using cls
         elif isinstance(base_model, Document):
-            filepath = base_model.entries[0].ingestion.parsed_file_path
+            filepath = base_model.entries[0].ingestion.extracted_file_path
             document = await read_content(filepath, read)  # Call the class method using cls
         elif isinstance(base_model, Entry):
             document = base_model.string

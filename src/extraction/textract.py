@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod, Document, ParsedFeatureType
+from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod, Document, ExtractedFeatureType
 
 
 def get_ingestion_data(pdf_path: str, scope: Scope, content_type: ContentType) -> dict[str, Any]:
@@ -198,7 +198,7 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
                 string=combined_text.strip(),
                 index_numbers=[Index(primary=page_number, secondary=0)],
                 bounding_box=[BoundingBox(left=0, top=0, width=0, height=0)],
-                parsed_feature_type=[ParsedFeatureType.COMBINED_TEXT]
+                parsed_feature_type=[ExtractedFeatureType.COMBINED_TEXT]
             )
         )
     

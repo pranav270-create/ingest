@@ -1,30 +1,28 @@
-import os
-from bs4 import BeautifulSoup
-import sys
-from pathlib import Path
-import subprocess
 import asyncio
+import os
+import sys
 import uuid
-from urllib.parse import urlparse, urljoin
 from asyncio import Queue
-from typing import List, Tuple, Optional
+from pathlib import Path
+from typing import Optional
+from urllib.parse import urljoin, urlparse
+
 import aiohttp
 import backoff
+from bs4 import BeautifulSoup
 
 sys.path.append(str(Path(__file__).resolve().parents[3]))
 
+from src.pipeline.registry import FunctionRegistry
 from src.schemas.schemas import (
-    Ingestion,
-    Scope,
     ContentType,
     FileType,
+    Ingestion,
     IngestionMethod,
-    ParsingMethod,
-    ParsedFeatureType,
+    Scope,
 )
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.utils.ingestion_utils import update_ingestion_with_metadata
-from src.pipeline.registry import FunctionRegistry
 
 
 async def get_urls(urls: list[str], write=None, added_metadata: dict = {}):
@@ -39,13 +37,11 @@ async def get_urls(urls: list[str], write=None, added_metadata: dict = {}):
 
             os.system(f'wget -O "{download_path}" {url}')
 
-            with open(download_path, "r") as f:
+            with open(download_path) as f:
                 html = f.read()
 
             soup = BeautifulSoup(html, "html.parser")
-            document_title = (
-                soup.title.string if soup.title else str(uuid.uuid4())
-            )  # Get title from BeautifulSoup if available, else use uuid
+            document_title = soup.title.string if soup.title else str(uuid.uuid4())  # Get title from BeautifulSoup if available, else use uuid
             new_local_path = f"{download_path}.html"
             os.rename(download_path, new_local_path)  # Rename the file
             local_path = new_local_path
@@ -103,9 +99,7 @@ class DownloadQueue:
         if self.session:
             await self.session.close()
 
-    @backoff.on_exception(
-        backoff.expo, (aiohttp.ClientError, asyncio.TimeoutError), max_tries=3
-    )
+    @backoff.on_exception(backoff.expo, (aiohttp.ClientError, asyncio.TimeoutError), max_tries=3)
     async def download_single(self, url: str) -> Optional[bytes]:
         try:
             async with self.session.get(url, timeout=self.timeout) as response:
@@ -116,6 +110,7 @@ class DownloadQueue:
                     return None
         except Exception as e:
             import traceback
+
             print(traceback.format_exc())
             print(f"Error downloading {url}: {e}")
             return None
@@ -132,11 +127,9 @@ class DownloadQueue:
             finally:
                 self.queue.task_done()
 
-    async def process_urls(self, urls: List[str], callback) -> List[Tuple[str, bool]]:
+    async def process_urls(self, urls: list[str], callback) -> list[tuple[str, bool]]:
         # Start workers
-        workers = [
-            asyncio.create_task(self.worker()) for _ in range(self.max_concurrent)
-        ]
+        workers = [asyncio.create_task(self.worker()) for _ in range(self.max_concurrent)]
 
         # Add URLs to queue
         for url in urls:
@@ -152,7 +145,7 @@ class DownloadQueue:
         return workers
 
 
-async def download_pdfs(pdf_links: List[str], write=None) -> List[Tuple[str, str]]:
+async def download_pdfs(pdf_links: list[str], write=None) -> list[tuple[str, str]]:
     downloaded_pairs = []
     temp_dir = get_temp_dir()
 
@@ -176,6 +169,7 @@ async def download_pdfs(pdf_links: List[str], write=None) -> List[Tuple[str, str
     # Clean up temp directory
     try:
         import shutil
+
         shutil.rmtree(temp_dir)
     except Exception as e:
         print(f"Error cleaning up temp directory: {e}")
@@ -183,32 +177,34 @@ async def download_pdfs(pdf_links: List[str], write=None) -> List[Tuple[str, str
     return downloaded_pairs
 
 
-def clean_pdf_links(master_list: List[str], urls: List[str]) -> None:
+def clean_pdf_links(master_list: list[str], urls: list[str]) -> None:
     # Filter and clean PDF links
     pdf_links = set()
     for link in master_list:
         if not link:  # Skip empty links
             continue
-            
+
         # Normalize the link
         clean_link = link.strip().lower()
         if "#" in clean_link:  # Only split if # exists
             clean_link = clean_link.split("#")[0]
-            
+
         # Skip invalid protocols or obviously broken links
-        if clean_link.startswith(('javascript:', 'mailto:', 'tel:', 'data:')):
+        if clean_link.startswith(("javascript:", "mailto:", "tel:", "data:")):
             continue
-            
+
         # Check for PDF indicators
-        is_pdf = any([
-            clean_link.endswith('.pdf'),
-            'application/pdf' in clean_link,
-            '/pdf/' in clean_link,
-            'download=pdf' in clean_link,
-            'type=pdf' in clean_link,
-            'format=pdf' in clean_link
-        ])
-        
+        is_pdf = any(
+            [
+                clean_link.endswith(".pdf"),
+                "application/pdf" in clean_link,
+                "/pdf/" in clean_link,
+                "download=pdf" in clean_link,
+                "type=pdf" in clean_link,
+                "format=pdf" in clean_link,
+            ]
+        )
+
         if is_pdf:
             # Handle relative URLs by joining with base URL if needed
             try:
@@ -223,9 +219,7 @@ def clean_pdf_links(master_list: List[str], urls: List[str]) -> None:
 
 
 @FunctionRegistry.register("ingest", "manual_links")
-async def manual_ingest(
-    urls: list[str], read=None, write=None, added_metadata: dict = {}, **kwargs
-):
+async def manual_ingest(urls: list[str], read=None, write=None, added_metadata: dict = {}, **kwargs):
     master_list, all_ingestions = await get_urls(urls, write, added_metadata)
 
     # Filter and clean PDF links
@@ -265,9 +259,5 @@ if __name__ == "__main__":
         # "https://www.bridgewaternj.gov/council-meeting-minutes/",
         "https://www.bridgewaternj.gov/planning-board-minutes/"
     ]
-    urls = [
-        "http://ww2.abilenetx.com/ordinances/2011%20Ordinances/"
-    ]
-    all_ingestions = asyncio.run(
-        manual_ingest(urls, added_metadata={"creator_name": "City of Abilene"})
-    )
+    urls = ["http://ww2.abilenetx.com/ordinances/2011%20Ordinances/"]
+    all_ingestions = asyncio.run(manual_ingest(urls, added_metadata={"creator_name": "City of Abilene"}))

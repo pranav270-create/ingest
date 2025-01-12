@@ -1,14 +1,11 @@
 import sys
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry import PromptRegistry
-from src.retrieval.retrieve_new import FormattedScoredPoints
 
 
 class QuestionAnswerPair(BaseModel):
@@ -52,37 +49,3 @@ class SyntheticQAPairPrompt:
             model_response = parsed_items.get(i)
             basemodel['synthetic_questions'] = model_response["questions"]
         return base_models
-
-
-@PromptRegistry.register("synthetic_answer")
-class SyntheticAnswerPrompt:
-    system_prompt = (
-        "You are an assistant specialized in providing concise, accurate answers to questions "
-        "based on given context. Your task is to generate a brief, focused answer that is "
-        "fully grounded in the provided context."
-    )
-
-    user_prompt = (
-        "Based on the following context, provide a concise answer to the question. "
-        "Only use information that is explicitly stated in the context. "
-        "If the answer cannot be found in the context, respond with 'Unable to answer based on the given context.'\n\n"
-        "Context: {evidence}\n\n"
-        "Question: {question}\n"
-    )
-
-    @classmethod
-    def format_prompt(cls, question, context: list[FormattedScoredPoints]):
-        evidence = ""
-        for item in context:
-            title = item.ingestion.document_title
-            evidence += f"{title}\n{item.raw_text}\n\n"
-
-        return {
-            "system": cls.system_prompt,
-            "user": cls.user_prompt.format(question=question, evidence=evidence),
-        }
-
-    @classmethod
-    def parse_response(response: Any, model: str) -> tuple[str, float]:
-        response, _ = text_cost_parser(response)
-        return response

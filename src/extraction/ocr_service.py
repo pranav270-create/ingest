@@ -9,7 +9,7 @@ import os
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import Document, Entry, Index, Ingestion, ParsedFeatureType, ParsingMethod, Scope, IngestionMethod, FileType
+from src.schemas.schemas import Document, Entry, Index, Ingestion, ExtractedFeatureType, ExtractionMethod, Scope, IngestionMethod, FileType
 from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 
 
@@ -33,14 +33,14 @@ async def main_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs)
         # check if the ingestion is a PDF or an image
         if ingestion.file_type != FileType.PDF and ingestion.file_type not in [FileType.JPG, FileType.JPEG, FileType.PNG]:
             continue
-        ingestion.parsing_method = ParsingMethod.OCR2_0
-        ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
+        ingestion.extraction_method = ExtractionMethod.OCR2_0
+        ingestion.extraction_date = get_current_utc_datetime()
+        ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
 
         # Set parsed_file_path (similar to simple.py)
-        if not ingestion.parsed_file_path:
+        if not ingestion.extracted_file_path:
             base_path = os.path.splitext(ingestion.file_path)[0]
-            ingestion.parsed_file_path = f"{base_path}_ocr.txt"
+            ingestion.extracted_file_path = f"{base_path}_ocr.txt"
 
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
         # Determine if it's a PDF or an image
@@ -85,9 +85,9 @@ async def main_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs)
         # Save combined text to file
         combined_text = "\n\n=== PAGE BREAK ===\n\n".join(all_text)
         if write:
-            await write(ingestion.parsed_file_path, combined_text, mode="w")
+            await write(ingestion.extracted_file_path, combined_text, mode="w")
         else:
-            with open(ingestion.parsed_file_path, "w", encoding='utf-8') as f:
+            with open(ingestion.extracted_file_path, "w", encoding='utf-8') as f:
                 f.write(combined_text)
 
         all_documents.append(document)
@@ -110,13 +110,13 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
             continue
 
         # Set up ingestion metadata
-        ingestion.parsing_method = ParsingMethod.OCR2_0
-        ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
+        ingestion.extraction_method = ExtractionMethod.OCR2_0
+        ingestion.extraction_date = get_current_utc_datetime()
+        ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
 
-        if not ingestion.parsed_file_path:
+        if not ingestion.extracted_file_path:
             base_path = os.path.splitext(ingestion.file_path)[0]
-            ingestion.parsed_file_path = f"{base_path}_ocr.txt"
+            ingestion.extracted_file_path = f"{base_path}_ocr.txt"
 
         # Get file content and process
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
@@ -168,9 +168,9 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
         if document_texts[ing_idx]:  # Only save if we have processed text
             combined_text = "\n\n=== PAGE BREAK ===\n\n".join(document_texts[ing_idx])
             if write:
-                await write(ingestion.parsed_file_path, combined_text, mode="w")
+                await write(ingestion.extracted_file_path, combined_text, mode="w")
             else:
-                with open(ingestion.parsed_file_path, "w", encoding='utf-8') as f:
+                with open(ingestion.extracted_file_path, "w", encoding='utf-8') as f:
                     f.write(combined_text)
 
     return [doc for doc in documents if doc.entries]  # Return only documents that have entries

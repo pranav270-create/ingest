@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Document, Entry, Ingestion, ParsedFeatureType, ParsingMethod
+from src.schemas.schemas import Document, Entry, Ingestion, ExtractedFeatureType, ExtractionMethod
 from src.pipeline.registry import FunctionRegistry
 from src.utils.datetime_utils import get_current_utc_datetime
 
@@ -30,10 +30,10 @@ async def parse_html(ingestions: list[Ingestion], max_words_per_aggregate_passag
         else:
             with open(parsed_file_path, "w") as f:
                 f.write(all_text)
-        ingestion.parsing_method = ParsingMethod.GOOGLE_LABS_HTML_CHUNKER
-        ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
-        ingestion.parsed_file_path = parsed_file_path
+        ingestion.extraction_method = ExtractionMethod.GOOGLE_LABS_HTML_CHUNKER
+        ingestion.extraction_date = get_current_utc_datetime()
+        ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
+        ingestion.extracted_file_path = parsed_file_path
         entry = Entry(ingestion=ingestion, string=all_text, index_numbers=None, citations=None)
         document = Document(
             entries=[entry],

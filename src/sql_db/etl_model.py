@@ -1,13 +1,13 @@
-from sqlalchemy import DateTime, String, Text, func, BigInteger, Integer, ForeignKey, JSON, Boolean, Enum as SQLAlchemyEnum, text, Table, Column
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.schema import UniqueConstraint, Index
-from sqlalchemy.orm import validates
-from sqlalchemy.ext.asyncio import AsyncAttrs
-from datetime import datetime
-from typing import Any, Optional, List
-from enum import Enum as PythonEnum
 import sys
+from datetime import datetime
+from enum import Enum as PythonEnum
 from pathlib import Path
+from typing import Any, Optional
+
+from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, func, text
+from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
+from sqlalchemy.schema import Index, UniqueConstraint
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -51,21 +51,21 @@ class Ingest(AsyncAttrs, AbstractBase):
     __table_args__ = (
         UniqueConstraint('hash', name='uq_ingest_hash'),
     )
-    processing_pipelines: Mapped[List["ProcessingPipeline"]] = relationship(
+    processing_pipelines: Mapped[list["ProcessingPipeline"]] = relationship(
         "ProcessingPipeline",
         secondary="ingest_pipeline",
         back_populates="ingests"
     )
-    entries: Mapped[List["Entry"]] = relationship("Entry", back_populates="ingest")
+    entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="ingest")
 
-    outgoing_relationships: Mapped[List["DocumentRelationship"]] = relationship(
-        "DocumentRelationship", 
-        foreign_keys="[DocumentRelationship.source_id]", 
+    outgoing_relationships: Mapped[list["DocumentRelationship"]] = relationship(
+        "DocumentRelationship",
+        foreign_keys="[DocumentRelationship.source_id]",
         back_populates="source"
     )
-    incoming_relationships: Mapped[List["DocumentRelationship"]] = relationship(
-        "DocumentRelationship", 
-        foreign_keys="[DocumentRelationship.target_id]", 
+    incoming_relationships: Mapped[list["DocumentRelationship"]] = relationship(
+        "DocumentRelationship",
+        foreign_keys="[DocumentRelationship.target_id]",
         back_populates="target"
     )
 
@@ -75,7 +75,7 @@ class ProcessingPipeline(AsyncAttrs, AbstractBase):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     version: Mapped[str] = mapped_column(String(50), nullable=False, comment="Version of the processing pipeline")
     description: Mapped[str] = mapped_column(String(200), nullable=True, comment="Description of this processing pipeline")
-    storage_type: Mapped[str] = mapped_column(String(50), nullable=False, default="local", comment="Type of storage")
+    storage_type: Mapped[str] = mapped_column(String(50), nullable=False, default="local", comment="Type of storage, local or s3")
     storage_path: Mapped[str] = mapped_column(String(255), nullable=True, comment="Path to the storage of this pipeline")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Creation date of this pipeline")
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)
@@ -84,13 +84,13 @@ class ProcessingPipeline(AsyncAttrs, AbstractBase):
         Index('idx_version_description', 'version', 'description'),
     )
 
-    ingests: Mapped[List["Ingest"]] = relationship(
+    ingests: Mapped[list["Ingest"]] = relationship(
         "Ingest",
         secondary="ingest_pipeline",
         back_populates="processing_pipelines"
     )
-    processing_steps: Mapped[List["ProcessingStep"]] = relationship("ProcessingStep", back_populates="pipeline")
-    entries: Mapped[List["Entry"]] = relationship("Entry", back_populates="pipeline")
+    processing_steps: Mapped[list["ProcessingStep"]] = relationship("ProcessingStep", back_populates="pipeline")
+    entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="pipeline")
 
 
 class StepType(str, PythonEnum):
@@ -127,7 +127,7 @@ class ProcessingStep(AsyncAttrs, AbstractBase):
 
     previous_step_id: Mapped[Optional[int]] = mapped_column(ForeignKey('processing_steps.id'), nullable=True, index=True)
     previous_step: Mapped[Optional["ProcessingStep"]] = relationship("ProcessingStep", remote_side=[id], back_populates="next_steps")
-    next_steps: Mapped[List["ProcessingStep"]] = relationship("ProcessingStep", back_populates="previous_step")
+    next_steps: Mapped[list["ProcessingStep"]] = relationship("ProcessingStep", back_populates="previous_step")
 
     __table_args__ = (
         UniqueConstraint('pipeline_id', 'order', name='uq_pipeline_step_order'),
@@ -176,6 +176,8 @@ class Entry(AsyncAttrs, AbstractBase):
     synthetic_questions: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Questions generated from the entry")
     added_featurization: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Additional features added to the entry")
     index_numbers: Mapped[str] = mapped_column(Text, nullable=True, comment="Index numbers for the entry")
+    # min_primary_index:
+    # max_primary_index:
 
     __table_args__ = (
        UniqueConstraint('collection_name', 'unique_identifier', name='uq_collection_unique_identifier'),
@@ -189,8 +191,8 @@ class Entry(AsyncAttrs, AbstractBase):
     ingest: Mapped[Optional[Ingest]] = relationship("Ingest", back_populates="entries")
 
     # Relationships
-    outgoing_relationships: Mapped[List["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.source_id]", back_populates="source")
-    incoming_relationships: Mapped[List["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.target_id]", back_populates="target")
+    outgoing_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.source_id]", back_populates="source")
+    incoming_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.target_id]", back_populates="target")
 
 
 class EntryRelationship(Base):
@@ -259,10 +261,11 @@ ingest_pipeline = Table(
 
 if __name__ == '__main__':
     import asyncio
-    from sqlalchemy.orm import sessionmaker
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-    from sqlalchemy.future import select
+
     from sqlalchemy import text
+    from sqlalchemy.future import select
+    from sqlalchemy.orm import sessionmaker
+
     from src.sql_db.database_simple import get_engine
 
     engine = get_engine("tinypipeline")

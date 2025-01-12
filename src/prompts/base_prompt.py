@@ -27,6 +27,7 @@ class BasePrompt(ABC):
         """
         pass
 
+
     @staticmethod
     @abstractmethod
     def parse_response(entries: BaseModelListType, responses: list[ModelResponse]) -> BaseModelListType:

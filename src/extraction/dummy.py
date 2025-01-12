@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Document, Entry, Ingestion, ParsedFeatureType, ParsingMethod
+from src.schemas.schemas import Document, Entry, Ingestion, ExtractedFeatureType, ExtractionMethod
 from src.pipeline.registry import FunctionRegistry
 
 

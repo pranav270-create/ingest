@@ -129,7 +129,7 @@ class IngestionMethod(str, Enum):
     OTHER = "other"
 
 
-class ParsingMethod(str, Enum):
+class ExtractionMethod(str, Enum):
     SIMPLE = "simple"
     TESSERACT = "tesseract"
     TEXTRACT = "textract"
@@ -145,7 +145,7 @@ class ParsingMethod(str, Enum):
     NONE = "none"
 
 
-class ParsedFeatureType(str, Enum):
+class ExtractedFeatureType(str, Enum):
     # Basic content types
     TEXT = "text"
     IMAGE = "image"
@@ -271,7 +271,7 @@ class Index(BaseModel):
 
 class BoundingBox(BaseModel):
     """
-    This is the bounding box of the parsed data.
+    This is the bounding box of the extracted data.
     """
 
     left: float
@@ -303,16 +303,15 @@ class Ingestion(BaseModel):
     summary: Optional[str] = None  # This is a summary of the document
     keywords: Optional[list[str]] = None  # This is a list of keywords that we have extracted
     metadata: Optional[dict[str, Any]] = None  # This is for any metadata that we have not captured in other fields yet
-    # Parsing fields
-    parsing_method: Optional[ParsingMethod] = None
-    parsing_date: Optional[str] = None
-    parsed_feature_type: Optional[ParsedFeatureType] = None  # This is the type of feature that was extracted
-    parsed_file_path: Optional[str] = None  # This is the path to the parsed file which we can use for more context
+    # Extraction fields
+    extraction_method: Optional[ExtractionMethod] = None
+    extraction_date: Optional[str] = None
+    extracted_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
     # Chunking fields
     chunking_method: Optional[ChunkingMethod] = None
     chunking_metadata: Optional[dict[str, Any]] = None
     chunking_date: Optional[str] = None
-    # Featurization fields
+    # Featurization fields -> name of prompt from PromptRegistry
     feature_models: Optional[list[str]] = None
     feature_dates: Optional[list[str]] = None
     feature_types: Optional[list[str]] = None
@@ -330,21 +329,17 @@ class Entry(BaseModel):
     schema__: str = Field(default="Entry", alias="schema__")
     ingestion: Optional[Ingestion] = None  # null for cross document only, citations must be there
     string: Optional[str] = None  # If we embed a document or image, we don't need the original text
-    context_summary_string: Optional[str] = (
-        None  # This is only if we are generating a summary of the entry wrt the broader document # noqa
-    )
+    context_summary_string: Optional[str] = None  # only if we generate a summary of the entry wrt the broader document # noqa
     added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
     keywords: Optional[list[str]] = None  # This is for any keywords that we have not captured in other fields yet
-    index_numbers: Optional[list[Index]] = (
-        None  # Null if we embed whole document or cross-doc summary. Represents range for continous time items; int for discrete. # noqa
-    )
+    index_numbers: Optional[list[Index]] = None  # Null if embed whole document or cross-doc summary. range for continous time; int for discrete. # noqa
     bounding_box: Optional[list[BoundingBox]] = None   # since we may cross page boundaries
-    parsed_feature_type: Optional[list[ParsedFeatureType]] = None  # since we may have multiple feature types in a single entry
-    # Add fields for parent-child relationships in textract parsing
+    extracted_feature_type: Optional[list[ExtractedFeatureType]] = None  # since we may have multiple feature types in a single entry
+    # Add fields for parent-child relationships in textract extraction
     id: Optional[str] = None  # Unique identifier for this entry
     parent_id: Optional[str] = None  # ID of the parent entry (e.g., table containing cells)
     child_ids: Optional[list[str]] = None  # IDs of child entries (e.g., cells in a table)
-
+    citations: Optional[dict[str, str]] = None  # This is for citations that we have not processed yet
 
 @SchemaRegistry.register("Document")
 class Document(BaseModel):
@@ -392,11 +387,11 @@ class Upsert(BaseModel):
     creation_date: Optional[str] = None
     ingestion_method: IngestionMethod  # Source of ingestion (e.g., 'slack', 'youtube', 'wix', etc.)
     ingestion_date: str
-    # Parsing fields
-    parsing_method: Optional[ParsingMethod] = None
-    parsing_date: Optional[str] = None
-    parsed_feature_type: Optional[ParsedFeatureType] = None  # This is the type of feature that was extracted
-    parsed_file_path: Optional[str] = None  # This is the path to the parsed file which we can use for more context
+    # Extraction fields
+    extraction_method: Optional[ExtractionMethod] = None
+    extraction_date: Optional[str] = None
+    extracted_feature_type: Optional[ExtractedFeatureType] = None  # This is the type of feature that was extracted
+    extracted_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
     # Chunking fields
     chunking_method: Optional[ChunkingMethod] = None
     chunking_date: Optional[str] = None

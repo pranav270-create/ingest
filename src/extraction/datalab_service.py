@@ -11,7 +11,7 @@ import os
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import Document, Entry, Index, Ingestion, ParsedFeatureType, ParsingMethod, Scope, IngestionMethod
+from src.schemas.schemas import Document, Entry, Index, Ingestion, ExtractedFeatureType, ExtractionMethod, Scope, IngestionMethod
 from src.utils.datetime_utils import get_current_utc_datetime
 
 def convert_to_pdf(file_content, file_extension):
@@ -51,14 +51,14 @@ async def main_datalab(ingestions: list[Ingestion], write=None, read=None, **kwa
     cls = modal.Cls.lookup("document-parsing-modal", "Model")
     obj = cls()
     for ingestion in ingestions:
-        ingestion.parsing_method = ParsingMethod.MARKER
-        ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
+        ingestion.extraction_method = ExtractionMethod.MARKER
+        ingestion.extraction_date = get_current_utc_datetime()
+        ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
 
         # Set parsed_file_path (similar to ocr_service.py)
-        if not ingestion.parsed_file_path:
+        if not ingestion.extracted_file_path:
             base_path = os.path.splitext(ingestion.file_path)[0]
-            ingestion.parsed_file_path = f"{base_path}_datalab.txt"
+            ingestion.extracted_file_path = f"{base_path}_datalab.txt"
 
         # Update file reading to handle async
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
@@ -89,9 +89,9 @@ async def main_datalab(ingestions: list[Ingestion], write=None, read=None, **kwa
         # Save combined text to file (similar to ocr_service.py)
         combined_text = "\n\n=== PAGE BREAK ===\n\n".join(all_text)
         if write:
-            await write(ingestion.parsed_file_path, combined_text, mode="w")
+            await write(ingestion.extracted_file_path, combined_text, mode="w")
         else:
-            with open(ingestion.parsed_file_path, "w", encoding='utf-8') as f:
+            with open(ingestion.extracted_file_path, "w", encoding='utf-8') as f:
                 f.write(combined_text)
 
         all_documents.append(document)

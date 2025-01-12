@@ -8,7 +8,7 @@ from sentence_transformers import SentenceTransformer
 from src.extraction.ocr import ocr_parse
 from src.extraction.textract import textract_parse
 from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import ChunkingMethod, ContentType, Entry, FileType, Ingestion, ParsingMethod, Scope
+from src.schemas.schemas import ChunkingMethod, ContentType, Entry, FileType, Ingestion, ExtractionMethod, Scope
 import src.pipeline.pipeline
 
 class ExtractionMethod(Enum):
@@ -40,7 +40,7 @@ async def evaluate_extraction_chunking(
             creator_name="evaluation_pipeline",
             ingestion_method="local_file",
             ingestion_date=datetime.now(timezone.utc).isoformat(),
-            parsing_method=ParsingMethod.OCR2_0,
+            parsing_method=ExtractionMethod.OCR2_0,
         )
         document = await ocr_parse(pdf_path, scope=scope, content_type=content_type)
         if not document:
