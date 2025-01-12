@@ -1,4 +1,4 @@
-# Document Processing Pipeline
+# Ingest
 
 ## Architecture Overview
 
@@ -6,39 +6,45 @@ The pipeline is built around a flexible, modular architecture that processes doc
 
 ### Core Components
 
-1. **Pipeline Orchestrator**
-   - Manages the overall pipeline configuration and execution
+**[Pipeline Orchestrator](pipeline_orchestrator.md)**
+
+   Manages the overall pipeline configuration and execution
+
    - Loads configuration from YAML files
    - Sets up storage backend
    - Registers processing functions
 
-2. **Registry System**
+**[Registry System](registry.md)**
+
    Three main registries handle different aspects of the pipeline:
 
    - `FunctionRegistry`: Manages processing functions for each pipeline stage
-   - `SchemaRegistry`: Handles data schemas for different document types
+   - `SchemaRegistry`: Handles data schemas for different units of data
    - `PromptRegistry`: Manages prompt templates for LLM interactions
 
-3. **Storage Backend**
-   - Abstracted storage interface supporting different backends
-   - Handles reading and writing of intermediate results
-   - Configurable through pipeline configuration
+**[Storage Backend](storage.md)**
+
+   - Abstracted read/write interface to save intermediate results
+   - Supports local filesystem `LocalStorageBackend` and S3 `S3StorageBackend`
 
 ### Pipeline Stages
 
 The pipeline processes documents through the following stages:
 
-1. **Ingestion** (`ingest`)
+**Ingestion** (`/ingestion`)
+
    - Handles document input from various sources
    - Supports multiple ingestion methods (web scraping, local files, APIs)
    - Creates initial document metadata
 
-2. **Parsing** (`parse`)
+**Extraction** (`/extraction`)
+
    - Extracts text and structure from documents
    - Supports multiple parsing methods (OCR, HTML parsing, etc.)
    - Creates structured document representations
 
-3. **Chunking** (`chunk`)
+**Chunking** (`/chunking`)
+
    - Breaks documents into smaller, processable pieces
    - Multiple chunking strategies available:
      - Fixed length
@@ -49,21 +55,24 @@ The pipeline processes documents through the following stages:
      - Topic-based
      - Regex-based
 
-4. **Featurization** (`featurize`)
+**Featurization** (`/featurization`)
+
    - Extracts features from document chunks
    - Supports multiple feature types and models
 
-5. **Embedding** (`embed`)
+**Embedding** (`/embedding`)
+
    - Converts text into vector representations
    - Supports different embedding models and dimensions
 
-6. **Upsert** (`upsert`)
+**Upsert** (`upsert`)
+
    - Stores processed documents in vector database
    - Manages document metadata and relationships
 
-### Data Models
+### Data Schemas
 
-The pipeline uses several core data models:
+The pipeline uses several core data schemas:
 
 1. **Ingestion**
    - Tracks document metadata and processing status
