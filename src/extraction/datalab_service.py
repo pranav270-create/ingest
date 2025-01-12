@@ -12,7 +12,7 @@ import json
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import Document, Entry, Index, Ingestion, ParsedFeatureType, ParsingMethod, Scope, IngestionMethod
+from src.schemas.schemas import Entry, Index, Ingestion, ParsedFeatureType, ParsingMethod, Scope, IngestionMethod
 from src.utils.datetime_utils import get_current_utc_datetime
 
 def convert_to_pdf(file_content: bytes, file_extension: str) -> bytes:
@@ -47,7 +47,7 @@ def convert_to_pdf(file_content: bytes, file_extension: str) -> bytes:
 
 
 @FunctionRegistry.register("parse", "datalab")
-async def main_datalab(ingestions: list[Ingestion], write=None, read=None, mode="simple", **kwargs) -> list[Document]:
+async def main_datalab(ingestions: list[Ingestion], write=None, read=None, mode="simple", **kwargs) -> list[Entry]:
     file_bytes = []
     cls = modal.Cls.lookup("document-parsing-modal", "Model")
     obj = cls()
@@ -73,9 +73,8 @@ async def main_datalab(ingestions: list[Ingestion], write=None, read=None, mode=
         with fitz.open(stream=io.BytesIO(pdf_content), filetype="pdf") as pdf:
             ingestion.metadata = pdf.metadata
     
-    all_documents = []
+    all_entries = []
     async for ret in obj.parse_document.map.aio(file_bytes, return_exceptions=True):
-        document = Document(entries=[])
         if isinstance(ret, Exception):
             print(f"Error processing document: {ret}")
             continue
@@ -97,7 +96,7 @@ async def main_datalab(ingestions: list[Ingestion], write=None, read=None, mode=
                     string=combined_page_text, 
                     index_numbers=[Index(primary=page_num + 1)]
                 )
-                document.entries.append(page_entry)
+                all_entries.append(page_entry)
                 all_text.append(combined_page_text)
         
         else:  # mode == "structured"
@@ -116,7 +115,7 @@ async def main_datalab(ingestions: list[Ingestion], write=None, read=None, mode=
                                 "confidence": child.get("confidence")
                             }
                         )
-                        document.entries.append(entry)
+                        all_entries.append(entry)
                         all_text.append(child["text"])
 
         # Save combined text to file
@@ -127,5 +126,4 @@ async def main_datalab(ingestions: list[Ingestion], write=None, read=None, mode=
             with open(ingestion.parsed_file_path, "w", encoding='utf-8') as f:
                 f.write(combined_text)
 
-        all_documents.append(document)
-    return all_documents
+    return all_entries

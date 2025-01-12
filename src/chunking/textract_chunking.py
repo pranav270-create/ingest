@@ -4,13 +4,13 @@ from typing import Any
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Document, Entry, Index, ChunkingMethod, ParsedFeatureType, BoundingBox
+from src.schemas.schemas import Entry, Index, ChunkingMethod, ParsedFeatureType, BoundingBox
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.pipeline.registry import FunctionRegistry
-from src.chunking.chunk_utils import document_to_content, chunks_to_entries
+from src.chunking.chunk_utils import entries_to_content, chunks_to_entries
 
 @FunctionRegistry.register("chunk", ChunkingMethod.TEXTRACT.value)
-async def textract_chunks(document: list[Document], **kwargs) -> list[Entry]:
+async def textract_chunks(entries: list[Entry], **kwargs) -> list[Entry]:
     """
     Chunks documents while preserving textract-specific features (tables, forms, etc.)
     """
@@ -20,14 +20,12 @@ async def textract_chunks(document: list[Document], **kwargs) -> list[Entry]:
         "method": "textract_preserve_features"
     }
     
-    new_docs = []
-    for doc in document:
-        content = document_to_content(doc)
-        chunks = textract_chunking(content, chunk_size=chunk_size)
-        formatted_entries = chunks_to_entries(doc, chunks, ChunkingMethod.TEXTRACT, chunking_metadata)
-        doc.entries = formatted_entries
-        new_docs.append(doc)
-    return new_docs
+    content = entries_to_content(entries)
+    chunks = textract_chunking(content, chunk_size=chunk_size)
+    formatted_entries = chunks_to_entries(entries, chunks, ChunkingMethod.TEXTRACT, chunking_metadata)
+    entries = formatted_entries
+    return entries
+
 
 # TODO: This should be used and only not used when the chunks cross pages
 def combine_bounding_boxes(boxes: list[BoundingBox]) -> BoundingBox:
@@ -41,6 +39,7 @@ def combine_bounding_boxes(boxes: list[BoundingBox]) -> BoundingBox:
         width=max(box.left + box.width for box in boxes) - min(box.left for box in boxes),
         height=max(box.top + box.height for box in boxes) - min(box.top for box in boxes)
     )
+
 
 def textract_chunking(content: list[dict[str, Any]], chunk_size: int = 1000) -> list[dict[str, Any]]:
     """

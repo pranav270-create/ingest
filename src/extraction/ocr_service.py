@@ -9,7 +9,7 @@ import os
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import Document, Entry, Index, Ingestion, ParsedFeatureType, ParsingMethod, Scope, IngestionMethod, FileType
+from src.schemas.schemas import Entry, Index, Ingestion, ParsedFeatureType, ParsingMethod, Scope, IngestionMethod, FileType
 from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 
 
@@ -25,10 +25,10 @@ def pdf_to_images(pdf_content):
 
 
 @FunctionRegistry.register("parse", "ocr2_0")
-async def main_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Document]:
+async def main_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Entry]:
     cls = modal.Cls.lookup("ocr-modal", "Model")
     obj = cls()
-    all_documents = []
+    all_entries = []
     for ingestion in ingestions:
         # check if the ingestion is a PDF or an image
         if ingestion.file_type != FileType.PDF and ingestion.file_type not in [FileType.JPG, FileType.JPEG, FileType.PNG]:
@@ -66,7 +66,6 @@ async def main_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs)
             img.save(img_byte_arr, format='PNG')
             image_bytes_list.append((img_byte_arr.getvalue(), "format"))
         # Process images with OCR
-        document = Document(entries=[])
         all_text = []  # Collect all text for saving to file
         count = 0
         async for ret in obj.ocr_document.map.aio(image_bytes_list, return_exceptions=True):
@@ -79,7 +78,7 @@ async def main_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs)
                 index_numbers=[Index(primary=count)]
             )
             count += 1
-            document.entries.append(page)
+            all_entries.append(page)
             all_text.append(ret)
 
         # Save combined text to file
@@ -89,20 +88,18 @@ async def main_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs)
         else:
             with open(ingestion.parsed_file_path, "w", encoding='utf-8') as f:
                 f.write(combined_text)
-
-        all_documents.append(document)
-    return all_documents
+    return all_entries
 
 
 @FunctionRegistry.register("parse", "ocr2_0_batch")
-async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Document]:
+async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Entry]:
     cls = modal.Cls.lookup("ocr-modal", "Model")
     obj = cls()
 
     # Prepare all images and track their document mapping
     all_image_bytes = []
     image_to_doc_mapping = []  # List of tuples (ingestion_idx, page_number)
-    documents = [Document(entries=[]) for _ in ingestions]
+    all_entries = []
 
     # First pass: collect all images and build mapping
     for ing_idx, ingestion in enumerate(ingestions):
@@ -159,7 +156,7 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
             string=ret,
             index_numbers=[Index(primary=page_num)]
         )
-        documents[ing_idx].entries.append(entry)
+        all_entries.append(entry)
         document_texts[ing_idx].append(ret)
         idx += 1
 
@@ -172,7 +169,8 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
             else:
                 with open(ingestion.parsed_file_path, "w", encoding='utf-8') as f:
                     f.write(combined_text)
+    return all_entries
 
-    return [doc for doc in documents if doc.entries]  # Return only documents that have entries
 
-
+if __name__ == "__main__":
+    pass

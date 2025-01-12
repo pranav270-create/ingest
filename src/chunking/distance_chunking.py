@@ -8,13 +8,13 @@ from sentence_transformers import SentenceTransformer
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.chunking.chunk_utils import chunks_to_entries, document_to_content, spacy_tokenize
+from src.chunking.chunk_utils import chunks_to_entries, entries_to_content, spacy_tokenize
 from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import Document
+from src.schemas.schemas import Entry
 
 
 @FunctionRegistry.register("chunk", "distance_chunking")
-async def distance_chunks(document: list[Document], **kwargs) -> list[Document]:
+async def distance_chunks(entries: list[Entry], **kwargs) -> list[Entry]:
     chunk_size = kwargs.get("chunk_size", None)
     threshold = kwargs.get("threshold", None)
     embedding_model = kwargs.get("embedding_model", "all-MiniLM-L6-v2")
@@ -28,25 +28,20 @@ async def distance_chunks(document: list[Document], **kwargs) -> list[Document]:
         "similarity_metric": "cosine",
     }
 
-    new_docs = []
-    for doc in document:
-        content = document_to_content(doc)
-        chunks, similarity_data = distance_chunking(  # noqa
-            content,
-            chunk_size=chunk_size,
-            threshold=threshold,
-            embedding_model=embedding_model,
-            percentile_threshold=percentile_threshold,
-        )
-        # Convert chunks to entries and add to flat list
-        entries = chunks_to_entries(doc, chunks, "distance", chunking_metadata)
-        doc.entries = entries
-        metadata = {}
-        metadata['sentence_indices'] = similarity_data['sentence_indices']
-        metadata['similarities'] = similarity_data['similarities']
-        doc.metadata = metadata
-        new_docs.append(doc)
-    return new_docs
+    content = entries_to_content(entries)
+    chunks, similarity_data = distance_chunking(  # noqa
+        content,
+        chunk_size=chunk_size,
+        threshold=threshold,
+        embedding_model=embedding_model,
+        percentile_threshold=percentile_threshold,
+    )
+    # Convert chunks to entries and add to flat list
+    entries = chunks_to_entries(entries, chunks, "distance", chunking_metadata)
+    metadata = {}
+    metadata['sentence_indices'] = similarity_data['sentence_indices']
+    metadata['similarities'] = similarity_data['similarities']
+    return entries
 
 
 @lru_cache(maxsize=1)

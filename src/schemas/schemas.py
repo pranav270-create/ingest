@@ -348,13 +348,6 @@ class Entry(BaseModel):
     child_ids: Optional[list[str]] = None  # IDs of child entries (e.g., cells in a table)
 
 
-@SchemaRegistry.register("Document")
-class Document(BaseModel):
-    schema__: str = Field(default="Document", alias="schema__")
-    entries: list[Entry]
-    metadata: Optional[dict[str, Any]] = None
-
-
 @SchemaRegistry.register("Embedding")
 class Embedding(Entry):
     schema__: str = Field(default="Embedding", alias="schema__")

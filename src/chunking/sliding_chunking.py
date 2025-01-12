@@ -1,15 +1,15 @@
 from typing import Any
 import re
 
-from src.schemas.schemas import ChunkingMethod, Document, Entry, Index
+from src.schemas.schemas import ChunkingMethod, Entry, Index
 from src.pipeline.registry import FunctionRegistry
-from src.chunking.chunk_utils import document_to_content, chunks_to_entries
+from src.chunking.chunk_utils import entries_to_content, chunks_to_entries
 from src.llm_utils.tokenize_utils import detokenize_embed_input, tokenize_embed_input
 from src.llm_utils.utils import Provider
 
 
 @FunctionRegistry.register("chunk", ChunkingMethod.SLIDING_WINDOW.value)
-async def sliding_chunks(document: list[Document], **kwargs) -> list[Entry]:
+async def sliding_chunks(entries: list[Entry], **kwargs) -> list[Entry]:
     chunk_size = kwargs.get("chunk_size", 500)
     overlap = kwargs.get("overlap", 50)
     provider = kwargs.get("provider", None)
@@ -20,14 +20,12 @@ async def sliding_chunks(document: list[Document], **kwargs) -> list[Entry]:
         "provider": provider,
         "model": model
     }
-    new_docs = []
-    for doc in document:
-        content = document_to_content(doc)
-        chunks = sliding_window_chunking(content, chunk_size=chunk_size, overlap=overlap, provider=provider, model=model)
-        formatted_entries = chunks_to_entries(doc, chunks, "sliding_window", chunking_metadata)
-        doc.entries = formatted_entries
-        new_docs.append(doc)
-    return new_docs
+    content = entries_to_content(entries)
+    chunks = sliding_window_chunking(content, chunk_size=chunk_size, overlap=overlap, provider=provider, model=model)
+    formatted_entries = chunks_to_entries(entries, chunks, "sliding_window", chunking_metadata)
+    entries = formatted_entries
+    return entries
+
 
 def sliding_window_chunking(content: list[dict[str, Any]], chunk_size=500, overlap=50, provider=None, model=None) -> list[dict[str, Any]]:
     """
