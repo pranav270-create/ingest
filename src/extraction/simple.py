@@ -7,7 +7,7 @@ import os
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import Entry, Index, Ingestion, ParsedFeatureType, ParsingMethod, FileType
+from src.schemas.schemas import Entry, Index, Ingestion, ExtractedFeatureType, ExtractionMethod, FileType
 from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 
 
@@ -47,16 +47,16 @@ async def main_simple(ingestions: list[Ingestion], write=None, read=None, **kwar
     for ingestion in ingestions:
         if ingestion.file_type != FileType.PDF:
             continue
-        ingestion.parsing_method = ParsingMethod.SIMPLE
-        ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
-        ingestion.parsed_file_path = os.path.basename(ingestion.file_path).replace(".pdf", "_parsed.txt")
+        ingestion.extraction_method = ExtractionMethod.SIMPLE
+        ingestion.extraction_date = get_current_utc_datetime()
+        ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
+        ingestion.extracted_file_path = os.path.basename(ingestion.file_path).replace(".pdf", "_parsed.txt")
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
         entries, all_text = process_pdf(file_content, ingestion)
         if write:
-            await write(ingestion.parsed_file_path, all_text, mode="w")
+            await write(ingestion.extracted_file_path, all_text, mode="w")
         else:
-            with open(ingestion.parsed_file_path, "w") as f:
+            with open(ingestion.extracted_file_path, "w") as f:
                 f.write(all_text)
         all_entries.extend(entries)
     return all_entries

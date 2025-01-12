@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import ContentType, Entry, FileType, Ingestion, IngestionMethod, ParsedFeatureType, ParsingMethod, Scope
+from src.schemas.schemas import ContentType, Entry, FileType, Ingestion, IngestionMethod, ExtractedFeatureType, ExtractionMethod, Scope
 from src.pipeline.registry import FunctionRegistry
 from src.utils.datetime_utils import get_current_utc_datetime, parse_datetime
 from src.utils.ingestion_utils import update_ingestion_with_metadata
@@ -301,9 +301,9 @@ async def run_crawler(config, write=None, visited_urls=None, lock=None):
                 creation_date=current_time,
                 ingestion_date=current_time,
                 ingestion_method=IngestionMethod.URL_SCRAPE,
-                parsing_method=ParsingMethod.NONE,
+                parsing_method=ExtractionMethod.NONE,
                 parsing_date=current_time,
-                parsed_feature_type=[ParsedFeatureType.IMAGE],
+                parsed_feature_type=[ExtractedFeatureType.IMAGE],
                 unprocessed_citations=None,
                 embedded_feature_type=None,
             )

@@ -1,5 +1,5 @@
-from rerankers import Reranker
 import cohere
+from rerankers import Reranker
 
 from src.schemas.schemas import FormattedScoredPoints
 
@@ -18,7 +18,9 @@ def rerank_local(ranker: Reranker, query: str, points: list[FormattedScoredPoint
     return points
 
 
-async def rerank_remote(cohere_client: cohere.Client, rerank_model: str, query: str, context: list[FormattedScoredPoints]) -> list[FormattedScoredPoints]:
+async def rerank_remote(
+        cohere_client: cohere.Client, rerank_model: str, query: str, context: list[FormattedScoredPoints]
+        ) -> list[FormattedScoredPoints]:
     try:
         documents = [doc.raw_text for doc in context]
         results = await cohere_client.rerank(model=rerank_model, query=query, documents=documents, top_n=10)

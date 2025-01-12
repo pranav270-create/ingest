@@ -1,47 +1,51 @@
-from typing import Any
+import sys
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from src.llm_utils.utils import text_cost_parser
-from src.prompts.base_prompt import BasePrompt
-from src.prompts.registry import PromptRegistry
-from src.schemas.schemas import Entry
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+from src.pipeline.registry import PromptRegistry
 
 
-@PromptRegistry.register("chunk_evaluation")
-class ChunkEvaluationPrompt(BasePrompt):
-    system_prompt = """You are a highly capable image analysis assistant.
-    Analyze the provided image and answer questions about it accurately and concisely."""
+class QuestionAnswerPair(BaseModel):
+    question: str = Field(..., description="A question that can be addressed by this text chunk")
+    answer: str = Field(..., description="The answer to the question")
 
-    user_prompt = """
-    Rate this text chunk from 1-5 on the following criteria:
-    1. Text Clarity (1-5): Is the text well-formed and readable?
-    2. Coherence (1-5): Does the chunk represent a complete, coherent unit of information?
-    3. Organization (1-5): Is the content well-structured within the chunk?
 
-    Text chunk:
-    {chunk}
-    """
+@PromptRegistry.register("synthetic_qa_pair")
+class SyntheticQAPairPrompt:
+    system_prompt = (
+        "You are an assistant specialized in RAG tasks."
+        " The task is the following: given a document chunk, you will have to"
+        " generate questions that can be asked by a user to retrieve information from a large documentary corpus."
+    )
+
+    user_prompt = (
+        "The question should be relevant to the chunk, and should not be too specific"
+        " or too general. The question should be about the subject of the chunk, and"
+        " the answer needs to be found in the chunk."
+        " Remember that the question is asked by a user to get some information from a"
+        " large documentary corpus."
+        " Generate a question that could be asked by a user without knowing the existence and the content of the corpus."
+        " Also generate the answer to the question, which should be found in the"
+        " document chunk.  \n"
+        " Generate TWO pairs of questions and answers per chunk. Follow the schema\n"
+        " Chunk: {chunk_text}\n"
+    )
 
     class DataModel(BaseModel):
-        text_clarity: int = Field(..., description="Rating from 1-5 for text clarity")
-        coherence: int = Field(..., description="Rating from 1-5 for coherence")
-        organization: int = Field(..., description="Rating from 1-5 for organization")
+        questions: list[QuestionAnswerPair] = Field(
+            ..., description="A list of two question-answer pairs that are based on the chunk of text"
+        )
 
     @classmethod
-    async def format_prompt(cls, entry: BaseModel, read=None) -> dict[str, str]:
-        """Format the prompt with the given question."""
-        return [
-            {"role": "system", "content": cls.system_prompt},
-            {"role": "user", "content": cls.user_prompt.format(chunk=entry.string)},
-        ]
+    async def format_prompt(cls, base_model: BaseModel, read=None, **kwargs) -> tuple[str, str]:
+        return cls.system_prompt, cls.user_prompt.format(chunk_text=base_model['input'])
 
-    @staticmethod
-    def parse_response(basemodels: list[Entry], responses: Any) -> tuple[dict[str, int], float]:
-        """Parse the response into a structured output."""
-        for basemodel, response in zip(basemodels, responses):
-            parsed_response, cost = text_cost_parser(response)
-            if not basemodel.added_featurization:
-                basemodel.added_featurization = {}
-            basemodel.added_featurization["chunk_evaluation"] = parsed_response
-        return basemodels
+    @classmethod
+    def parse_response(cls, base_models: list[BaseModel], parsed_items: dict[str, BaseModel]) -> list[BaseModel]:
+        for i, basemodel in enumerate(base_models):
+            model_response = parsed_items.get(i)
+            basemodel['synthetic_questions'] = model_response["questions"]
+        return base_models
