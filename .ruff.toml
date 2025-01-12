@@ -1,0 +1,77 @@
+# Exclude a variety of commonly ignored directories.
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+# Same as Black.
+line-length = 150
+output-format = "grouped"
+
+
+# Assume Python 3.10.
+target-version = "py39"
+
+
+[lint]
+select = [
+  "F", # Pyflakes
+  "B", # bugbear rules
+  "I", # isort
+  "E112",   # no-indented-block
+  "E113",   # unexpected-indentation
+  "E203",   # whitespace-before-punctuation
+  "E272",   # multiple-spaces-before-keyword
+  "E275",   # missing-whitespace-after-keyword
+  "E501",   # line-too-long
+  "F401", # remove unused imports
+  "E722", # bare except statements
+  "ARG", # unused arguments
+  "UP", # pyupgrade
+  "W291",   # trailing-whitespace
+  "W293",   # blank-line-with-whitespace
+  "UP039",  # unnecessary-class-parentheses
+  "C416",   # unnecessary-comprehension
+  "RET506", # superfluous-else-raise
+  "RET507", # superfluous-else-continue
+  "A",      # builtin-variable-shadowing, builtin-argument-shadowing, builtin-attribute-shadowing
+  "SIM105", # suppressible-exception
+]
+
+preview = true
+
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+ignore = [
+  # mutable defaults
+  "B006",
+  "B018",
+  "B008", # no function calls in arguments
+]
+
+exclude = [
+  "docs/",
+  "examples/",
+  "*.md",
+]

@@ -10,8 +10,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from transformers import AutoTokenizer, GPT2TokenizerFast
 from voyageai import Client as voyage_client
 
-from .api_requests import get_api_key
-from .utils import Provider
+from src.llm_utils.utils import Provider, get_api_key
 
 
 @cache
@@ -158,7 +157,7 @@ def detokenize_oss(model: str, tokens: list[int]) -> str:
         return tokenizer.decode(tokens)
 
 
-def get_embed_input_tokens(request_json, provider: Provider) -> int:
+def get_embed_input_tokens(request_json: dict, provider: Provider) -> int:
     def get_text(inputs):
         if isinstance(inputs, str):
             return inputs
@@ -182,7 +181,7 @@ def get_embed_input_tokens(request_json, provider: Provider) -> int:
         return tokenize_cohere(model=request_json["model"], text=get_text(request_json["texts"]))
 
 
-def get_chat_prompt_tokens(request_json, provider: Provider) -> int:
+def get_chat_prompt_tokens(request_json: dict, provider: Provider) -> int:
     def get_text(messages):
         return "".join(value for message in messages for value in message.values())
 

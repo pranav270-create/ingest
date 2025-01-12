@@ -7,6 +7,7 @@ setup(
     package_dir={"": "src"},
     python_requires=">=3.9",
     install_requires=[
+        "litellm~=1.57.5",
         "sqlalchemy~=2.0.36",
         "psycopg2-binary",
         "qdrant-client",

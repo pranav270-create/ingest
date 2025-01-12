@@ -10,9 +10,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 from tqdm import tqdm
 
-from src.agent.simple import SimpleAgent
-from src.llm_utils.client import AsyncChat
-from src.llm_utils.client_factory import llm_client
+from src.llm_utils.agent import Agent
 from src.llm_utils.utils import Provider
 from src.pipeline.registry import FunctionRegistry
 from src.prompts.offline.etl_featurization import ExtractClaimsPrompt, LabelClustersPrompt
@@ -62,8 +60,7 @@ async def get_clusters(entries: list[Entry], **kwargs) -> list[Entry]:
     clusters = organize_clusters(all_claims, cluster_assignments)
 
     # Get labels for clusters
-    client = llm_client(provider, async_client=True)
-    cluster_labels = await label_clusters(client, model=model, prompt=LabelClustersPrompt, clusters=list(clusters.values()))
+    cluster_labels = await label_clusters(provider=provider, model=model, prompt=LabelClustersPrompt, clusters=list(clusters.values()))
 
     # Track all unique cluster labels
     all_cluster_labels = set()
@@ -107,17 +104,17 @@ async def get_clusters(entries: list[Entry], **kwargs) -> list[Entry]:
     return entries
 
 
-async def label_clusters(client: AsyncChat, model: str, prompt, clusters: list[list[str]], **kwargs) -> list[dict[str, str]]:
+async def label_clusters(provider: Provider, model: str, prompt, clusters: list[list[str]], **kwargs) -> list[dict[str, str]]:
     """
     label the clusters
     """
 
-    async def label_cluster(client: AsyncChat, claims: list[str]) -> dict[str, str]:
-        agent = SimpleAgent(prompt)
-        labels, _ = await agent.call(client, model=model, claims=claims, **kwargs)
+    async def label_cluster(claims: list[str]) -> dict[str, str]:
+        agent = Agent(prompt)
+        labels, _ = await agent.call(provider=provider, model=model, claims=claims, **kwargs)
         return labels
 
-    tasks = [label_cluster(client, c) for c in clusters]
+    tasks = [label_cluster(c) for c in clusters]
     return await asyncio.gather(*tasks)
 
 
@@ -164,9 +161,8 @@ def organize_clusters(data: list[dict[str, Any]], cluster_assignment: list[list[
 
 async def extract_claims(text: str, model: str, provider: Provider) -> list[str]:
     """Extract claims from text using LLM."""
-    client = llm_client(provider, async_client=True)
-    agent = SimpleAgent(ExtractClaimsPrompt)
-    claims, _ = await agent.call(client, model=model, text=text)
+    agent = Agent(ExtractClaimsPrompt)
+    claims, _ = await agent.call(provider=provider, model=model, text=text)
     return claims
 
 
@@ -182,7 +178,7 @@ def run_umap(embeddings: list[list[float]], n_neighbors: int = 50, n_components:
     vector_matrix = np.array(embeddings)
     # If we have very few samples, return the original embeddings
     if len(vector_matrix) <= n_components:
-        print(f"Warning: Number of samples ({len(vector_matrix)}) is less than or equal to target dimensions ({n_components}). Skipping UMAP reduction.")
+        print(f"Warning: Number of samples ({len(vector_matrix)}) is less than or equal to target dimensions ({n_components}). Skipping UMAP reduction.") # noqa
         return vector_matrix
     try:
         n_neighbors = min(int((len(vector_matrix) - 1) ** 0.5), n_neighbors)

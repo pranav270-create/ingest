@@ -1,17 +1,37 @@
+import base64
+from typing import Union
+
 from pydantic import BaseModel, Field
 
-from src.prompts.parser import structured_text_cost_parser
+from src.llm_utils.utils import structure_image_prompt, text_cost_parser
 from src.prompts.registry import PromptRegistry
 from src.schemas.schemas import Document, Entry, Ingestion
 
 
-async def read_content(filepath, read):
+async def read_content(filepath, read) -> Union[str, bytes]:
     if read is not None:
-        document = await read(filepath)
-    else:
-        with open(filepath) as f:
-            document = f.read()
-    return document
+        return await read(filepath)
+    with open(filepath) as f:
+        return f.read()
+
+
+async def base_model_to_encoded_image(base_model: BaseModel, read=None):
+    if isinstance(base_model, Ingestion):
+        content = await read_content(base_model.file_path, read)
+
+    elif isinstance(base_model, Document):
+        filepath = base_model.entries[0].ingestion.parsed_file_path
+        content = await read_content(filepath, read)
+
+    elif isinstance(base_model, Entry):
+        content = base_model.string
+
+    # If content is already bytes (from S3), use it directly
+    if isinstance(content, bytes):
+        return base64.b64encode(content).decode('utf-8')
+
+    # If it's a string path, read and encode the local file
+    return base64.b64encode(content.encode('utf-8')).decode('utf-8')
 
 
 @PromptRegistry.register("filter_indexing")
@@ -305,16 +325,16 @@ class ImageDescriptionPrompt:
 
     user_prompt = """
     Please caption this image in detail.
-    Image:
-    {entry}
     """
 
     class DataModel(BaseModel):
         description: str = Field(..., description="A description of the image")
 
     @classmethod
-    def format_prompt(cls, entry):
-        return cls.system_prompt, cls.user_prompt.format(entry=entry)
+    def format_prompt(cls, entry: BaseModel, read=None):
+        image = base_model_to_encoded_image(entry, read)
+        return structure_image_prompt(cls.system_prompt, cls.user_prompt, image)
+
 
     @classmethod
     def parse_response(cls, entries: list[Entry], parsed_entries: dict[str, Entry]) -> bool:
@@ -355,7 +375,7 @@ class ExtractClaimsPrompt:
 
     @classmethod
     def parse_response(cls, response: DataModel, model: str) -> tuple[list[str], list[str], float]:
-        text, cost = structured_text_cost_parser(response, model)
+        text, cost = text_cost_parser(response)
         return text.claims, cost
 
 
@@ -392,5 +412,5 @@ class LabelClustersPrompt:
 
     @classmethod
     def parse_response(cls, response: DataModel, model: str) -> tuple[dict[str, str], float]:
-        text, cost = structured_text_cost_parser(response, model)
+        text, cost = text_cost_parser(response, model)
         return {"description": text.description, "subtopic": text.subtopic}, cost

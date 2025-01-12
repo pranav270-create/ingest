@@ -2,6 +2,7 @@ import sys
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union
+
 from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
