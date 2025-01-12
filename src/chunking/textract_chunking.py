@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
-from typing import Any, List
-from collections import defaultdict
+from typing import Any
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -30,6 +29,7 @@ async def textract_chunks(document: list[Document], **kwargs) -> list[Entry]:
         new_docs.append(doc)
     return new_docs
 
+# TODO: This should be used and only not used when the chunks cross pages
 def combine_bounding_boxes(boxes: list[BoundingBox]) -> BoundingBox:
     """Combine multiple bounding boxes into one encompassing box."""
     if not boxes:

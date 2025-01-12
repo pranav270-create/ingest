@@ -206,6 +206,15 @@ if __name__ == '__main__':
     file = "/Users/pranaviyer/Desktop/AstralisData/ColbertV2.pdf"
     file = "/Users/pranaviyer/Downloads/Zoning-Map-05-10-18.pdf"
     file = "/Users/pranaviyer/Downloads/12-05-24-Regular-Meeting.pdf"
-    file = "/Users/pranaviyer/Downloads/NistLegacyShort.pdf"
+    # file = "/Users/pranaviyer/Downloads/NistLegacyShort.pdf"
+    # file = "/Users/pranaviyer/Downloads/real-estate-market-update-data-centers-summer-2024.pdf"
     os.makedirs("output_datalab", exist_ok=True)
-    main(file)
+    # main(file)
+    import modal
+    cls = modal.Cls.lookup("document-parsing-modal", "Model")
+    obj = cls()
+    bytes = open(file, "rb").read()
+    text = obj.parse_document.remote(bytes)
+    with open("output_datalab/output.json", "w") as f:
+        f.write(text)
+    visualize("output_datalab/output.json")

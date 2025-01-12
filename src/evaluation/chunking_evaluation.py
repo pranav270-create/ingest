@@ -42,7 +42,8 @@ async def evaluate_extraction_chunking(
             ingestion_date=datetime.now(timezone.utc).isoformat(),
             parsing_method=ExtractionMethod.OCR2_0,
         )
-        document = await ocr_parse(pdf_path, scope=scope, content_type=content_type)
+        documents = await main_ocr([ingestion])
+        document = documents[0]
         if not document:
             raise ValueError("OCR parsing failed to return a document")
 
