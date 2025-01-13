@@ -25,12 +25,12 @@ embedding_model_list: list[dict[str, Union[str, dict[str, Union[str, int]]]]] = 
         },
     },
     {
-        "model_name": "voyageai",
+        "model_name": "voyage",
         "litellm_params": {
-            "model": "voyageai/voyage-1-mini",
+            "model": "voyage/voyage-3-large",
             "api_key": os.getenv("VOYAGE_API_KEY"),
-            "rpm": 5000,
-            "tpm": 5000000,
+            "rpm": 2000,
+            "tpm": 8000000,
         },
     },
     {
@@ -38,7 +38,7 @@ embedding_model_list: list[dict[str, Union[str, dict[str, Union[str, int]]]]] = 
         "litellm_params": {
             "model": "cohere/embed-english-v3.0",
             "api_key": os.getenv("COHERE_API_KEY"),
-            "rpm": 100,
+            "rpm": 2000,
             "tpm": 100000,
         },
     }
