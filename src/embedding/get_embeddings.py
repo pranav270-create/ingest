@@ -97,3 +97,46 @@ async def get_embeddings(
         )
         for entry, embed_dict, string in zip(flat_entries, embeddings, inputs)
     ]
+
+
+if __name__ == "__main__":
+    import asyncio
+    from src.schemas.schemas import Ingestion, Scope, IngestionMethod, Entry, Embedding
+
+    async def test():
+
+        def convert_image_to_base64(image_path: str) -> str:
+            """Convert an image file to a base64 encoded string."""
+            with open(image_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            return f"data:image/jpeg;base64,{encoded_string}"
+
+        base64_image = convert_image_to_base64(r"C:\Users\marka\fun\ingest\src\test_image.jpg")
+        print("Base64 Image String:", base64_image)
+
+        # Test creating an Ingestion object
+        ingestion = Ingestion(
+            document_hash="123abc",
+            scope=Scope.INTERNAL,
+            creator_name="Test User",
+            ingestion_method=IngestionMethod.LOCAL_FILE,
+            ingestion_date="2024-03-20T12:00:00Z"
+        )
+        print("Ingestion created successfully:", ingestion.model_dump_json(indent=2))
+
+        # Test creating an Entry object
+        entry = Entry(
+            uuid="test-uuid-123",
+            ingestion=ingestion,
+            string=base64_image,
+            keywords=["test", "example"],
+            embedded_feature_type=EmbeddedFeatureType.TEXT
+        )
+        print("\nEntry created successfully:", entry.model_dump_json(indent=2))
+
+
+        embeddings = await get_embeddings([entry], "voyage", 1024)
+
+        print("\nEmbedding created successfully:", embeddings[0].model_dump_json(indent=2))
+
+    asyncio.run(test())
