@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="ingest",
@@ -71,4 +71,4 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Operating System :: OS Independent",
     ],
-) 
+)

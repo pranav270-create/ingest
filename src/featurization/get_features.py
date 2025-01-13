@@ -21,7 +21,7 @@ router = Router(
 )
 
 
-def update_metadata(obj: Ingestion, model: str, prompt_name: str) -> None:
+def update_ingestion_metadata(obj: Ingestion, model: str, prompt_name: str) -> None:
     """
     Update feature metadata for an ingestion object.
     """
@@ -46,6 +46,7 @@ async def featurize(
     args:
         basemodels: a list of objects to featurize
         prompt_name: the name of the prompt from the PromptRegistry
+        model_name: the name of the group of models for litellm Router
     """
 
     prompt = PromptRegistry.get(prompt_name)
@@ -56,9 +57,9 @@ async def featurize(
     if not update_metadata:
         for base_model in basemodels:
             if base_model.schema__ == "Ingestion":
-                update_metadata(base_model, model_name, prompt_name)
+                update_ingestion_metadata(base_model, model_name, prompt_name)
             elif base_model.schema__ == "Entry":
-                update_metadata(base_model.ingestion, model_name, prompt_name)
+                update_ingestion_metadata(base_model.ingestion, model_name, prompt_name)
 
     # format prompts
     messages_list = await asyncio.gather(*(prompt.format_prompt(basemodel, read=read) for basemodel in basemodels))
