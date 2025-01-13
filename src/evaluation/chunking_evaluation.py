@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 
 from src.extraction.textract import textract_parse
 from src.extraction.ocr_service import main_ocr
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import ChunkingMethod, ContentType, Entry, FileType, Ingestion, ExtractionMethod, Scope
 import src.pipeline.pipeline
 

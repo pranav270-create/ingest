@@ -8,7 +8,7 @@ from litellm import Router
 sys.path.append(str(Path(__file__).parents[2]))
 
 from src.llm_utils.model_lists import embedding_model_list
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import EmbeddedFeatureType, Embedding, Entry
 from src.utils.datetime_utils import get_current_utc_datetime
 
@@ -112,7 +112,6 @@ if __name__ == "__main__":
             return f"data:image/jpeg;base64,{encoded_string}"
 
         base64_image = convert_image_to_base64(r"C:\Users\marka\fun\ingest\src\test_image.jpg")
-        print("Base64 Image String:", base64_image)
 
         # Test creating an Ingestion object
         ingestion = Ingestion(
@@ -122,7 +121,6 @@ if __name__ == "__main__":
             ingestion_method=IngestionMethod.LOCAL_FILE,
             ingestion_date="2024-03-20T12:00:00Z"
         )
-        print("Ingestion created successfully:", ingestion.model_dump_json(indent=2))
 
         # Test creating an Entry object
         entry = Entry(

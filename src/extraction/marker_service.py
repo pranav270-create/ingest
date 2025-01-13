@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import (
     Entry,
     Index,

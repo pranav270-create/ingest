@@ -8,7 +8,7 @@ import nltk
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.schemas.schemas import Entry
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.chunking.chunk_utils import entries_to_content, chunks_to_entries
 
 

@@ -4,7 +4,7 @@ from typing import Union
 from pydantic import BaseModel, Field
 
 from src.llm_utils.utils import structure_image_prompt, text_cost_parser
-from src.pipeline.registry import PromptRegistry
+from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.schemas.schemas import Document, Entry, Ingestion
 
 

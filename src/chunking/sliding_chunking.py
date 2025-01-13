@@ -2,7 +2,7 @@ from typing import Any
 import re
 
 from src.schemas.schemas import ChunkingMethod, Entry, Index
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.chunking.chunk_utils import entries_to_content, chunks_to_entries
 from src.llm_utils.tokenize_utils import detokenize_embed_input, tokenize_embed_input
 from src.llm_utils.utils import Provider

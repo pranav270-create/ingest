@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 
 sys.path.append(str(Path(__file__).resolve().parents[3]))
 
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import (
     ContentType,
     FileType,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).parents[3]))
 
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import FileType, Ingestion, IngestionMethod, Scope
 from src.utils.datetime_utils import get_current_utc_datetime, parse_datetime
 from src.utils.ingestion_utils import update_ingestion_with_metadata

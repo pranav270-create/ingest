@@ -7,7 +7,7 @@ from pydantic import BaseModel
 sys.path.append(str(Path(__file__).parents[2]))
 
 from src.vector_db.qdrant_utils import async_create_hybrid_collection, async_get_qdrant_client, async_upsert_embed
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 
 
 @FunctionRegistry.register("upsert", "upsert_embeddings")
