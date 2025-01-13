@@ -1,6 +1,4 @@
 # ingest
-ingest it all.
-
 
 To get started, use `setup.py` to install the packages.
 

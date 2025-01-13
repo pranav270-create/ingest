@@ -33,8 +33,11 @@ def parse_args():
 args = parse_args()
 CONFIG = args.config
 
+if not CONFIG.endswith(".yaml"):
+    CONFIG = f"{CONFIG}.yaml"
+
 # Initialize the orchestrator to register functions
-config_path = Path(__file__).resolve().parent.parent / "config" / f"{CONFIG}.yaml"
+config_path = Path(__file__).resolve().parent.parent / "config" / CONFIG
 orchestrator = PipelineOrchestrator(str(config_path))
 storage = orchestrator.storage
 FunctionRegistry.set_storage_backend(storage)
