@@ -56,22 +56,23 @@ async def get_embeddings(
         nonlocal using_image_embedding
 
         for i, entry in enumerate(entries):
+            if i == 0:
+                if is_base64_image(entry.string):
+                    using_image_embedding = True
+
             # update metadata
-            entry.ingestion.embedded_feature_type = (
-                EmbeddedFeatureType.TEXT
-                if entry.ingestion.embedded_feature_type is None
-                else entry.ingestion.embedded_feature_type
-            )
-            entry.ingestion.embedding_date = get_current_utc_datetime()
-            entry.ingestion.embedding_model = model_name
-            entry.ingestion.embedding_dimensions = dimensions
+            if not entry.embedded_feature_type:
+                if using_image_embedding:
+                    entry.embedded_feature_type = EmbeddedFeatureType.IMAGE
+                else:
+                    entry.embedded_feature_type = EmbeddedFeatureType.TEXT
+            entry.embedding_date = get_current_utc_datetime()
+            entry.embedding_model = model_name
+            entry.embedding_dimensions = dimensions
 
             # get the text to embed
             text = entry.string
 
-            if i == 0:
-                if is_base64_image(text):
-                    using_image_embedding = True
 
             text += entry.context_summary_string or ""
             inputs.append(text)
@@ -83,10 +84,11 @@ async def get_embeddings(
 
     iterate_over_entries(basemodels)
 
-    # if embedding images, check if model supports image embedding
+    # Check if the model supports image embedding when embedding images
     if using_image_embedding:
-        if not supports_image_embedding(model_name):
-            raise ValueError(f"Model {model_name} does not support image embedding")
+        model_params = next((mp for mp in embedding_model_list if mp['model_name'] == model_name), None)
+        if model_params and not supports_image_embedding(model_params['litellm_params']['model']):
+            raise ValueError(f"Model '{model_name}' does not support image embedding")
 
     embedding_response = await router.aembedding(model=model_name, input=inputs, dimensions=dimensions)
     embeddings = embedding_response.data
@@ -130,7 +132,6 @@ if __name__ == "__main__":
             keywords=["test", "example"],
             embedded_feature_type=EmbeddedFeatureType.TEXT
         )
-        print("\nEntry created successfully:", entry.model_dump_json(indent=2))
 
 
         embeddings = await get_embeddings([entry], "voyage", 1024)
