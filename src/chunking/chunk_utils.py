@@ -1,15 +1,15 @@
-from collections import defaultdict
-from datetime import datetime
-from typing import Any
-import sys
 import re
-import spacy
+import sys
+from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
+
+import spacy
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Entry, Index, ChunkingMethod, BoundingBox
+from src.schemas.schemas import BoundingBox, ChunkingMethod, Entry, Index
 from src.utils.datetime_utils import get_current_utc_datetime
 
 
@@ -41,7 +41,7 @@ def entries_to_content(entries: list[Entry]) -> list[dict[str, Any]]:
             feature_types = []
             if entry.parsed_feature_type:
                 feature_types = [
-                    ft.value if hasattr(ft, 'value') else ft 
+                    ft.value if hasattr(ft, 'value') else ft
                     for ft in entry.parsed_feature_type
                 ]
             # Get bounding boxes if they exist
@@ -72,7 +72,7 @@ def create_index_numbers(chunks: list[dict[str, Any]]) -> list[list[Index]]:
 def chunks_to_entries(entries: list[Entry], chunks: list[dict[str, Any]], strategy_type: str, chunking_metadata: dict = {}) -> list[Entry]:
     """
     Convert chunks back to Entry objects, preserving feature types and handling ingestion metadata.
-    
+
     Args:
         document: Source document containing entries
         chunks: List of chunk dictionaries containing text, pages, and feature types

@@ -1,7 +1,6 @@
 import asyncio
 import sys
 from pathlib import Path
-from typing import Literal, Optional
 
 sys.path.append(str(Path(__file__).parents[2]))
 
@@ -49,7 +48,6 @@ def update_metadata(obj: Ingestion, model: str, feature_class_name: str) -> None
 async def featurize(
     basemodels: BaseModelListType,
     feature_class_name: str,
-    basemodel_name: Optional[Literal["Ingestion", "Entry"]] = None,
     model_name: str = "gpt-4o-mini", # model_name from litellm router
     write=None,  # noqa
     read=None,
@@ -68,8 +66,8 @@ async def featurize(
     # get prompt
     feature_class = PromptRegistry.get(feature_class_name)
 
-    # grab kwargs from yaml
-    max_tokens = kwargs.get("max_tokens", 512)
+    if feature_class.DataModel:
+        kwargs["response_format"] = feature_class.DataModel
 
     if not sql_only:
         for base_model in basemodels:
@@ -80,12 +78,6 @@ async def featurize(
 
     # format prompts
     messages_list = await asyncio.gather(*(feature_class.format_prompt(basemodel, read=read) for basemodel in basemodels))
-
-    kwargs = {
-        "max_tokens": max_tokens,
-    }
-    if feature_class.DataModel:
-        kwargs["response_format"] = feature_class.DataModel
 
     # Run LLM Router
     tasks = [
