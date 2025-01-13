@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from src.llm_utils.utils import structure_image_prompt, text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
+from src.prompts.base_prompt import BasePrompt
 from src.schemas.schemas import Document, Entry, Ingestion
 
 
@@ -35,7 +36,7 @@ async def base_model_to_encoded_image(base_model: BaseModel, read=None):
 
 
 @PromptRegistry.register("filter_indexing")
-class FilterIndexingPrompt:
+class FilterIndexingPrompt(BasePrompt):
     """
     A prompt class for evaluating whether a given text chunk is pertinent for indexing in the company's vector database.
     """
@@ -99,7 +100,7 @@ class FilterIndexingPrompt:
 
 
 @PromptRegistry.register("summarize_ingestion")
-class SummarizeIngestionPrompt:
+class SummarizeIngestionPrompt(BasePrompt):
     """
     A prompt class for summarizing text ingestions
     """
@@ -135,7 +136,7 @@ class SummarizeIngestionPrompt:
 
 
 @PromptRegistry.register("summarize_entry")
-class SummarizeEntryPrompt:
+class SummarizeEntryPrompt(BasePrompt):
     """
     A prompt class for summarizing text entries while considering their context within the full document.
     """
@@ -188,7 +189,7 @@ class SummarizeEntryPrompt:
 
 
 @PromptRegistry.register("clean_entry")
-class CleanEntryPrompt:
+class CleanEntryPrompt(BasePrompt):
     """
     A prompt class for cleaning and filtering text data, focusing on removing only pure citation pages or completely
     non-informative content.
@@ -269,7 +270,7 @@ class CleanEntryPrompt:
 
 
 @PromptRegistry.register("keywords")
-class KeywordPrompt:
+class KeywordPrompt(BasePrompt):
     """
     A prompt class for extracting keywords from text data, focusing on identifying the most relevant terms that capture the
      essence of the content.
@@ -316,7 +317,7 @@ class KeywordPrompt:
 
 
 @PromptRegistry.register("describe_image")
-class ImageDescriptionPrompt:
+class ImageDescriptionPrompt(BasePrompt):
     """ """
 
     system_prompt = """
@@ -344,7 +345,7 @@ class ImageDescriptionPrompt:
 
 
 @PromptRegistry.register("extract_claims")
-class ExtractClaimsPrompt:
+class ExtractClaimsPrompt(BasePrompt):
     """
     This prompt uses structured output to extract the key scientific claims from a podcast transcript.
     """
@@ -380,7 +381,7 @@ class ExtractClaimsPrompt:
 
 
 @PromptRegistry.register("label_clusters")
-class LabelClustersPrompt:
+class LabelClustersPrompt(BasePrompt):
     """
     This prompt labels the clusters of claims based on their relevance to a given topic.
     """

@@ -7,7 +7,8 @@ sys.path.append(str(Path(__file__).parents[2]))
 from litellm import Router
 
 from src.llm_utils.model_lists import chat_model_list
-from src.pipeline.registry.function_registry import FunctionRegistry, PromptRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
+from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.schemas.schemas import BaseModelListType, Ingestion
 from src.utils.datetime_utils import get_current_utc_datetime
 
@@ -20,69 +21,51 @@ router = Router(
 )
 
 
-def update_metadata(obj: Ingestion, model: str, feature_class_name: str) -> None:
+def update_metadata(obj: Ingestion, model: str, prompt_name: str) -> None:
     """
     Update feature metadata for an ingestion object.
     """
-    if obj.feature_models is None:
-        obj.feature_models = [model]
-    else:
-        obj.feature_models.append(model)
-
-    if obj.feature_dates is None:
-        obj.feature_dates = [get_current_utc_datetime()]
-    else:
-        obj.feature_dates.append(get_current_utc_datetime())
-
-    if obj.feature_types is None:
-        obj.feature_types = [feature_class_name]
-    else:
-        obj.feature_types.append(feature_class_name)
+    obj.feature_models = (obj.feature_models or []) + [model]
+    obj.feature_dates = (obj.feature_dates or []) + [get_current_utc_datetime()]
+    obj.feature_types = (obj.feature_types or []) + [prompt_name]
 
 
 @FunctionRegistry.register("featurize", "featurize_model")
 async def featurize(
     basemodels: BaseModelListType,
-    feature_class_name: str,
+    prompt_name: str,
     model_name: str = "gpt-4o-mini", # model_name from litellm router
     write=None,  # noqa
     read=None,
     update_metadata=True,
-    **kwargs,
+    **litellm_kwargs,
 ) -> BaseModelListType:
     """
-    Use LiteLLM to featurize the data contained in an Ingestion, or Entry
+    Use LLMs to featurize the data contained in an Ingestion or Entry
 
     args:
         basemodels: a list of objects to featurize
-        feature_class_name: the name of the prompt
+        prompt_name: the name of the prompt from the PromptRegistry
     """
 
-    # get prompt
-    feature_class = PromptRegistry.get(feature_class_name)
+    prompt = PromptRegistry.get(prompt_name)
 
-    if feature_class.DataModel:
-        kwargs["response_format"] = feature_class.DataModel
+    if prompt.has_data_model():
+        litellm_kwargs["response_format"] = prompt.DataModel
 
     if not update_metadata:
         for base_model in basemodels:
             if base_model.schema__ == "Ingestion":
-                update_metadata(base_model, model_name, feature_class_name)
+                update_metadata(base_model, model_name, prompt_name)
             elif base_model.schema__ == "Entry":
-                update_metadata(base_model.ingestion, model_name, feature_class_name)
+                update_metadata(base_model.ingestion, model_name, prompt_name)
 
     # format prompts
-    messages_list = await asyncio.gather(*(feature_class.format_prompt(basemodel, read=read) for basemodel in basemodels))
+    messages_list = await asyncio.gather(*(prompt.format_prompt(basemodel, read=read) for basemodel in basemodels))
 
-    # Run LLM Router
-    tasks = [
-        router.acompletion(
-            model=model_name,
-            messages=messages,
-            **kwargs,
-        )
-        for messages in messages_list
-    ]
+    # Run litellm Router, add results to basemodels
+    tasks = [router.acompletion(model=model_name, messages=messages, **litellm_kwargs) for messages in messages_list]
     responses = await asyncio.gather(*tasks)
+    updated_basemodels = prompt.parse_response(basemodels, responses)
 
-    return feature_class.parse_response(basemodels, responses)
+    return updated_basemodels
