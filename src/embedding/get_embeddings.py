@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 from typing import Union
@@ -7,24 +6,13 @@ from litellm import Router
 
 sys.path.append(str(Path(__file__).parents[2]))
 
+from src.llm_utils.model_lists import embedding_model_list
 from src.pipeline.registry import FunctionRegistry
 from src.schemas.schemas import Document, EmbeddedFeatureType, Embedding, Entry
 from src.utils.datetime_utils import get_current_utc_datetime
 
-model_list = [
-    {
-        "model_name": "openai",  # model alias -> loadbalance between models with same `model_name`
-        "litellm_params": {
-            "model": "text-embedding-3-large",  # actual model name
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            "rpm": 5000,
-            "tpm": 5000000,
-        },
-    }
-]
-
 router = Router(
-    model_list=model_list,
+    model_list=embedding_model_list,
     default_max_parallel_requests=50,
     allowed_fails=2,
     cooldown_time=20,
