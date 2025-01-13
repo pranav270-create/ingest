@@ -30,11 +30,9 @@ stages:
         input: Entry
         return: Entry
         params:
-          feature_class_name: "summarize_entry"
+          prompt_name: "summarize_entry"
           basemodel_name: "Entry"
-          provider: "openai"
-          functionality: "chat"
-          model: "gpt-4o-mini"
+          model_name: "gpt-4o-mini"
           max_tokens: 1000
 
   - name: embed

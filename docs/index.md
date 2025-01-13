@@ -55,7 +55,7 @@ The pipeline processes documents through the following stages:
 
    - Breaks documents into smaller, processable pieces
 
-**Featurization** (`/featurization`)
+**[Featurization](featurization.md)** (`/featurization`)
 
    - Uses LLMs to create synthetic representations of chunks
 
