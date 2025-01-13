@@ -49,7 +49,7 @@ async def async_get_qdrant_client(timeout: int = 10) -> QdrantClient:
 
 # collection is a set of points (vector + payload) that you can search over
 # they recommed just using 1 collection
-def create_collection(client: QdrantClient, collection_name: str):
+def create_collection(client: QdrantClient, collection_name: str, vector_size: int = 1024, distance: models.Distance = models.Distance.COSINE, datatype: models.Datatype = models.Datatype.FLOAT16):
     """
     Creates a new collection in Qdrant with the specified name and vector configuration.
 
@@ -59,7 +59,16 @@ def create_collection(client: QdrantClient, collection_name: str):
     """
     client.create_collection(
         collection_name=collection_name,
-        vectors_config=models.VectorParams(size=1024, distance=models.Distance.COSINE),
+        vectors_config=models.VectorParams(
+            size=vector_size,
+            distance=distance,
+            datatype=datatype
+        ),
+        sparse_vectors_config={
+            "text": models.SparseVectorParams(
+                index=models.SparseIndexParams(datatype=datatype)
+            ),
+        },
     )
 
 
@@ -69,6 +78,9 @@ async def async_create_hybrid_collection(
     embedding_model_name: str,
     embedding_model_dim: int,
     text_model_name: str = "bm25",
+    distance: models.Distance = models.Distance.COSINE,
+    modifier: models.Modifier = models.Modifier.IDF,
+    datatype: models.Datatype = models.Datatype.FLOAT16,
 ):
     """
     creates a new collection that supports hybrid search
@@ -82,12 +94,16 @@ async def async_create_hybrid_collection(
             vectors_config={
                 embedding_model_name: models.VectorParams(
                     size=embedding_model_dim,
-                    distance=models.Distance.COSINE,
+                    distance=distance,
+                    datatype=datatype,
                 ),
             },
             sparse_vectors_config={
                 text_model_name: models.SparseVectorParams(
-                    modifier=models.Modifier.IDF,
+                    modifier=modifier,
+                    index=models.SparseIndexParams(
+                        datatype=datatype
+                    )
                 )
             },
         )

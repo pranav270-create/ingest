@@ -60,6 +60,12 @@ setup(
             "black",
             "isort",
             "mypy",
+            "mkdocs",
+            "mkdocs-material",
+            "mkdocstrings[python]",
+            "mkdocs-gen-files",
+            "mkdocs-literate-nav",
+            "mkdocs-section-index",
         ]
     },
     author="Pranav Iyer",
@@ -71,4 +77,4 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Operating System :: OS Independent",
     ],
-) 
+)

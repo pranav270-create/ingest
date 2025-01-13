@@ -202,11 +202,13 @@ class EmbeddedFeatureType(str, Enum):
     # these are synthetic features and are all text
     SYNTHETIC_FEATURE_DESCRIPTION = "synthetic_feature_description"  # this is for extracted images (traditional pipeline)
     SYNTHETIC_SUMMARY = "synthetic_summary"
-    # these synthetic features are all exclusively for increasing RAG surface area
-    SYNTHETIC_FACT = "synthetic_fact"
-    SYNTHETIC_QUESTION = "synthetic_question"
-    SYNTHETIC_KEYWORD = "synthetic_keyword"
-    SYNTHETIC_ANSWER = "synthetic_answer"
+    SYNTHETIC_CONTEXT_SUMMARY = "synthetic_context_summary"
+    SYNTHETIC_TRENDS = "synthetic_trends"
+    SYNTHETIC_COMPONENTS = "synthetic_components"
+    SYNTHETIC_KEYWORDS = "synthetic_keywords"
+    SYNTHETIC_ANSWERS = "synthetic_answers"
+    SYNTHETIC_QUESTIONS = "synthetic_questions"
+    SYNTHETIC_FACTS = "synthetic_facts"
 
 
 class Index(BaseModel):
@@ -351,21 +353,13 @@ class Entry(BaseModel):
     # Core fields
     ingestion: Optional[Ingestion] = None  # null for cross document only, citations must be there
     string: Optional[str] = None  # If we embed a document or image, we don't need the original text
-    # Summary fields
-    context_summary_string: Optional[str] = None  # only if we generate a summary of the entry wrt the broader document # noqa
-    chunk_summary_string: Optional[str] = None  # a summary of the chunk
-    description: Optional[str] = None  # This is for a figure, table, or other content
+
     # Featurization fields
-    title: Optional[str] = None  # Title of a figure, table, or other content
+    entry_title: Optional[str] = None  # Title of a figure, table, or other content
     table_number: Optional[int] = None  # This is for a table specifically
     figure_number: Optional[int] = None  # This is for a figure specifically
     main_headers: Optional[list[str]] = None  # This is for a table specifically
-    trends: Optional[str] = None  # This is for tables and graphs asking for specific trends
-    components: Optional[list[str]] = None  # This is for a figure specifically
     keywords: Optional[list[str]] = None  # This is for any keywords that we have not captured in other fields yet
-
-    # Catch-all
-    added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
 
     # Chunk location fields. Used for reconstruction.
     consolidated_feature_type: Optional[ExtractedFeatureType] = None  # This is the type of feature that is being embedded
