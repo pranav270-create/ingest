@@ -83,7 +83,6 @@ def chunks_to_entries(entries: list[Entry], chunks: list[dict[str, Any]], strate
     for entry in entries:
         if entry.ingestion:
             ingestion = entry.ingestion
-            ingestion.total_length = sum(len(chunk["text"]) for chunk in chunks)
             ingestion.chunking_method = ChunkingMethod(strategy_type)
         ingestion.chunking_date = get_current_utc_datetime()
         ingestion.chunking_metadata = chunking_metadata

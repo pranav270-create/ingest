@@ -17,8 +17,11 @@ case $deploy_type in
     "ocr")
         modal deploy "$SCRIPT_DIR/ocr_modal.py"
         ;;
+    "grobid")
+        modal deploy "$SCRIPT_DIR/grobid_modal.py"
+        ;;
     *)
-        echo "Invalid deployment type. Please use 'all', 'datalab', or 'ocr'"
+        echo "Invalid deployment type. Please use 'all', 'datalab', 'ocr', or 'grobid'"
         exit 1
         ;;
 esac

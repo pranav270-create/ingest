@@ -23,12 +23,10 @@ def process_pdf(file_content: bytes, ingestion: Ingestion) -> tuple[list[Entry],
                 if parsed_date:
                     ingestion.creation_date = parsed_date
                     break
-        total_length = 0
         all_text = ""
         for i in range(pdf.page_count):
             page = pdf.load_page(i)
             page_text = page.get_text("text")
-            total_length += len(page_text)
             all_text += page_text + "\n"
             entry = Entry(
                 ingestion=ingestion,
@@ -37,7 +35,6 @@ def process_pdf(file_content: bytes, ingestion: Ingestion) -> tuple[list[Entry],
                 citations=None,
             )
             all_entries.append(entry)
-        ingestion.total_length = total_length
     return all_entries, all_text
 
 

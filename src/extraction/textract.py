@@ -21,7 +21,6 @@ def get_ingestion_data(pdf_path: str, scope: Scope, content_type: ContentType) -
     """
     with fitz.open(pdf_path) as doc:
         metadata = doc.metadata
-        total_length = sum(len(page.get_text()) for page in doc)
 
     ingestion_data = {
         "document_title": metadata.get("title", "Untitled"),
@@ -30,7 +29,6 @@ def get_ingestion_data(pdf_path: str, scope: Scope, content_type: ContentType) -
         "creator_name": metadata.get("author", "Unknown"),
         "file_type": FileType.PDF,
         "file_path": pdf_path.split("/")[-1],  # Get the filename from the path
-        "total_length": total_length,
         "metadata": metadata,
         "ingestion_method": IngestionMethod.LOCAL_FILE,
         "ingestion_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

@@ -54,7 +54,6 @@ async def create_ingestion(file_path: str, write=None) -> Ingestion:
         file_path=file_name,  # Use the cloud path instead of local path
         public_url=None,
         creator_name="Astralis",
-        total_length=os.path.getsize(file_path),
         metadata={},
         creation_date=parse_datetime(os.path.getctime(file_path)),
         ingestion_date=get_current_utc_datetime(),
