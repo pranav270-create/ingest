@@ -11,6 +11,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from src.pipeline.pipeline import PipelineOrchestrator
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.schema_registry import SchemaRegistry
+from src.sql_db.database_simple import get_async_session
 from src.sql_db.etl_crud import (
     clone_pipeline,
     create_entries,
@@ -21,12 +22,11 @@ from src.sql_db.etl_crud import (
     get_specific_processing_step,
     update_ingests_from_results,
 )
-from src.sql_db.database_simple import get_async_session
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run ETL pipeline")
-    parser.add_argument("--config", type=str, default="youtube_labels", help="Configuration name (default: youtube_labels)")
+    parser.add_argument("--config", type=str, default="youtube_labels", help="config file name (default: youtube_labels)")
     return parser.parse_args()
 
 
