@@ -8,7 +8,7 @@ sys.path.append(str(Path(__file__).parents[2]))
 
 from src.llm_utils.model_lists import embedding_model_list
 from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import Document, EmbeddedFeatureType, Embedding, Entry
+from src.schemas.schemas import EmbeddedFeatureType, Embedding, Entry
 from src.utils.datetime_utils import get_current_utc_datetime
 
 router = Router(
@@ -21,7 +21,7 @@ router = Router(
 
 @FunctionRegistry.register("embed", "embed")
 async def get_embeddings(
-    basemodels: Union[list[Document], list[Entry]],
+    basemodels: Union[list[Entry]],
     model: str,
     provider: str, # noqa
     dimensions: int,
@@ -57,20 +57,10 @@ async def get_embeddings(
             metadata.pop("schema__")
             flat_entries.append(metadata)
 
-
-    # iterate over the input
-    if isinstance(basemodels[0], Document):
-        for basemodel in basemodels:
-            iterate_over_entries(basemodel.entries)
-    elif isinstance(basemodels[0], Entry):
-        iterate_over_entries(basemodels)
-    else:
-        raise ValueError("Invalid input type")
-
+    iterate_over_entries(basemodels)
     embedding_response = await router.aembedding(model="openai", input=all_prompts, dimensions=dimensions)
     embeddings = embedding_response.data
     tokens = embedding_response.usage.total_tokens
-
     return [
         Embedding(
             **{**entry, "embedding": embed_dict["embedding"], "string": prompt, "tokens": tokens}

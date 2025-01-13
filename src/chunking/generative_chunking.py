@@ -4,10 +4,10 @@ from typing import Any
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Entry, Index, ChunkingMethod, ExtractedFeatureType, BoundingBox
-from src.utils.datetime_utils import get_current_utc_datetime
+from src.schemas.schemas import Entry, ChunkingMethod, BoundingBox
 from src.pipeline.registry import FunctionRegistry
 from src.chunking.chunk_utils import entries_to_content, chunks_to_entries
+
 
 @FunctionRegistry.register("chunk", ChunkingMethod.TEXTRACT.value)
 async def textract_chunks(entries: list[Entry], **kwargs) -> list[Entry]:
@@ -112,38 +112,4 @@ def textract_chunking(content: list[dict[str, Any]], chunk_size: int = 1000) -> 
 
 
 if __name__ == "__main__":
-    import asyncio
-    import argparse
-    import json
-    from src.extraction.textract import textract_parse
-    from src.schemas.schemas import Scope, ContentType
-    
-    parser = argparse.ArgumentParser(description='Chunk a PDF document using textract')
-    parser.add_argument('--pdf_path', type=str, required=True, help='Path to the PDF file')
-    parser.add_argument('--chunk_size', type=int, default=1000, help='Size of text chunks')
-    parser.add_argument('--output_path', type=str, help='Path to save chunked output (optional)')
-    parser.add_argument('--scope', type=str, default='EXTERNAL', choices=['EXTERNAL', 'INTERNAL'], help='Document scope')
-    parser.add_argument('--content_type', type=str, default='OTHER_ARTICLES', help='Content type')
-    
-    async def main(args):
-        # Parse document using textract
-        document = textract_parse(
-            args.pdf_path, 
-            Scope[args.scope], 
-            ContentType[args.content_type]
-        )
-        
-        # Chunk the document
-        chunked_docs = await textract_chunks([document], chunk_size=args.chunk_size)
-        total_chunks = sum(len(doc.entries) for doc in chunked_docs)
-        print(f"Created {total_chunks} chunks")
-        
-        # Save chunks if output path is provided
-        if args.output_path:
-            # dump the document
-            with open(args.output_path, 'w', encoding='utf-8') as f:
-                json.dump(document.model_dump(), f, indent=2, ensure_ascii=False)
-            print(f"Saved document to {args.output_path}")
-    
-    args = parser.parse_args()
-    asyncio.run(main(args))
+    pass

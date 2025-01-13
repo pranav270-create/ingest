@@ -7,12 +7,12 @@ import os
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import Document, Entry, Index, Ingestion, ExtractedFeatureType, ExtractionMethod, Scope, IngestionMethod, FileType
+from src.schemas.schemas import Entry, Index, Ingestion, ExtractedFeatureType, ExtractionMethod, FileType
 from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 
 
-def process_pdf(file_content, ingestion):
-    document = Document(entries=[])
+def process_pdf(file_content: bytes, ingestion: Ingestion) -> tuple[list[Entry], str]:
+    all_entries = []
     with fitz.open(stream=io.BytesIO(file_content), filetype="pdf") as pdf:
         ingestion.metadata = pdf.metadata
         # Try multiple metadata fields for date
@@ -36,15 +36,14 @@ def process_pdf(file_content, ingestion):
                 index_numbers=[Index(primary=i + 1)],  # Adjusting for 1-based indexing
                 citations=None,
             )
-            document.entries.append(entry)
-    for entries in document.entries:
-        entries.ingestion.total_length = total_length
-    return document, all_text
+            all_entries.append(entry)
+        ingestion.total_length = total_length
+    return all_entries, all_text
 
 
 @FunctionRegistry.register("parse", "simple")
-async def main_simple(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Document]:
-    all_documents = []
+async def main_simple(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Entry]:
+    all_entries = []
     for ingestion in ingestions:
         if ingestion.file_type != FileType.PDF:
             continue
@@ -53,11 +52,11 @@ async def main_simple(ingestions: list[Ingestion], write=None, read=None, **kwar
         ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
         ingestion.extracted_file_path = os.path.basename(ingestion.file_path).replace(".pdf", "_parsed.txt")
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
-        document, all_text = process_pdf(file_content, ingestion)
+        entries, all_text = process_pdf(file_content, ingestion)
         if write:
             await write(ingestion.extracted_file_path, all_text, mode="w")
         else:
             with open(ingestion.extracted_file_path, "w") as f:
                 f.write(all_text)
-        all_documents.append(document)
-    return all_documents
+        all_entries.extend(entries)
+    return all_entries

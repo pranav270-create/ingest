@@ -49,7 +49,7 @@ def update_metadata(obj: Ingestion, model: str, feature_class_name: str) -> None
 async def featurize(
     basemodels: BaseModelListType,
     feature_class_name: str,
-    basemodel_name: Optional[Literal["Ingestion", "Document", "Entry"]] = None,
+    basemodel_name: Optional[Literal["Ingestion", "Entry"]] = None,
     model_name: str = "gpt-4o-mini", # model_name from litellm router
     write=None,  # noqa
     read=None,
@@ -57,12 +57,12 @@ async def featurize(
     **kwargs,
 ) -> BaseModelListType:
     """
-    Use LiteLLM to featurize the data contained in an Ingestion, Document, or Entry
+    Use LiteLLM to featurize the data contained in an Ingestion, or Entry
 
     args:
         basemodels: a list of objects to featurize
         feature_class_name: the name of the prompt
-        basemodel_name: Ingestion, Document, or Entry
+        basemodel_name: Ingestion or Entry
     """
 
     # get prompt
@@ -75,17 +75,8 @@ async def featurize(
         for base_model in basemodels:
             if base_model.schema__ == "Ingestion":
                 update_metadata(base_model, model_name, feature_class_name)
-            elif base_model.schema__ == "Document":
-                for entry in base_model.entries:
-                    update_metadata(entry.ingestion, model_name, feature_class_name)
             elif base_model.schema__ == "Entry":
                 update_metadata(base_model.ingestion, model_name, feature_class_name)
-
-        # if we are featurizing a Document, we need to flatten the entries
-        if basemodel_name and basemodel_name != basemodels[0].schema__:
-            assert basemodels[0].schema__ == "Document" and basemodel_name == "Entry"
-            documents = basemodels
-            basemodels = [entry for document in documents for entry in document.entries]
 
     # format prompts
     messages_list = await asyncio.gather(*(feature_class.format_prompt(basemodel, read=read) for basemodel in basemodels))

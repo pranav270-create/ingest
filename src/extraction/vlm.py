@@ -7,7 +7,7 @@ from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Document, Entry, Ingestion, ParsedFeatureType, ParsingMethod
+from src.schemas.schemas import Entry, Ingestion, ExtractedFeatureType, ExtractionMethod
 from src.pipeline.registry import FunctionRegistry
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.llm_utils.utils import Provider
@@ -63,7 +63,7 @@ def pdf_to_images(pdf_content):
 
 @FunctionRegistry.register("parse", "vlm")
 async def vlm_parse(ingestions: list[Ingestion], read=None, write=None, **kwargs):
-    documents = []
+    all_entries = []
     for ingestion in ingestions:
         if read:
             document = await read(ingestion.file_path)
@@ -74,7 +74,6 @@ async def vlm_parse(ingestions: list[Ingestion], read=None, write=None, **kwargs
         parsed_file_path = ingestion.file_path.replace(".pdf", ".txt")
         images = pdf_to_images(document)
 
-        entries = []
         for image in images:
             all_text = await compare_with_vlm(image)
             if write:
@@ -83,14 +82,11 @@ async def vlm_parse(ingestions: list[Ingestion], read=None, write=None, **kwargs
                 with open(parsed_file_path, "w") as f:
                     f.write(all_text)
             entry = Entry(ingestion=ingestion, string=all_text, index_numbers=None, citations=None)
-            entries.append(entry)
-        document = Document(entries=entries)
-        ingestion.parsing_method = ParsingMethod.GOOGLE_LABS_HTML_CHUNKER
-        ingestion.parsing_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ParsedFeatureType.TEXT]
-        ingestion.parsed_file_path = parsed_file_path
-        documents.append(document)
-    return documents
+            all_entries.append(entry)
+        ingestion.extraction_method = ExtractionMethod.VLM
+        ingestion.extraction_date = get_current_utc_datetime()
+        ingestion.extracted_file_path = parsed_file_path
+    return all_entries
 
 
 if __name__ == "__main__":

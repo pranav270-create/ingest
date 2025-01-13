@@ -4,14 +4,14 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Document, Entry, Ingestion, ExtractedFeatureType, ExtractionMethod
+from src.schemas.schemas import Entry, Ingestion, ExtractedFeatureType, ExtractionMethod
 from src.pipeline.registry import FunctionRegistry
 from src.utils.datetime_utils import get_current_utc_datetime
 
 
 @FunctionRegistry.register("parse", "google_labs_html_chunker")
-async def parse_html(ingestions: list[Ingestion], max_words_per_aggregate_passage=220, greedily_aggregate_sibling_nodes=True, read=None, write=None, **kwargs):
-    documents = []
+async def parse_html(ingestions: list[Ingestion], max_words_per_aggregate_passage=220, greedily_aggregate_sibling_nodes=True, read=None, write=None, **kwargs) -> list[Entry]:
+    all_entries = []
     for ingestion in ingestions:
         if read:
             html = await read(ingestion.file_path)
@@ -35,11 +35,8 @@ async def parse_html(ingestions: list[Ingestion], max_words_per_aggregate_passag
         ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
         ingestion.extracted_file_path = parsed_file_path
         entry = Entry(ingestion=ingestion, string=all_text, index_numbers=None, citations=None)
-        document = Document(
-            entries=[entry],
-        )
-        documents.append(document)
-    return documents
+        all_entries.append(entry)
+    return all_entries
 
 
 if __name__ == "__main__":

@@ -7,24 +7,22 @@ import nltk
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import ChunkingMethod, Document, Entry, Index
+from src.schemas.schemas import Entry
 from src.pipeline.registry import FunctionRegistry
-from src.chunking.chunk_utils import document_to_content, chunks_to_entries
+from src.chunking.chunk_utils import entries_to_content, chunks_to_entries
 
 
 @FunctionRegistry.register("chunk", "topic_segmentation_chunking")
-async def topic_chunks(document: list[Document], **kwargs) -> list[Entry]:
+async def topic_chunks(entries: list[Entry], **kwargs) -> list[Entry]:
     chunking_metadata = {
         "tokenizer": "Text Tiling Tokenizer"
     }
-    new_docs = []
-    for doc in document:
-        content = document_to_content(doc)
-        chunks = topic_segmentation_chunking(content)
-        formatted_entries = chunks_to_entries(doc, chunks, "topic_segmentation", chunking_metadata)
-        doc.entries = formatted_entries
-        new_docs.append(doc)
-    return new_docs
+    content = entries_to_content(entries)
+    chunks = topic_segmentation_chunking(content)
+    formatted_entries = chunks_to_entries(entries, chunks, "topic_segmentation", chunking_metadata)
+    entries = formatted_entries
+    return entries
+
 
 @lru_cache(maxsize=1)
 def load_text_tiling_tokenizer():
@@ -33,6 +31,7 @@ def load_text_tiling_tokenizer():
     except LookupError:
         nltk.download('punkt')
         return TextTilingTokenizer()
+
 
 def topic_segmentation_chunking(content: list[dict[str, Any]]) -> list[dict[str, Any]]:
     tokenizer = load_text_tiling_tokenizer()
@@ -76,15 +75,3 @@ def topic_segmentation_chunking(content: list[dict[str, Any]]) -> list[dict[str,
         current_pos = chunk_end + 1  # +1 for the delimiter
 
     return chunks
-
-
-if __name__ == "__main__":
-    import sys
-    import json
-    import asyncio
-    with open("/private/tmp/pipeline_storage/10_ingest_youtube_to_transcript_1.json") as f:
-        documents = json.load(f)
-
-    for document in documents:
-        document = Document(**document)
-        entries = asyncio.run(topic_chunks([document]))

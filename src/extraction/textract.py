@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod, Document, ExtractedFeatureType
+from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod, ExtractedFeatureType
 
 
 def get_ingestion_data(pdf_path: str, scope: Scope, content_type: ContentType) -> dict[str, Any]:
@@ -209,10 +209,10 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
     return parsed_elements
 
 
-def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> Document:
+def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> list[Entry]:
     """
     Process a PDF file: extract Ingestion data, convert to images, and extract content.
-    Returns a Document object containing the ingestion metadata and parsed entries.
+    Returns a list of Entry objects containing the ingestion metadata and parsed entries.
     """
     ingestion_data = get_ingestion_data(pdf_path, scope, content_type)
     image_paths = convert_pdf_to_images(pdf_path, "output_textract")
@@ -226,8 +226,7 @@ def textract_parse(pdf_path: str, scope: Scope, content_type: ContentType) -> Do
             for entry in page_entries:
                 entry.ingestion = ingestion_data
             entries.extend(page_entries)
-
-    return Document(entries=entries)
+    return entries
 
 
 if __name__ == "__main__":

@@ -8,8 +8,8 @@ import os
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.pipeline.registry import FunctionRegistry
-from src.schemas.schemas import Document, Entry, Index, Ingestion, ExtractedFeatureType, ExtractionMethod, Scope, IngestionMethod, FileType
+from src.pipeline.registry.function_registry import FunctionRegistry
+from src.schemas.schemas import Entry, Index, Ingestion, ExtractedFeatureType, ExtractionMethod, Scope, IngestionMethod, FileType
 from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 
 
@@ -25,84 +25,14 @@ def pdf_to_images(pdf_content):
 
 
 @FunctionRegistry.register("parse", "ocr2_0")
-async def main_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Document]:
-    cls = modal.Cls.lookup("ocr-modal", "Model")
-    obj = cls()
-    all_documents = []
-    for ingestion in ingestions:
-        # check if the ingestion is a PDF or an image
-        if ingestion.file_type != FileType.PDF and ingestion.file_type not in [FileType.JPG, FileType.JPEG, FileType.PNG]:
-            continue
-        ingestion.extraction_method = ExtractionMethod.OCR2_0
-        ingestion.extraction_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
-
-        # Set parsed_file_path (similar to simple.py)
-        if not ingestion.extracted_file_path:
-            base_path = os.path.splitext(ingestion.file_path)[0]
-            ingestion.extracted_file_path = f"{base_path}_ocr.txt"
-
-        file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
-        # Determine if it's a PDF or an image
-        is_pdf = file_content.startswith(b'%PDF')
-        if is_pdf:
-            with fitz.open(stream=io.BytesIO(file_content), filetype="pdf") as pdf:
-                ingestion.metadata = pdf.metadata
-                # Try multiple metadata fields for date
-                date_fields = ['creationDate', 'modDate', 'created', 'modified']
-                for field in date_fields:
-                    if pdf.metadata.get(field):
-                        parsed_date = parse_pdf_date(pdf.metadata[field])
-                        if parsed_date:
-                            ingestion.creation_date = parsed_date
-                            break
-            images = pdf_to_images(file_content)
-        else:
-            images = [Image.open(io.BytesIO(file_content))]
-        # Process each image
-        image_bytes_list = []
-        for img in images:
-            img_byte_arr = io.BytesIO()
-            img.save(img_byte_arr, format='PNG')
-            image_bytes_list.append((img_byte_arr.getvalue(), "format"))
-        # Process images with OCR
-        document = Document(entries=[])
-        all_text = []  # Collect all text for saving to file
-        count = 0
-        async for ret in obj.ocr_document.map.aio(image_bytes_list, return_exceptions=True):
-            if isinstance(ret, Exception):
-                print(f"Error processing page: {ret}")
-                continue
-            page = Entry(
-                ingestion=ingestion,
-                string=ret,
-                index_numbers=[Index(primary=count)]
-            )
-            count += 1
-            document.entries.append(page)
-            all_text.append(ret)
-
-        # Save combined text to file
-        combined_text = "\n\n=== PAGE BREAK ===\n\n".join(all_text)
-        if write:
-            await write(ingestion.extracted_file_path, combined_text, mode="w")
-        else:
-            with open(ingestion.extracted_file_path, "w", encoding='utf-8') as f:
-                f.write(combined_text)
-
-        all_documents.append(document)
-    return all_documents
-
-
-@FunctionRegistry.register("parse", "ocr2_0_batch")
-async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Document]:
+async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Entry]:
     cls = modal.Cls.lookup("ocr-modal", "Model")
     obj = cls()
 
     # Prepare all images and track their document mapping
     all_image_bytes = []
     image_to_doc_mapping = []  # List of tuples (ingestion_idx, page_number)
-    documents = [Document(entries=[]) for _ in ingestions]
+    all_entries = []
 
     # First pass: collect all images and build mapping
     for ing_idx, ingestion in enumerate(ingestions):
@@ -112,7 +42,6 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
         # Set up ingestion metadata
         ingestion.extraction_method = ExtractionMethod.OCR2_0
         ingestion.extraction_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
 
         if not ingestion.extracted_file_path:
             base_path = os.path.splitext(ingestion.file_path)[0]
@@ -159,7 +88,7 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
             string=ret,
             index_numbers=[Index(primary=page_num)]
         )
-        documents[ing_idx].entries.append(entry)
+        all_entries.append(entry)
         document_texts[ing_idx].append(ret)
         idx += 1
 
@@ -172,7 +101,33 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
             else:
                 with open(ingestion.extracted_file_path, "w", encoding='utf-8') as f:
                     f.write(combined_text)
+    return all_entries
 
-    return [doc for doc in documents if doc.entries]  # Return only documents that have entries
 
-
+if __name__ == "__main__":
+    # Create sample ingestions with only required fields
+    test_ingestions = [
+        Ingestion(
+            scope=Scope.INTERNAL,  # Required
+            creator_name="Test User",  # Required
+            ingestion_method=IngestionMethod.LOCAL_FILE,  # Required
+            file_type=FileType.PDF,
+            ingestion_date="2024-03-20T12:00:00Z",  # Required
+            file_path="/Users/pranaviyer/Downloads/TR0722-315a Appendix A.pdf"
+        ),
+        # Ingestion(
+        #     scope=Scope.INTERNAL,
+        #     creator_name="Test User",
+        #     ingestion_method=IngestionMethod.LOCAL_FILE,
+        #     ingestion_date="2024-03-20T12:00:00Z",
+        #     file_path="/Users/pranaviyer/Desktop/AstralisData/TR0722-315a Appendix A.pdf"
+        # )
+    ]
+    # Run the batch OCR
+    import asyncio
+    output = asyncio.run(batch_ocr(test_ingestions))
+    import json
+    with open("output.json", "w") as f:
+        for entry in output:
+            f.write(json.dumps(entry.model_dump(), indent=4))
+            f.write("\n")

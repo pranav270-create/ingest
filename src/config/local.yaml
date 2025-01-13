@@ -11,13 +11,13 @@ stages:
     functions:
       - name: textract
         input: Ingestion
-        return: Document
+        return: Entry
 
   - name: chunk
     functions:
       - name: sliding_window_chunking
-        input: Document
-        return: Document
+        input: Entry
+        return: Entry
         params:
           chunk_size: 600
           overlap: 200
@@ -27,7 +27,7 @@ stages:
   - name: featurize
     functions:
       - name: featurize_model
-        input: Document
+        input: Entry
         return: Entry
         params:
           feature_class_name: "summarize_entry"

@@ -29,21 +29,29 @@ dependencies = [
     "ninja",
 ]
 
+cuda_version = "12.4.0"  # should be no greater than host CUDA version
+flavor = "devel"  #  includes full CUDA toolkit
+operating_sys = "ubuntu22.04"
+tag = f"{cuda_version}-{flavor}-{operating_sys}"
+
 image = (
-    modal.Image.debian_slim(python_version="3.9")
+    modal.Image.from_registry(f"nvidia/cuda:{tag}", add_python="3.11")
     .apt_install("build-essential", "curl", "libgl1-mesa-glx", "libglib2.0-0", "libsm6", "libxext6", "libxrender-dev", "git")
+    .pip_install(  # required to build flash-attn
+        "ninja",
+        "packaging",
+        "wheel",
+        "torch",
+    )
+    .run_commands(  # add flash-attn
+        "CXX=g++ pip install flash-attn==2.5.8 --no-build-isolation"
+    )
     .pip_install(*dependencies)
-    # .run_commands(
-    #     # Set up CUDA environment
-    #     "export CUDA_HOME=/usr/local/cuda",
-    #     "export PATH=$CUDA_HOME/bin:$PATH",
-    #     "export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
-    # )
-    # .pip_install("flash-attn==2.5.8")
 )
 
+
 @app.cls(
-    gpu="any",
+    gpu="a10g",
     image=image,
     concurrency_limit=5,
     keep_warm=0,
@@ -63,6 +71,9 @@ class Model:
         model = model.eval().cuda()
         self.model = model
         self.tokenizer = tokenizer
+
+    @method()
+    def warmup(self): return
 
     @method()
     def ocr_document(self, image_data) -> dict:
