@@ -261,16 +261,16 @@ async def run_crawler(config, write=None, visited_urls=None, lock=None):
         # Add all extracted data to Ingestion.metadata
         for key, value in data.items():
             if key not in ['url', 'title', 'content']:
-                webpage_ingestion.metadata["extracted_data"][key] = value
+                webpage_ingestion.document_metadata["extracted_data"][key] = value
 
         # Add summary information if available
-        for key, value in webpage_ingestion.metadata["extracted_data"].items():
+        for key, value in webpage_ingestion.document_metadata["extracted_data"].items():
             if isinstance(value, list):
-                webpage_ingestion.metadata[f"{key}_count"] = len(value)
+                webpage_ingestion.document_metadata[f"{key}_count"] = len(value)
                 if value and isinstance(value[0], dict):
                     for sub_key in value[0].keys():
                         # Ignore entries with empty or None values
-                        webpage_ingestion.metadata[f"{key}_{sub_key}_list"] = [
+                        webpage_ingestion.document_metadata[f"{key}_{sub_key}_list"] = [
                             item.get(sub_key) for item in value if sub_key in item and item.get(sub_key)
                         ]
 
@@ -416,7 +416,7 @@ async def scrape_ingestion(ingestions: list[Ingestion], added_metadata: dict={},
         if ingestion.public_url in url_to_file_path:
             ingestion.file_path = url_to_file_path[ingestion.public_url].file_path
             ingestion.file_type = url_to_file_path[ingestion.public_url].file_type
-            ingestion.metadata['extracted_data'] = url_to_file_path[ingestion.public_url].metadata
+            ingestion.document_metadata['extracted_data'] = url_to_file_path[ingestion.public_url].metadata
             ingestion = update_ingestion_with_metadata(ingestion, added_metadata)
             updated_ingestions.append(ingestion)
         else:

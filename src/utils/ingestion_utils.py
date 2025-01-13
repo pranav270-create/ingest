@@ -21,7 +21,7 @@ def update_ingestion_with_metadata(ingestion: Ingestion, added_metadata: Optiona
     For each key-value pair in added_metadata:
     - If the key matches an existing Ingestion field (that isn't itself a BaseModel),
       updates that field directly
-    - Otherwise, adds the key-value pair to ingestion.metadata dictionary
+    - Otherwise, adds the key-value pair to ingestion.document_metadata dictionary
     - If added_metadata is None, returns the original ingestion unchanged
     """
     if added_metadata is None:
@@ -31,5 +31,5 @@ def update_ingestion_with_metadata(ingestion: Ingestion, added_metadata: Optiona
         if hasattr(ingestion, key):
             setattr(ingestion, key, value)
         else:
-            ingestion.metadata.setdefault(key, value)
+            ingestion.document_metadata.setdefault(key, value)
     return ingestion

@@ -43,9 +43,9 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
         ingestion.extraction_method = ExtractionMethod.OCR2_0
         ingestion.extraction_date = get_current_utc_datetime()
 
-        if not ingestion.extracted_file_path:
+        if not ingestion.extracted_document_file_path:
             base_path = os.path.splitext(ingestion.file_path)[0]
-            ingestion.extracted_file_path = f"{base_path}_ocr.txt"
+            ingestion.extracted_document_file_path = f"{base_path}_ocr.txt"
 
         # Get file content and process
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
@@ -54,7 +54,7 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
         if is_pdf:
             # Handle PDF metadata
             with fitz.open(stream=io.BytesIO(file_content), filetype="pdf") as pdf:
-                ingestion.metadata = pdf.metadata
+                ingestion.document_metadata = pdf.metadata
                 for field in ['creationDate', 'modDate', 'created', 'modified']:
                     if pdf.metadata.get(field):
                         parsed_date = parse_pdf_date(pdf.metadata[field])
@@ -97,9 +97,9 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
         if document_texts[ing_idx]:  # Only save if we have processed text
             combined_text = "\n\n=== PAGE BREAK ===\n\n".join(document_texts[ing_idx])
             if write:
-                await write(ingestion.extracted_file_path, combined_text, mode="w")
+                await write(ingestion.extracted_document_file_path, combined_text, mode="w")
             else:
-                with open(ingestion.extracted_file_path, "w", encoding='utf-8') as f:
+                with open(ingestion.extracted_document_file_path, "w", encoding='utf-8') as f:
                     f.write(combined_text)
     return all_entries
 

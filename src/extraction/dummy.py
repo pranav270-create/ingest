@@ -16,7 +16,7 @@ async def parse_dummy(ingestions: list[Ingestion], read=None, write=None, **kwar
         else:
             with open(ingestion.file_path) as f:
                 all_text = f.read()
-        entry = Entry(ingestion=ingestion, string=all_text, index_numbers=None, citations=None)
+        entry = Entry(ingestion=ingestion, string=all_text, chunk_locations=None, citations=None)
         all_entries.append(entry)
     return all_entries
 

@@ -9,10 +9,11 @@ import fitz
 import os
 import json
 import matplotlib.pyplot as plt
+import uuid
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import (
     Entry,
     Index,
@@ -21,6 +22,7 @@ from src.schemas.schemas import (
     ExtractionMethod,
     Scope,
     IngestionMethod,
+    FileType,
 )
 from src.utils.datetime_utils import get_current_utc_datetime
 
@@ -111,7 +113,8 @@ def _visualize_page_results(
         font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20
         )
-    except:
+    except Exception as e:
+        print(f"Error loading font: {e}")
         font = ImageFont.load_default()
 
     for element in parsed_elements:
@@ -158,12 +161,10 @@ async def main_datalab(
     for ingestion in ingestions:
         ingestion.extraction_method = ExtractionMethod.MARKER
         ingestion.extraction_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
 
-        # Set parsed_file_path (similar to ocr_service.py)
-        if not ingestion.extracted_file_path:
+        if not ingestion.extracted_document_file_path:
             base_path = os.path.splitext(ingestion.file_path)[0]
-            ingestion.extracted_file_path = f"{base_path}_datalab.txt"
+            ingestion.extracted_document_file_path = f"{base_path}_datalab.txt"
 
         # Update file reading to handle async
         file_content = (
@@ -179,7 +180,7 @@ async def main_datalab(
 
         # Extract metadata
         with fitz.open(stream=io.BytesIO(pdf_content), filetype="pdf") as pdf:
-            ingestion.metadata = pdf.metadata
+            ingestion.document_metadata = pdf.metadata
 
     all_entries = []
     async for ret in obj.parse_document.map.aio(file_bytes, return_exceptions=True):
@@ -188,11 +189,13 @@ async def main_datalab(
             continue
 
         parsed_data = json.loads(ret)
+        with open("parsed_data.json", "w") as f:
+            f.write(json.dumps(parsed_data, indent=4))
 
         # If visualization is requested, process each page
         if visualize:
             output_dir = os.path.join(
-                os.path.dirname(ingestion.extracted_file_path), "annotated"
+                os.path.dirname(ingestion.extracted_document_file_path), "annotated"
             )
             os.makedirs(output_dir, exist_ok=True)
 
@@ -227,20 +230,30 @@ async def main_datalab(
                     _visualize_page_results(temp_image, elements, output_path)
                     os.remove(temp_image)  # Clean up temporary image
 
+        all_text = []
         if mode == "simple":
-            # Original behavior: concatenate all text on each page
-            all_text = []
+            # Process each page and combine all text into a single Entry
             for page_num, page in enumerate(parsed_data["children"]):
                 page_text = []
-                for child in page.get("children", []):
-                    if "text" in child:
-                        page_text.append(child["text"])
+                if page.get("children"):
+                    for child in page["children"]:
+                        if "html" in child:
+                            # Extract text from HTML, removing HTML tags
+                            text = child["html"].replace("<p>", "").replace("</p>", "").replace("<h1>", "").replace("</h1>", "").replace("<h2>", "").replace("</h2>", "").replace("<h4>", "").replace("</h4>", "")
+                            if text.strip():  # Only add non-empty text
+                                page_text.append(text)
 
+                # Create one Entry per page with all text combined
                 combined_page_text = " ".join(page_text)
                 page_entry = Entry(
+                    uuid=str(uuid.uuid4()),
                     ingestion=ingestion,
                     string=combined_page_text,
                     index_numbers=[Index(primary=page_num + 1)],
+                    metadata={
+                        "page_number": page_num + 1,
+                        "block_type": "Page"
+                    }
                 )
                 all_entries.append(page_entry)
                 all_text.append(combined_page_text)
@@ -252,6 +265,7 @@ async def main_datalab(
                     block_type = child.get("block_type")
                     if "text" in child:
                         entry = Entry(
+                            uuid=str(uuid.uuid4()),
                             ingestion=ingestion,
                             string=child["text"],
                             index_numbers=[Index(primary=page_num + 1)],
@@ -267,9 +281,38 @@ async def main_datalab(
         # Save combined text to file
         combined_text = "\n\n=== PAGE BREAK ===\n\n".join(all_text)
         if write:
-            await write(ingestion.extracted_file_path, combined_text, mode="w")
+            await write(ingestion.extracted_document_file_path, combined_text, mode="w")
         else:
-            with open(ingestion.extracted_file_path, "w", encoding="utf-8") as f:
+            with open(ingestion.extracted_document_file_path, "w", encoding="utf-8") as f:
                 f.write(combined_text)
 
     return all_entries
+
+
+if __name__ == "__main__":
+    # Create sample ingestions with only required fields
+    test_ingestions = [
+        Ingestion(
+            scope=Scope.INTERNAL,  # Required
+            creator_name="Test User",  # Required
+            ingestion_method=IngestionMethod.LOCAL_FILE,  # Required
+            file_type=FileType.PDF,
+            ingestion_date="2024-03-20T12:00:00Z",  # Required
+            file_path="/Users/pranaviyer/Downloads/TR0722-315a Appendix A.pdf"
+        ),
+        # Ingestion(
+        #     scope=Scope.INTERNAL,
+        #     creator_name="Test User",
+        #     ingestion_method=IngestionMethod.LOCAL_FILE,
+        #     ingestion_date="2024-03-20T12:00:00Z",
+        #     file_path="/Users/pranaviyer/Desktop/AstralisData/TR0722-315a Appendix A.pdf"
+        # )
+    ]
+    # Run the batch OCR
+    import asyncio
+    output = asyncio.run(main_datalab(test_ingestions, mode="simple", visualize=True))
+    import json
+    with open("datalab_output.json", "w") as f:
+        for entry in output:
+            f.write(json.dumps(entry.model_dump(), indent=4))
+            f.write("\n")
