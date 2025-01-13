@@ -8,7 +8,7 @@ sys.path.append(str(Path(__file__).parents[2]))
 from litellm import Router
 
 from src.llm_utils.model_lists import chat_model_list
-from src.pipeline.registry import FunctionRegistry, PromptRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry, PromptRegistry
 from src.schemas.schemas import BaseModelListType, Ingestion
 from src.utils.datetime_utils import get_current_utc_datetime
 

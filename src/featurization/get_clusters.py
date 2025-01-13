@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from src.llm_utils.agent import Agent
 from src.llm_utils.utils import Provider
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.prompts.etl_featurization import ExtractClaimsPrompt, LabelClustersPrompt
 from src.retrieval.embed_text import async_embed_text
 from src.schemas.schemas import Entry

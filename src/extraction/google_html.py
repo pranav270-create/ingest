@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.schemas.schemas import Entry, Ingestion, ExtractedFeatureType, ExtractionMethod
-from src.pipeline.registry import FunctionRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
 from src.utils.datetime_utils import get_current_utc_datetime
 
 

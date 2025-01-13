@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.pipeline.registry import PromptRegistry
+from src.pipeline.registry.prompt_registry import PromptRegistry
 
 
 class QuestionAnswerPair(BaseModel):

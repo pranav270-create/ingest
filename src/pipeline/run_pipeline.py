@@ -9,8 +9,8 @@ from typing import Any
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.pipeline import PipelineOrchestrator
-from src.pipeline.registry import FunctionRegistry
-from src.pipeline.registry import SchemaRegistry
+from src.pipeline.registry.function_registry import FunctionRegistry
+from src.pipeline.registry.schema_registry import SchemaRegistry
 from src.sql_db.etl_crud import (
     clone_pipeline,
     create_entries,
