@@ -24,10 +24,12 @@ case $deploy_type in
         marker_id=$(get_app_id "marker-modal")
         ocr_id=$(get_app_id "ocr-modal")
         grobid_id=$(get_app_id "grobid-modal")
+        moondream_id=$(get_app_id "moondream-modal")
         
         [ ! -z "$marker_id" ] && modal app stop "$marker_id"
         [ ! -z "$ocr_id" ] && modal app stop "$ocr_id"
         [ ! -z "$grobid_id" ] && modal app stop "$grobid_id"
+        [ ! -z "$moondream_id" ] && modal app stop "$moondream_id"
         ;;
     "marker")
         app_id=$(get_app_id "marker-modal")
@@ -41,8 +43,12 @@ case $deploy_type in
         app_id=$(get_app_id "grobid-modal")
         [ ! -z "$app_id" ] && modal app stop "$app_id"
         ;;
+    "moondream")
+        app_id=$(get_app_id "moondream-modal")
+        [ ! -z "$app_id" ] && modal app stop "$app_id"
+        ;;
     *)
-        echo "Invalid deployment type. Please use 'all', 'marker', 'ocr', or 'grobid'"
+        echo "Invalid deployment type. Please use 'all', 'marker', 'ocr', 'grobid', or 'moondream'"
         exit 1
         ;;
 esac

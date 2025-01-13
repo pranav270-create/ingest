@@ -1,8 +1,9 @@
 import base64
 import sys
 from pathlib import Path
-from typing import Union
-
+from typing import Union, Dict, Any, Literal
+import httpx
+import os
 from litellm import Router
 
 sys.path.append(str(Path(__file__).parents[2]))
@@ -32,7 +33,42 @@ def is_base64_image(s: str) -> bool:
 
 def supports_image_embedding(model: str) -> bool:
     """Check if model supports image embedding based on prefix"""
-    return model.startswith(("cohere/", "voyage/"))
+    return model.startswith(("cohere/", "voyage/", "jina-"))
+
+
+async def get_jina_embeddings(inputs: list[str], model_name: str, dimensions: int, embedding_type: Literal["ubinary", "float", "binary"] = "float") -> Dict[str, Any]:
+    """Handle embedding requests specifically for Jina AI models"""
+    jina_api_key = os.environ.get("JINA_API_KEY")
+    if not jina_api_key:
+        raise ValueError("JINA_API_KEY is not set in the environment variables")
+
+    # Prepare the input data
+    input_data = []
+    for text in inputs:
+        if is_base64_image(text):
+            input_data.append({"image": text})
+        else:
+            input_data.append({"text": text})
+
+    payload = {
+        "model": model_name,
+        "dimensions": dimensions,
+        "normalized": True,
+        "embedding_type": embedding_type,
+        "input": input_data
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.jina.ai/v1/embeddings",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {jina_api_key}"
+            },
+            json=payload
+        )
+        response.raise_for_status()
+        return response.json()
 
 
 @FunctionRegistry.register("embed", "embed")
@@ -73,7 +109,6 @@ async def get_embeddings(
             # get the text to embed
             text = entry.string
 
-
             text += entry.context_summary_string or ""
             inputs.append(text)
 
@@ -90,9 +125,16 @@ async def get_embeddings(
         if model_params and not supports_image_embedding(model_params['litellm_params']['model']):
             raise ValueError(f"Model '{model_name}' does not support image embedding")
 
-    embedding_response = await router.aembedding(model=model_name, input=inputs, dimensions=dimensions)
-    embeddings = embedding_response.data
-    tokens = embedding_response.usage.total_tokens
+    # Check if using Jina AI model
+    if model_name.startswith("jina-"):
+        response_data = await get_jina_embeddings(inputs, model_name, dimensions)
+        embeddings = response_data["data"]
+        tokens = response_data.get("usage", {}).get("total_tokens", 0)
+    else:
+        embedding_response = await router.aembedding(model=model_name, input=inputs, dimensions=dimensions)
+        embeddings = embedding_response.data
+        tokens = embedding_response.usage.total_tokens
+
     return [
         Embedding(
             **{**entry, "embedding": embed_dict["embedding"], "string": string, "tokens": tokens}
@@ -132,7 +174,6 @@ if __name__ == "__main__":
             keywords=["test", "example"],
             embedded_feature_type=EmbeddedFeatureType.TEXT
         )
-
 
         embeddings = await get_embeddings([entry], "voyage", 1024)
 
