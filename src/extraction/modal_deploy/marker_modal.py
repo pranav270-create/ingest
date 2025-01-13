@@ -5,7 +5,7 @@ from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
 from marker.config.parser import ConfigParser
 
-app = App("document-parsing-modal")
+app = App("marker-modal")
 MINUTES = 60  # seconds
 HOURS = 60 * MINUTES
 
