@@ -156,7 +156,7 @@ async def main_datalab(
         **kwargs: Additional arguments
     """
     file_bytes = []
-    cls = modal.Cls.lookup("document-parsing-modal", "Model")
+    cls = modal.Cls.lookup("marker-modal", "Model")
     obj = cls()
     for ingestion in ingestions:
         ingestion.extraction_method = ExtractionMethod.MARKER
