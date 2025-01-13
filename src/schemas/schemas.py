@@ -2,7 +2,6 @@ import sys
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, TypeVar, Union
-
 from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -276,6 +275,18 @@ class BoundingBox(BaseModel):
     height: float
 
 
+class ChunkLocation(BaseModel):
+    """
+    Represents the location of a chunk within a document, combining index information
+    with physical location details and the type of content extracted at that location.
+    """
+    index: Index
+    page_file_path: Optional[str] = None  # Path to the page file this chunk is from
+    bounding_box: Optional[BoundingBox] = None  # Physical location on the page
+    extracted_feature_type: Optional[ExtractedFeatureType] = None  # Type of content at this location
+    page_file_path: Optional[str] = None  # This is the file path to the page screenshot
+
+
 # ------------------------------ CORE MODELS ------------------------------ #
 
 
@@ -290,12 +301,13 @@ class Ingestion(BaseModel):
     document_title: Optional[str] = None  # We may want a LLM to title the document
     scope: Scope  # You must know the scope of the document before you can ingest it.
     content_type: Optional[ContentType] = None  # We may eventually want to infer this
-    file_type: Optional[FileType] = None  # For alerts
-    public_url: Optional[str] = None  # This is the public URL for the document (website, image, youtube, etc.)
     creator_name: str  # This is the name of the entity who created the document (if known)
-    file_path: Optional[str] = None  # Cloud bucket path, so just grab the ending
-    total_length: Optional[int] = None  # In characters if text, otherwise None
     creation_date: Optional[str] = None
+    file_type: Optional[FileType] = None  # This is the file type of the document (pdf, docx, pptx, etc.)
+    file_path: Optional[str] = None  # Cloud bucket path
+    file_size: Optional[int] = None  # In bytes
+    public_url: Optional[str] = None  # This is the public URL for the document (website, image, youtube, etc.)
+    # Ingestion fields
     ingestion_method: IngestionMethod  # Source of ingestion (e.g., 'slack', 'youtube', 'wix', etc.)
     ingestion_date: str
     # Added fields
@@ -305,8 +317,8 @@ class Ingestion(BaseModel):
     # Extraction fields
     extraction_method: Optional[ExtractionMethod] = None
     extraction_date: Optional[str] = None
-    # TODO: Should this be default of type .json of page_numer and content?
-    extracted_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
+    # TODO: Should this be default of type .json of page_number and content?
+    extracted_document_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
     # Chunking fields
     chunking_method: Optional[ChunkingMethod] = None
     chunking_metadata: Optional[dict[str, Any]] = None
@@ -328,18 +340,18 @@ class Entry(BaseModel):
     # Core fields
     ingestion: Optional[Ingestion] = None  # null for cross document only, citations must be there
     string: Optional[str] = None  # If we embed a document or image, we don't need the original text
+    # Summary fields
     context_summary_string: Optional[str] = None  # only if we generate a summary of the entry wrt the broader document # noqa
+    chunk_summary_string: Optional[str] = None  # a summary of the chunk in particular
+    # Featurization fields
     added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
     keywords: Optional[list[str]] = None  # This is for any keywords that we have not captured in other fields yet
 
-    # Indexing fields and Reconstruction fields
-    index_numbers: Optional[list[Index]] = None  # Null if embed whole document or cross-doc summary. range for continous time; int for discrete. # noqa
-    min_primary_index: Optional[int] = None  # This is the minimum primary index for the entry
-    max_primary_index: Optional[int] = None  # This is the maximum primary index for the entry
-    bounding_box: Optional[list[BoundingBox]] = None   # since we may cross page boundaries
+    # Reorganized chunk location fields
+    chunk_locations: Optional[list[ChunkLocation]] = None  # Combined location information
+    min_primary_index: Optional[int] = None  # Cached for quick access
+    max_primary_index: Optional[int] = None  # Cached for quick access
 
-    # Extracted field
-    extracted_feature_type: Optional[list[ExtractedFeatureType]] = None  # since we may have multiple feature types in a single entry
     # Embedding fields -> embedded_feature_type = type of feature being embedded, embedding_date = date of embedding, embedding_model = name of model used, embedding_dimensions = dimensions of embedding
     embedded_feature_type: Optional[EmbeddedFeatureType] = None  # This is the type of feature that is being embedded
     embedding_date: Optional[str] = None
@@ -350,6 +362,7 @@ class Entry(BaseModel):
     id: Optional[str] = None  # Unique identifier for this entry
     parent_id: Optional[str] = None  # ID of the parent entry (e.g., table containing cells)
     child_ids: Optional[list[str]] = None  # IDs of child entries (e.g., cells in a table)
+
     # Graph DB
     citations: Optional[dict[str, str]] = None  # This is for citations that we have not processed yet
 
@@ -385,9 +398,10 @@ class Upsert(BaseModel):
     file_type: Optional[FileType] = None  # For alerts
     public_url: Optional[str] = None  # This is the public URL for the document (website, image, youtube, etc.)
     creator_name: str  # This is the name of the entity who created the document (if known)
-    file_path: Optional[str] = None  # Cloud bucket path, so just grab the ending
-    total_length: Optional[int] = None  # In characters if text, otherwise None
     creation_date: Optional[str] = None
+    file_path: Optional[str] = None  # Cloud bucket path, so just grab the ending
+    file_size: Optional[int] = None  # In bytes
+    # Ingestion fields
     ingestion_method: IngestionMethod  # Source of ingestion (e.g., 'slack', 'youtube', 'wix', etc.)
     ingestion_date: str
     # Extraction fields
@@ -402,7 +416,6 @@ class Upsert(BaseModel):
     feature_dates: Optional[list[str]] = None
     feature_types: Optional[list[str]] = None
     # From Entry
-    extracted_feature_type: Optional[ExtractedFeatureType] = None  # This is the type of feature that was extracted
     embedded_feature_type: Optional[EmbeddedFeatureType] = None  # This is the type of feature that is being embedded
     embedding_date: Optional[str] = None
     embedding_model: Optional[str] = None

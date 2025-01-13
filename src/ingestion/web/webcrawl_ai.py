@@ -122,7 +122,6 @@ def create_ingestion(url, result, creator_name):
         content_type=ContentType.TEXT,
         file_type=FileType.HTML,
         file_path=html_path,
-        total_length=len(result.html),
         public_url=url,
         creator_name=creator_name,
         metadata={
@@ -132,6 +131,7 @@ def create_ingestion(url, result, creator_name):
         ingestion_date=current_time,
         ingestion_method=IngestionMethod.URL_SCRAPE,
     )
+
 
 async def process_url(url, extraction_strategy, creator_name):
     try:

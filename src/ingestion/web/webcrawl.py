@@ -93,7 +93,6 @@ async def handle_pdf(url: str, write=None, content_type=ContentType.OTHER, creat
         content_type=content_type,
         file_type=FileType.PDF,
         file_path=pdf_path,
-        total_length=len(pdf_content),
         public_url=url,
         creator_name=creator_name,
         metadata={
@@ -249,7 +248,6 @@ async def run_crawler(config, write=None, visited_urls=None, lock=None):
             content_type=content_type,
             file_type=FileType.HTML,
             file_path=html_path,
-            total_length=len(data["content"]),
             public_url=context.request.url,
             creator_name=creator_name,
             metadata={
@@ -295,7 +293,6 @@ async def run_crawler(config, write=None, visited_urls=None, lock=None):
                 content_type=ContentType.OTHER,
                 file_type=FileType.PNG,
                 file_path=screenshot_path,
-                total_length=len(screenshot_content),
                 public_url=context.request.url,
                 creator_name=creator_name,
                 creation_date=current_time,
