@@ -11,8 +11,6 @@ from src.schemas.schemas import Entry, Ingestion, ExtractedFeatureType, Extracti
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.llm_utils.utils import Provider
-from src.prompts.parser import text_cost_parser
-from src.llm_utils.api_requests import get_api_key
 
 
 client = AsyncOpenAI(api_key=get_api_key(Provider.OPENAI))
@@ -21,14 +19,12 @@ client = AsyncOpenAI(api_key=get_api_key(Provider.OPENAI))
 async def compare_with_vlm(page_image: bytes) -> dict:
     # Convert image to base64
     image_b64 = b64encode(page_image).decode('utf-8')
-    
     prompt = """Here is a page from a document
     Please extract ALL the text from the document, as it will be used later on in an retrievel augmented generation pipeline.
     If there is an image, please describe the image in detail. If there is a graph, please describe the graph to detail and attempt to convert the data to a text if possible.
     If there is a table, please convert the table to a markdown string.
     Structure your response as a JSON with the following.
     """
-    
     response = await client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -42,11 +38,11 @@ async def compare_with_vlm(page_image: bytes) -> dict:
         ],
         max_tokens=2000
     )
-    
     text, _ = text_cost_parser(response, "gpt-4-vision-preview")
     try:
         return eval(text)
-    except:
+    except Exception as e:
+        print(e)
         return {"error": "Failed to parse VLM response"} 
 
 

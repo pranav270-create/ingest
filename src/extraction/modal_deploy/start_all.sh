@@ -9,7 +9,7 @@ case $deploy_type in
     "all")
         modal deploy "$SCRIPT_DIR/marker_modal.py"
         modal deploy "$SCRIPT_DIR/ocr_modal.py"
-        # modal deploy "$SCRIPT_DIR/grobid_modal.py"
+        modal deploy "$SCRIPT_DIR/grobid_modal.py"
         ;;
     "marker")
         modal deploy "$SCRIPT_DIR/marker_modal.py"

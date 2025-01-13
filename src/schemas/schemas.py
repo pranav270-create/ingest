@@ -1,8 +1,9 @@
 import sys
-from enum import Enum
+from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Optional, TypeVar, Union
 from pydantic import BaseModel, Field
+from typing_extensions import Annotated
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -116,6 +117,7 @@ class IngestionMethod(str, Enum):
     SEMANTIC_SCHOLAR_API = "semantic_scholar_api"
     BRAVE_API = "brave_api"
     LOCAL_FILE = "local_file"
+    S3 = "s3"
     GDRIVE_API = "gdrive_api"
     RSS = "rss"
     ARXIV_BIORXIV_API = "arxiv_biorxiv_api"
@@ -144,46 +146,45 @@ class ExtractionMethod(str, Enum):
 
 
 class ExtractedFeatureType(str, Enum):
-    # Basic content types
-    TEXT = "text"
-    IMAGE = "image"
-    FORM = "form"
-    TABLE = "table"
-    # Document structure
-    PAGE = "page"
-    PAGE_HEADER = "page_header"
-    PAGE_FOOTER = "page_footer"
-    TABLE_OF_CONTENTS = "table_of_contents"
-    # Text elements
-    PARAGRAPH = "paragraph"
-    LIST_GROUP = "list_group"
-    LIST_ITEM = "list_item"
-    FOOTNOTE = "footnote"
-    CAPTION = "caption"
-    # Special content
-    EQUATION = "equation"
-    MATH_INLINE = "math_inline"
-    CODE = "code"
-    HANDWRITING = "handwriting"
-    # Figures and media
-    FIGURE = "figure"
-    FIGURE_GROUP = "figure_group"
-    PICTURE = "picture"
-    # Complex elements
-    COMPLEX_REGION = "complex_region"
-    # Textract-specific elements
-    WORD = "word"
-    LINE = "line"
-    TITLE = "title"  # Changed from "title"
-    HEADER = "header"  # Changed from "header"
-    FOOTER = "footer"  # Changed from "footer"
-    LIST = "list"  # Changed from "list"
-    PAGE_NUMBER = "page_number"  # Changed from "page_number"
-    KEY_VALUE = "key_value"  # Changed from "key_value"
-    SECTION_HEADER = "section_header"  # Added new
-    # Catch-all
-    COMBINED_TEXT = "combined_text"  # Changed from "combined_text"
-    OTHER = "other"
+    # Common content types (shared across extractors)
+    text = "text"                    # Basic text content (from Marker.Text and Textract.LAYOUT_TEXT)
+    word = "word"                    # Word-level text (from Textract extraction)
+    line = "line"                    # Line-level text (from Marker.Line and Textract extraction)
+    image = "image"                   # Basic image content
+    table = "table"                   # Tables (from Marker.Table and Textract.LAYOUT_TABLE)
+    figure = "figure"                  # Figures (from Marker.Figure and Textract.LAYOUT_FIGURE)
+    code = "code"                    # Code blocks (from Marker.Code)
+    equation = "equation"                # Mathematical equations (from Marker.Equation)
+    form = "form"                    # Form elements (from Marker.Form)
+    header = "header"                  # Headers (from Marker.PageHeader and Textract.LAYOUT_HEADER)
+    footer = "footer"                  # Footers (from Marker.PageFooter and Textract.LAYOUT_FOOTER)
+    section_header = "section_header"          # Section headers (from Marker.SectionHeader and Textract.LAYOUT_SECTION_HEADER)
+    list = "list"                    # List structures (from Marker.ListItem/ListGroup and Textract.LAYOUT_LIST)
+    page_number = "page_number"             # Page numbers (from Textract.LAYOUT_PAGE_NUMBER)
+
+    # Marker-specific types (original: PascalCase -> lowercase)
+    span = "span"                    # From Marker.Span
+    figuregroup = "figuregroup"             # From Marker.FigureGroup
+    tablegroup = "tablegroup"              # From Marker.TableGroup
+    listgroup = "listgroup"               # From Marker.ListGroup
+    picturegroup = "picturegroup"            # From Marker.PictureGroup
+    picture = "picture"                 # From Marker.Picture
+    page = "page"                    # From Marker.Page
+    caption = "caption"                 # From Marker.Caption
+    footnote = "footnote"                # From Marker.Footnote
+    handwriting = "handwriting"             # From Marker.Handwriting
+    textinlinemath = "textinlinemath"          # From Marker.TextInlineMath
+    tableofcontents = "tableofcontents"         # From Marker.TableOfContents
+    document = "document"                # From Marker.Document
+    complexregion = "complexregion"           # From Marker.ComplexRegion
+
+    # Textract-specific types (original: LAYOUT_* -> lowercase)
+    key_value = "key_value"               # From Textract.LAYOUT_KEY_VALUE
+
+    # Catch-all types
+    combined_text = "combined_text"           # Our aggregation type
+    section_text = "section_text"           # Our aggregation type
+    other = "other"                   # Fallback type
 
 
 class ChunkingMethod(str, Enum):
@@ -212,16 +213,16 @@ class Index(BaseModel):
     """
     This is a list of indices that can be used to index a larger object. (float for video/audio, int for everything else)
     We sort by primary, then secondary, then tertiary.
-    Note: We start indexing at 1 for all indices.
+    NOTE: We start indexing at 1 for all indices.
     For a simple text extraction, we would only have a primary index.
     For a more complex PDF, we may have a primary and secondary index telling us where each chunk is within the page.
     For a table within a complex PDF, we may have a primary, secondary, and tertiary index telling us where each cell is
     within the table within the page.
     """
 
-    primary: Union[float, int]
-    secondary: Optional[Union[float, int]] = None
-    tertiary: Optional[Union[float, int]] = None
+    primary: Annotated[int, Field(gt=0)]  # Ensure primary is greater than 0
+    secondary: Optional[Annotated[int, Field(gt=0)]] = None  # Ensure secondary is greater than 0 if provided
+    tertiary: Optional[Annotated[int, Field(gt=0)]] = None  # Ensure tertiary is greater than 0 if provided
 
     def __str__(self):
         return f"{self.primary}.{self.secondary}.{self.tertiary}"
@@ -268,11 +269,22 @@ class BoundingBox(BaseModel):
     This is the bounding box of the extracted data. This will be in the pixel space of a page image.
     0, 0 is the top left corner of the page.
     """
-
     left: float
     top: float
     width: float
     height: float
+    page_width: float
+    page_height: float
+
+    @property
+    def relative_coords(self) -> dict[str, float]:
+        """Returns coordinates normalized to page dimensions (0-1 range)"""
+        return {
+            "left": self.left / self.page_width,
+            "top": self.top / self.page_height,
+            "width": self.width / self.page_width,
+            "height": self.height / self.page_height
+        }
 
 
 class ChunkLocation(BaseModel):
@@ -356,9 +368,11 @@ class Entry(BaseModel):
     added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
 
     # Chunk location fields. Used for reconstruction.
+    consolidated_feature_type: Optional[ExtractedFeatureType] = None  # This is the type of feature that is being embedded
     chunk_locations: Optional[list[ChunkLocation]] = None  # Combined location information
     min_primary_index: Optional[int] = None  # Cached for quick access
     max_primary_index: Optional[int] = None  # Cached for quick access
+    chunk_index: Optional[Annotated[int, Field(gt=0)]] = None  # Ensure chunk index is greater than 0
 
     # Embedding fields -> embedded_feature_type = type of feature being embedded, embedding_date = date of embedding, embedding_model = name of model used, embedding_dimensions = dimensions of embedding
     embedded_feature_type: Optional[EmbeddedFeatureType] = None  # This is the type of feature that is being embedded
