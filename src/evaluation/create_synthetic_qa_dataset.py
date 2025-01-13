@@ -113,8 +113,8 @@ async def main(force_rerun: bool = False):
             # Generate synthetic QA pairs
             new_entries = await featurize(
                 basemodels=entries,
-                feature_class_name="synthetic_qa_pair",
-                sql_only=True,
+                prompt_name="synthetic_qa_pair",
+                update_metadata=False,
                 model=model,
                 provider=provider,
                 functionality=functionality,

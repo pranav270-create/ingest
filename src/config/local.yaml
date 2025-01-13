@@ -7,7 +7,7 @@ stages:
         params:
           directory_path: "/Users/pranaviyer/Desktop/AstralisData"
 
-  - name: parse
+  - name: extract
     functions:
       - name: textract
         input: Ingestion
@@ -30,11 +30,8 @@ stages:
         input: Entry
         return: Entry
         params:
-          feature_class_name: "summarize_entry"
-          basemodel_name: "Entry"
-          provider: "openai"
-          functionality: "chat"
-          model: "gpt-4o-mini"
+          prompt_name: "summarize_entry"
+          model_name: "gpt-4o-mini"
           max_tokens: 1000
 
   - name: embed
@@ -44,7 +41,6 @@ stages:
         return: Embedding
         params:
           model: "text-embedding-3-large"
-          provider: "openai"
           dimensions: 512
   
   - name: upsert
