@@ -21,12 +21,8 @@ router = Router(
 
 
 def update_metadata(obj: Ingestion, model: str, feature_class_name: str) -> None:
-    """Update feature metadata for an ingestion object.
-
-    Args:
-        obj: The Entry object to update
-        model: LLM model name
-        feature_class_name: The feature class name to add
+    """
+    Update feature metadata for an ingestion object.
     """
     if obj.feature_models is None:
         obj.feature_models = [model]
@@ -51,7 +47,7 @@ async def featurize(
     model_name: str = "gpt-4o-mini", # model_name from litellm router
     write=None,  # noqa
     read=None,
-    sql_only=False,
+    update_metadata=True,
     **kwargs,
 ) -> BaseModelListType:
     """
@@ -60,7 +56,6 @@ async def featurize(
     args:
         basemodels: a list of objects to featurize
         feature_class_name: the name of the prompt
-        basemodel_name: Ingestion or Entry
     """
 
     # get prompt
@@ -69,7 +64,7 @@ async def featurize(
     if feature_class.DataModel:
         kwargs["response_format"] = feature_class.DataModel
 
-    if not sql_only:
+    if not update_metadata:
         for base_model in basemodels:
             if base_model.schema__ == "Ingestion":
                 update_metadata(base_model, model_name, feature_class_name)
