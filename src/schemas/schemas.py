@@ -280,12 +280,11 @@ class ChunkLocation(BaseModel):
     Represents the location of a chunk within a document, combining index information
     with physical location details and the type of content extracted at that location.
     """
-    index: Index
-    page_file_path: Optional[str] = None  # Path to the page file this chunk is from
+    index: Index  # basically page number
     bounding_box: Optional[BoundingBox] = None  # Physical location on the page
     extracted_feature_type: Optional[ExtractedFeatureType] = None  # Type of content at this location
     page_file_path: Optional[str] = None  # This is the file path to the page screenshot
-
+    extracted_file_path: Optional[str] = None  # This is the file path to the extracted screenshot
 
 # ------------------------------ CORE MODELS ------------------------------ #
 
@@ -293,7 +292,7 @@ class ChunkLocation(BaseModel):
 @SchemaRegistry.register("Ingestion")
 class Ingestion(BaseModel):
     schema__: str = Field(default="Ingestion", alias="schema__")
-    document_hash: str  # This is the hash of the document
+    document_hash: Optional[str] = None  # This is the hash of the document
     # Processing fields
     ingestion_id: Optional[int] = None  # Needed for SQL mode
     pipeline_id: Optional[int] = None  # Needed for SQL mode
@@ -309,7 +308,7 @@ class Ingestion(BaseModel):
     public_url: Optional[str] = None  # This is the public URL for the document (website, image, youtube, etc.)
     # Ingestion fields
     ingestion_method: IngestionMethod  # Source of ingestion (e.g., 'slack', 'youtube', 'wix', etc.)
-    ingestion_date: str
+    ingestion_date: Optional[str] = None
     # Added fields
     document_summary: Optional[str] = None  # This is a summary of the document
     document_keywords: Optional[list[str]] = None  # This is a list of keywords that we have extracted
@@ -342,12 +341,21 @@ class Entry(BaseModel):
     string: Optional[str] = None  # If we embed a document or image, we don't need the original text
     # Summary fields
     context_summary_string: Optional[str] = None  # only if we generate a summary of the entry wrt the broader document # noqa
-    chunk_summary_string: Optional[str] = None  # a summary of the chunk in particular
+    chunk_summary_string: Optional[str] = None  # a summary of the chunk
+    description: Optional[str] = None  # This is for a figure, table, or other content
     # Featurization fields
-    added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
+    title: Optional[str] = None  # Title of a figure, table, or other content
+    table_number: Optional[int] = None  # This is for a table specifically
+    figure_number: Optional[int] = None  # This is for a figure specifically
+    main_headers: Optional[list[str]] = None  # This is for a table specifically
+    trends: Optional[str] = None  # This is for tables and graphs asking for specific trends
+    components: Optional[list[str]] = None  # This is for a figure specifically
     keywords: Optional[list[str]] = None  # This is for any keywords that we have not captured in other fields yet
 
-    # Reorganized chunk location fields
+    # Catch-all
+    added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
+
+    # Chunk location fields. Used for reconstruction.
     chunk_locations: Optional[list[ChunkLocation]] = None  # Combined location information
     min_primary_index: Optional[int] = None  # Cached for quick access
     max_primary_index: Optional[int] = None  # Cached for quick access
@@ -359,9 +367,9 @@ class Entry(BaseModel):
     embedding_dimensions: Optional[int] = None
 
     # Add fields for parent-child relationships in textract extraction
-    id: Optional[str] = None  # Unique identifier for this entry
-    parent_id: Optional[str] = None  # ID of the parent entry (e.g., table containing cells)
-    child_ids: Optional[list[str]] = None  # IDs of child entries (e.g., cells in a table)
+    # id: Optional[str] = None  # Unique identifier for this entry
+    # parent_id: Optional[str] = None  # ID of the parent entry (e.g., table containing cells)
+    # child_ids: Optional[list[str]] = None  # IDs of child entries (e.g., cells in a table)
 
     # Graph DB
     citations: Optional[dict[str, str]] = None  # This is for citations that we have not processed yet
@@ -407,7 +415,7 @@ class Upsert(BaseModel):
     # Extraction fields
     extraction_method: Optional[ExtractionMethod] = None
     extraction_date: Optional[str] = None
-    extracted_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
+    extracted_document_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
     # Chunking fields
     chunking_method: Optional[ChunkingMethod] = None
     chunking_date: Optional[str] = None

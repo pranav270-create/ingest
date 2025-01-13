@@ -20,7 +20,7 @@ async def base_model_to_encoded_image(base_model: BaseModel, read=None):
         content = await read_content(base_model.file_path, read)
 
     elif isinstance(base_model, Document):
-        filepath = base_model.entries[0].ingestion.extracted_file_path
+        filepath = base_model.entries[0].ingestion.extracted_document_file_path
         content = await read_content(filepath, read)
 
     elif isinstance(base_model, Entry):
@@ -69,7 +69,7 @@ class FilterIndexingPrompt:
         if isinstance(base_model, Ingestion):
             document = await read_content(base_model.file_path, read)  # Call the class method using cls
         elif isinstance(base_model, Document):
-            filepath = base_model.entries[0].ingestion.extracted_file_path
+            filepath = base_model.entries[0].ingestion.extracted_document_file_path
             document = await read_content(filepath, read)  # Call the class method using cls
         elif isinstance(base_model, Entry):
             document = base_model.string
@@ -89,11 +89,11 @@ class FilterIndexingPrompt:
                     basemodel.metadata["rationale"] = rationale
                 elif isinstance(basemodel, Document):
                     for entry in basemodel.entries:
-                        entry.ingestion.metadata["should_index"] = True
-                        entry.ingestion.metadata["rationale"] = rationale
+                        entry.ingestion.document_metadata["should_index"] = True
+                        entry.ingestion.document_metadata["rationale"] = rationale
                 elif isinstance(basemodel, Entry):
-                    basemodel.ingestion.metadata["should_index"] = True
-                    basemodel.ingestion.metadata["rationale"] = rationale
+                    basemodel.ingestion.document_metadata["should_index"] = True
+                    basemodel.ingestion.document_metadata["rationale"] = rationale
                 new_base_models.append(basemodel)
         return new_base_models
 
@@ -130,7 +130,7 @@ class SummarizeIngestionPrompt:
     def parse_response(ingestions: list[Ingestion], parsed_ingestions: dict[str, DataModel]) -> bool:
         # add the "summary" field to the entry.string in the front
         for i, ingestion in enumerate(ingestions):
-            ingestion.metadata["summary"] = parsed_ingestions.get(i).get("summary", "")
+            ingestion.document_metadata["summary"] = parsed_ingestions.get(i).get("summary", "")
         return ingestions
 
 
@@ -173,9 +173,9 @@ class SummarizeEntryPrompt:
     @classmethod
     async def format_prompt(cls, entry: Entry, read=None):
         if read is not None:
-            document = await read(entry.ingestion.extracted_file_path)
+            document = await read(entry.ingestion.extracted_document_file_path)
         else:
-            with open(entry.ingestion.extracted_file_path) as f:
+            with open(entry.ingestion.extracted_document_file_path) as f:
                 document = f.read()
         return cls.system_prompt, cls.user_prompt.format(entry=entry.string, document=document)
 
@@ -239,7 +239,7 @@ class CleanEntryPrompt:
         if isinstance(base_model, Ingestion):
             document = await read_content(base_model.file_path, read)  # Call the class method using cls
         elif isinstance(base_model, Document):
-            filepath = base_model.entries[0].ingestion.extracted_file_path
+            filepath = base_model.entries[0].ingestion.extracted_document_file_path
             document = await read_content(filepath, read)  # Call the class method using cls
         elif isinstance(base_model, Entry):
             document = base_model.string
@@ -259,11 +259,11 @@ class CleanEntryPrompt:
                     basemodel.metadata["rationale"] = rationale
                 elif isinstance(basemodel, Document):
                     for entry in basemodel.entries:
-                        entry.ingestion.metadata["retain"] = True
-                        entry.ingestion.metadata["rationale"] = rationale
+                        entry.ingestion.document_metadata["retain"] = True
+                        entry.ingestion.document_metadata["rationale"] = rationale
                 elif isinstance(basemodel, Entry):
-                    basemodel.ingestion.metadata["retain"] = True
-                    basemodel.ingestion.metadata["rationale"] = rationale
+                    basemodel.ingestion.document_metadata["retain"] = True
+                    basemodel.ingestion.document_metadata["rationale"] = rationale
                 new_base_models.append(basemodel)
         return new_base_models
 

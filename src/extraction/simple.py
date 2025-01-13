@@ -14,7 +14,7 @@ from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 def process_pdf(file_content: bytes, ingestion: Ingestion) -> tuple[list[Entry], str]:
     all_entries = []
     with fitz.open(stream=io.BytesIO(file_content), filetype="pdf") as pdf:
-        ingestion.metadata = pdf.metadata
+        ingestion.document_metadata = pdf.metadata
         # Try multiple metadata fields for date
         date_fields = ['creationDate', 'modDate', 'created', 'modified']
         for field in date_fields:
@@ -47,13 +47,13 @@ async def main_simple(ingestions: list[Ingestion], write=None, read=None, **kwar
         ingestion.extraction_method = ExtractionMethod.SIMPLE
         ingestion.extraction_date = get_current_utc_datetime()
         ingestion.parsed_feature_type = [ExtractedFeatureType.TEXT]
-        ingestion.extracted_file_path = os.path.basename(ingestion.file_path).replace(".pdf", "_parsed.txt")
+        ingestion.extracted_document_file_path = os.path.basename(ingestion.file_path).replace(".pdf", "_parsed.txt")
         file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
         entries, all_text = process_pdf(file_content, ingestion)
         if write:
-            await write(ingestion.extracted_file_path, all_text, mode="w")
+            await write(ingestion.extracted_document_file_path, all_text, mode="w")
         else:
-            with open(ingestion.extracted_file_path, "w") as f:
+            with open(ingestion.extracted_document_file_path, "w") as f:
                 f.write(all_text)
         all_entries.extend(entries)
     return all_entries

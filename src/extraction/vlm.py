@@ -85,7 +85,7 @@ async def vlm_parse(ingestions: list[Ingestion], read=None, write=None, **kwargs
             all_entries.append(entry)
         ingestion.extraction_method = ExtractionMethod.VLM
         ingestion.extraction_date = get_current_utc_datetime()
-        ingestion.extracted_file_path = parsed_file_path
+        ingestion.extracted_document_file_path = parsed_file_path
     return all_entries
 
 
