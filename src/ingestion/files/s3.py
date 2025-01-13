@@ -5,7 +5,8 @@ from pathlib import Path
 import io
 import fitz  # PyMuPDF
 import hashlib
-from typing import Optional
+import aioboto3
+from botocore.exceptions import ClientError
 
 sys.path.append(str(Path(__file__).parents[3]))
 
@@ -15,6 +16,9 @@ from src.utils.datetime_utils import get_current_utc_datetime, parse_datetime
 from src.utils.ingestion_utils import update_ingestion_with_metadata
 
 DEFAULT_CREATOR = "Astralis"
+aws_access_key_id = os.environ.get("AWS_DATA_ACCESS_KEY")
+aws_secret_access_key = os.environ.get("AWS_DATA_SECRET_ACCESS_KEY")
+region_name = os.environ.get("S3_DATA_REGION", "us-west-1")
 
 
 def get_file_type(file_path: str) -> FileType:
@@ -37,15 +41,32 @@ def get_file_type(file_path: str) -> FileType:
     return FileType.TXT  # Default to TXT if unable to determine
 
 
-async def create_ingestion(file_path: str, write=None) -> Ingestion:
-    file_type = get_file_type(file_path)
-    file_name = os.path.basename(file_path)
-    file_size = os.path.getsize(file_path)
+async def create_ingestion_from_s3(
+    session,
+    bucket_name: str,
+    s3_key: str,
+) -> Ingestion:
+    # Get file info
+    file_name = os.path.basename(s3_key)
+    file_type = get_file_type(file_name)
+
+    async with session.client(
+        "s3",
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        region_name=region_name,
+    ) as s3:
+        # Get object metadata
+        response = await s3.head_object(Bucket=bucket_name, Key=s3_key)
+        file_size = response['ContentLength']
+
+        # Download file content
+        response = await s3.get_object(Bucket=bucket_name, Key=s3_key)
+        async with response['Body'] as stream:
+            file_content = await stream.read()
 
     # Calculate document hash
-    with open(file_path, 'rb') as f:
-        file_content = f.read()
-        document_hash = hashlib.sha256(file_content).hexdigest()
+    document_hash = hashlib.sha256(file_content).hexdigest()
 
     # Extract PDF metadata if applicable
     document_metadata = {}
@@ -53,27 +74,20 @@ async def create_ingestion(file_path: str, write=None) -> Ingestion:
         with fitz.open(stream=io.BytesIO(file_content), filetype="pdf") as pdf:
             document_metadata = pdf.metadata
 
-    # Handle file upload if write function provided
-    if write:
-        await write(file_name, file_content)
-    else:
-        file_name = file_path  # Use local path as cloud path
-
     return Ingestion(
         document_hash=document_hash,
         document_title=file_name,
         scope=Scope.INTERNAL,
-        content_type=None,  # Will be inferred later in pipeline or updated in added_metadata
+        content_type=None,
         creator_name=document_metadata.get('author', DEFAULT_CREATOR),
-        creation_date=parse_datetime(os.path.getctime(file_path)),
+        creation_date=parse_datetime(response['LastModified'].timestamp()),
         file_type=file_type,
-        file_path=file_name,
+        file_path=s3_key,
         file_size=file_size,
         public_url=None,
-        ingestion_method=IngestionMethod.LOCAL_FILE,
+        ingestion_method=IngestionMethod.S3,
         ingestion_date=get_current_utc_datetime(),
         document_metadata=document_metadata,
-        # Fields that will be populated later in pipeline
         document_summary=None,
         document_keywords=None,
         extraction_method=None,
@@ -89,19 +103,41 @@ async def create_ingestion(file_path: str, write=None) -> Ingestion:
     )
 
 
-@FunctionRegistry.register("ingest", "local")
-async def ingest_local_files(directory_path: str, added_metadata: dict = {},  write=None, **kwargs) -> list[Ingestion]:
-    if not os.path.isabs(directory_path):
-        raise ValueError("The provided path must be an absolute path.")
+@FunctionRegistry.register("ingest", "s3")
+async def ingest_s3_folder(
+    bucket_name: str,
+    prefix: str = "",
+    added_metadata: dict = {},
+    **kwargs
+) -> list[Ingestion]:
+    session = aioboto3.Session()
     all_ingestions = []
-    for root, _, files in os.walk(directory_path):
-        for file in files:
-            if file.startswith("."):
+    async with session.client(
+        "s3",
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        region_name=region_name,
+    ) as s3:
+        paginator = s3.get_paginator('list_objects_v2')
+        async for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+            if 'Contents' not in page:
                 continue
-            file_path = os.path.join(root, file)
-            ingestion = await create_ingestion(file_path, write)
-            ingestion = update_ingestion_with_metadata(ingestion, added_metadata)
-            all_ingestions.append(ingestion)
+            for obj in page['Contents']:
+                key = obj['Key']
+                # Skip if it's just a folder marker (empty object ending with /)
+                if key.endswith('/') and obj['Size'] == 0:
+                    continue
+                try:
+                    ingestion = await create_ingestion_from_s3(
+                        session,
+                        bucket_name,
+                        key
+                    )
+                    ingestion = update_ingestion_with_metadata(ingestion, added_metadata)
+                    all_ingestions.append(ingestion)
+                except ClientError as e:
+                    print(f"Error processing {obj['Key']}: {str(e)}")
+                    continue
     return all_ingestions
 
 
@@ -110,6 +146,6 @@ if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
         directory_path = sys.argv[1]
-        asyncio.run(ingest_local_files(directory_path))
+        asyncio.run(ingest_s3_folder(directory_path))
     else:
         print("Please provide an absolute directory path as an argument.")
