@@ -33,3 +33,10 @@ def get_async_session():
         yield session
     finally:
         session.close()
+
+def get_session():
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()

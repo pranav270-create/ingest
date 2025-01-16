@@ -87,8 +87,8 @@ class Ingest(AsyncAttrs, AbstractBase):
     # Relationships
     processing_pipelines: Mapped[list["ProcessingPipeline"]] = relationship("ProcessingPipeline", secondary="ingest_pipeline", back_populates="ingests")  # noqa
     entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="ingest")
-    # outgoing_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.source_id]", back_populates="source")  # noqa
-    # incoming_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.target_id]", back_populates="target")  # noqa
+    outgoing_relationships: Mapped[list["IngestRelationship"]] = relationship("IngestRelationship", foreign_keys="[IngestRelationship.source_id]", back_populates="source")  # noqa
+    incoming_relationships: Mapped[list["IngestRelationship"]] = relationship("IngestRelationship", foreign_keys="[IngestRelationship.target_id]", back_populates="target")  # noqa
 
     @validates('scope')
     def validate_scope(self, key, value):  # noqa
