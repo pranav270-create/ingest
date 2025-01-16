@@ -138,6 +138,7 @@ class ExtractionMethod(str, Enum):
     GROBID = "grobid"
     MARKER = "marker"
     UNSTRUCTURED = "unstructured"
+    MINERU = "mineru"
     OCR2_0 = "ocr2_0"
     WHISPER = "whisper"
     BS4 = "bs4"
@@ -289,6 +290,27 @@ class BoundingBox(BaseModel):
         }
 
 
+class RelationshipType(str, Enum):
+    CITES_GENERAL = "cites_general"
+    CITES_BACKGROUND = "cites_background"
+    CITES_METHOD = "cites_method"
+    CITES_RESULT = "cites_result"
+    CITED_BY = "cited_by"
+    ATTACHMENT = "attachment"
+    SECTION_REFERENCE = "section_reference"
+    ONTOLOGICAL = "ontological"
+    SNIPPET = "snippet"
+    SYNTHETIC = "synthetic"
+    FIGURE_CAPTION = "figure_caption"
+    TABLE_CAPTION = "table_caption"
+
+
+class Citation(BaseModel):
+    relationship_type: RelationshipType
+    target_uuid: str
+    source_uuid: str
+
+
 class ChunkLocation(BaseModel):
     """
     Represents the location of a chunk within a document, combining index information
@@ -374,7 +396,7 @@ class Entry(BaseModel):
     embedding_dimensions: Optional[int] = None
 
     # Graph DB
-    citations: Optional[dict[str, str]] = None  # This is for citations that we have not processed yet
+    citations: Optional[list[Citation]] = None
 
 
 @SchemaRegistry.register("Embedding")

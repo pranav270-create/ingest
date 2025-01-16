@@ -11,6 +11,7 @@ case $deploy_type in
         modal deploy "$SCRIPT_DIR/ocr_modal.py"
         modal deploy "$SCRIPT_DIR/grobid_modal.py"
         modal deploy "$SCRIPT_DIR/moondream_deploy.py"
+        modal deploy "$SCRIPT_DIR/mineru_modal.py"
         ;;
     "marker")
         modal deploy "$SCRIPT_DIR/marker_modal.py"
@@ -24,8 +25,11 @@ case $deploy_type in
     "moondream")
         modal deploy "$SCRIPT_DIR/moondream_deploy.py"
         ;;
+    "mineru")
+        modal deploy "$SCRIPT_DIR/mineru_modal.py"
+        ;;
     *)
-        echo "Invalid deployment type. Please use 'all', 'datalab', 'ocr', 'grobid', or 'moondream'"
+        echo "Invalid deployment type. Please use 'all', 'datalab', 'ocr', 'grobid', 'moondream', or 'mineru'"
         exit 1
         ;;
 esac

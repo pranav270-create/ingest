@@ -47,7 +47,7 @@ class Ingest(AsyncAttrs, AbstractBase):
 
     unprocessed_citations: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Unprocessed citations")
 
-    hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True, unique=True, comment="SHA256 hash of the data")
+    hash: Mapped[str] = mapped_column(String(64), primary_key=True, nullable=False, index=True, unique=True, comment="SHA256 hash of the data")
     __table_args__ = (
         UniqueConstraint('hash', name='uq_ingest_hash'),
     )
@@ -95,7 +95,7 @@ class ProcessingPipeline(AsyncAttrs, AbstractBase):
 
 class StepType(str, PythonEnum):
     INGEST = "ingest"
-    PARSE = "parse"
+    EXTRACT = "extract"
     CHUNK = "chunk"
     FEATURIZE = "featurize"
     EMBED = "embed"
@@ -130,7 +130,7 @@ class ProcessingStep(AsyncAttrs, AbstractBase):
     next_steps: Mapped[list["ProcessingStep"]] = relationship("ProcessingStep", back_populates="previous_step")
 
     __table_args__ = (
-        UniqueConstraint('pipeline_id', 'order', name='uq_pipeline_step_order'),
+        UniqueConstraint('pipeline_id', 'order', name='uq_pipeline_step_order')
     )
 
     @validates('step_type')
@@ -161,13 +161,13 @@ class RelationshipType(str, PythonEnum):
     ONTOLOGICAL = "ontological"
     SNIPPET = "snippet"
     SYNTHETIC = "synthetic"
+    CAPTION = "caption"
 
 
 class Entry(AsyncAttrs, AbstractBase):
     __tablename__ = 'entries'
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    unique_identifier: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, comment="Unique identifier for the entry (e.g., URL, UUID)")
+    uuid: Mapped[str] = mapped_column(String(255), unique=True, primary_key=True, nullable=False, comment="Unique identifier for the entry (e.g., URL, UUID)")
     collection_name: Mapped[str] = mapped_column(String(100), index=True, nullable=False, comment="Name of the collection the entry belongs to")
 
     keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the entry")
@@ -180,8 +180,8 @@ class Entry(AsyncAttrs, AbstractBase):
     # max_primary_index:
 
     __table_args__ = (
-       UniqueConstraint('collection_name', 'unique_identifier', name='uq_collection_unique_identifier'),
-       Index('ix_collection_unique_identifier', 'collection_name', 'unique_identifier'),
+       UniqueConstraint('collection_name', 'uuid', name='uq_collection_uuid'),
+       Index('ix_collection_uuid', 'collection_name', 'uuid'),
     )
 
     pipeline_id: Mapped[Optional[int]] = mapped_column(ForeignKey('processing_pipelines.id'), nullable=True, index=True)
@@ -199,12 +199,10 @@ class EntryRelationship(Base):
     __tablename__ = 'entry_relationships'
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    source_id: Mapped[int] = mapped_column(ForeignKey('entries.id'), nullable=False)
-    target_id: Mapped[int] = mapped_column(ForeignKey('entries.id'), nullable=False)
+    source_id: Mapped[str] = mapped_column(ForeignKey('entries.uuid'), nullable=False)
+    target_id: Mapped[str] = mapped_column(ForeignKey('entries.uuid'), nullable=False)
     relationship_type: Mapped[str] = mapped_column(String(50), nullable=False)
     metadata_field: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the relationship")
-
-    linkage_level: Mapped[str] = mapped_column(String(50), nullable=False, comment="Level of linkage: 'entry' or 'ingestion'")
 
     source: Mapped["Entry"] = relationship("Entry", foreign_keys=[source_id], back_populates="outgoing_relationships")
     target: Mapped["Entry"] = relationship("Entry", foreign_keys=[target_id], back_populates="incoming_relationships")
@@ -261,21 +259,20 @@ ingest_pipeline = Table(
 
 if __name__ == '__main__':
     import asyncio
-
     from sqlalchemy import text
     from sqlalchemy.future import select
     from sqlalchemy.orm import sessionmaker
 
     from src.sql_db.database_simple import get_engine
 
-    engine = get_engine("tinypipeline")
+    engine = get_engine("energy_data")
     Session = sessionmaker(bind=engine)
     session = Session()
 
     async def alter_table():
         with session.begin():
             stmt = text("""
-                ALTER TABLE ingest 
+                ALTER TABLE ingest
                 ALTER COLUMN document_title TYPE TEXT,
                 ALTER COLUMN summary TYPE TEXT,
                 ALTER COLUMN public_url TYPE TEXT,

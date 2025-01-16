@@ -20,9 +20,11 @@ def get_engine(db_name: str):
     """Get a synchronous engine for the specified database."""
     return create_engine(get_database_url(db_name), echo=True)
 
+
 # Create the async engine
 engine = get_engine("energy_data")
 SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+
 
 # Dependency to get a session for the energy database
 def get_async_session():

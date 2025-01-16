@@ -24,39 +24,11 @@ from src.schemas.schemas import (
     Scope,
     IngestionMethod,
     FileType,
+    RelationshipType,
+    Citation,
 )
 from src.utils.datetime_utils import get_current_utc_datetime
-
-
-def convert_to_pdf(file_content: bytes, file_extension: str) -> bytes:
-    pdf_bytes = io.BytesIO()
-    if file_extension in [".xlsx", ".xls"]:
-        # Convert Excel to PDF
-        df = pd.read_excel(io.BytesIO(file_content))
-        df.to_pdf(pdf_bytes)
-    elif file_extension in [".docx", ".doc"]:
-        # Convert Word to PDF
-        doc = DocxDocument(io.BytesIO(file_content))
-        # This is a placeholder. You'll need a library like python-docx2pdf for actual conversion
-        # For now, we'll just extract text
-        full_text = "\n".join([para.text for para in doc.paragraphs])
-        pdf = fitz.open()
-        page = pdf.new_page()
-        page.insert_text((50, 50), full_text)
-        pdf.save(pdf_bytes)
-        pdf.close()
-    elif file_extension in [".png", ".jpg", ".jpeg"]:
-        # Convert Image to PDF
-        image = Image.open(io.BytesIO(file_content))
-        pdf = fitz.open()
-        page = pdf.new_page(width=image.width, height=image.height)
-        page.insert_image(page.rect, stream=file_content)
-        pdf.save(pdf_bytes)
-        pdf.close()
-    else:
-        # Assume it's already a PDF
-        return file_content
-    return pdf_bytes.getvalue()
+from src.utils.extraction_utils import convert_to_pdf
 
 
 def _map_marker_type(block_type: str) -> ExtractedFeatureType:
@@ -425,8 +397,14 @@ async def _process_child_element(
                 counters["figure_count"] += 1
                 entries.append(figure_entry)
 
+                llm_caption_uuid = str(uuid.uuid4())
+                citation = Citation(
+                    relationship_type=RelationshipType.FIGURE_CAPTION,
+                    target_uuid=figure_uuid,
+                    source_uuid=llm_caption_uuid,
+                )
                 llm_caption_entry = Entry(
-                    uuid=str(uuid.uuid4()),
+                    uuid=llm_caption_uuid,
                     ingestion=ingestion,
                     string=sub_child["html"],
                     consolidated_feature_type=ExtractedFeatureType.caption,
@@ -434,7 +412,7 @@ async def _process_child_element(
                     chunk_index=chunk_idx + 1,
                     min_primary_index=child_chunk_location.index.primary,
                     max_primary_index=child_chunk_location.index.primary,
-                    citations={figure_uuid: "figure_caption"},
+                    citations=[citation],
                 )
                 chunk_idx += 1
                 entries.append(llm_caption_entry)
@@ -487,14 +465,20 @@ async def _process_child_element(
             citation_type = None
             if parent_feature_type in [ExtractedFeatureType.figuregroup, ExtractedFeatureType.picturegroup]:
                 parent_uuid = parent_elements.get(ExtractedFeatureType.figure) or parent_elements.get(ExtractedFeatureType.picture)
-                citation_type = "figure_caption"
+                citation_type = RelationshipType.FIGURE_CAPTION
             elif parent_feature_type == ExtractedFeatureType.tablegroup:
                 parent_uuid = parent_elements.get(ExtractedFeatureType.table)
-                citation_type = "table_caption"
+                citation_type = RelationshipType.TABLE_CAPTION
 
             if parent_uuid and sub_child.get("html"):
+                caption_uuid = str(uuid.uuid4())
+                citation = Citation(
+                    relationship_type=citation_type,
+                    target_uuid=parent_uuid,
+                    source_uuid=caption_uuid,
+                )
                 caption_entry = Entry(
-                    uuid=str(uuid.uuid4()),
+                    uuid=caption_uuid,
                     ingestion=ingestion,
                     string=sub_child["html"],
                     consolidated_feature_type=ExtractedFeatureType.caption,
@@ -502,7 +486,7 @@ async def _process_child_element(
                     chunk_index=chunk_idx + 1,
                     min_primary_index=child_chunk_location.index.primary,
                     max_primary_index=child_chunk_location.index.primary,
-                    citations={parent_uuid: citation_type},
+                    citations=[citation],
                 )
                 chunk_idx += 1
                 entries.append(caption_entry)
@@ -566,6 +550,9 @@ async def main_datalab(
         mode: "by_page" or "by_section" parsing mode
         visualize: If True, saves annotated PDFs with bounding boxes
         **kwargs: Additional arguments
+    
+    Returns:
+        List of Entry objects
     """
     file_bytes = []
     cls = modal.Cls.lookup("marker-modal", "Model")
@@ -901,11 +888,9 @@ async def main_datalab(
 
 
 if __name__ == "__main__":
-    from src.pipeline.storage_backend import LocalStorageBackend
     import asyncio
     import json
 
-    storage_client = LocalStorageBackend(base_path="/tmp/marker_service")
     test_ingestions = [
         Ingestion(
             scope=Scope.INTERNAL,  # Required

@@ -43,6 +43,7 @@ storage = orchestrator.storage
 FunctionRegistry.set_storage_backend(storage)
 
 
+# TODO: Change this to use the hash from Ingest that is a part of it
 async def process_batch(session, items, pipeline):
     def create_item_hash(item):
         """Create a hash for an item based on key fields."""
@@ -114,7 +115,7 @@ async def get_latest_step_results(session, pipeline_id: int) -> tuple[int, list[
     latest_step = await get_latest_processing_step(session, pipeline_id)
     if latest_step:
         results = json.loads(await storage.read(latest_step.output_path))
-        results = [SchemaRegistry.get(item["schema__"]).parse_obj(item) for item in results]
+        results = [SchemaRegistry.get(item["schema__"]).model_validate(item) for item in results]
         return latest_step.order + 1, results  # start from the next step with the results from the last successful step
     return 0, []
 
@@ -123,7 +124,7 @@ async def get_step_results(session, pipeline_id: int, resume_from_step: int) -> 
     step = await get_specific_processing_step(session, pipeline_id, resume_from_step)
     if step:
         results = json.loads(await storage.read(step.output_path))
-        results = [SchemaRegistry.get(item["schema__"]).parse_obj(item) for item in results]
+        results = [SchemaRegistry.get(item["schema__"]).model_validate(item) for item in results]
         return resume_from_step, results
     return 0, []
 
@@ -193,7 +194,8 @@ async def etl_pipeline():
             current_results = processed_results
 
         print("Creating Entries. No more processing steps to run", flush=True)
-        if current_results[0].schema__ == "Upsert":
+        # TODO: Let us do this if we have type Entry
+        if current_results[0].schema__ == "Entry":
             await create_entries(session, current_results, config["pipeline"].get("collection_name"))
 
 
