@@ -1,6 +1,6 @@
 import sys
 from datetime import datetime
-from enum import Enum as PythonEnum
+from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
@@ -10,6 +10,26 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from sqlalchemy.schema import Index, UniqueConstraint
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+from src.pipeline.registry.function_registry import StepType
+from src.schemas.schemas import (
+    ChunkingMethod,
+    ContentType,
+    EmbeddedFeatureType,
+    ExtractedFeatureType,
+    ExtractionMethod,
+    FileType,
+    IngestionMethod,
+    RelationshipType,
+    Scope,
+)
+
+
+class Status(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class Base(DeclarativeBase):
@@ -67,8 +87,56 @@ class Ingest(AsyncAttrs, AbstractBase):
     # Relationships
     processing_pipelines: Mapped[list["ProcessingPipeline"]] = relationship("ProcessingPipeline", secondary="ingest_pipeline", back_populates="ingests")  # noqa
     entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="ingest")
-    outgoing_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.source_id]", back_populates="source")  # noqa
-    incoming_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.target_id]", back_populates="target")  # noqa
+    # outgoing_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.source_id]", back_populates="source")  # noqa
+    # incoming_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.target_id]", back_populates="target")  # noqa
+
+    @validates('scope')
+    def validate_scope(self, key, value):  # noqa
+        if isinstance(value, Scope):
+            return value.value
+        if value not in Scope._value2member_map_:
+            raise ValueError(f"Invalid scope: {value}")
+        return value
+
+    @validates('content_type')
+    def validate_content_type(self, key, value):  # noqa
+        if isinstance(value, ContentType):
+            return value.value
+        if value not in ContentType._value2member_map_:
+            raise ValueError(f"Invalid content type: {value}")
+        return value
+
+    @validates('file_type')
+    def validate_file_type(self, key, value):  # noqa
+        if isinstance(value, FileType):
+            return value.value
+        if value not in FileType._value2member_map_:
+            raise ValueError(f"Invalid file type: {value}")
+        return value
+
+    @validates('ingestion_method')
+    def validate_ingestion_method(self, key, value):  # noqa
+        if isinstance(value, IngestionMethod):
+            return value.value
+        if value not in IngestionMethod._value2member_map_:
+            raise ValueError(f"Invalid ingestion method: {value}")
+        return value
+
+    @validates('extraction_method')
+    def validate_extraction_method(self, key, value):  # noqa
+        if isinstance(value, ExtractionMethod):
+            return value.value
+        if value not in ExtractionMethod._value2member_map_:
+            raise ValueError(f"Invalid extraction method: {value}")
+        return value
+
+    @validates('chunking_method')
+    def validate_chunking_method(self, key, value):  # noqa
+        if isinstance(value, ChunkingMethod):
+            return value.value
+        if value not in ChunkingMethod._value2member_map_:
+            raise ValueError(f"Invalid chunking method: {value}")
+        return value
 
 
 class ProcessingPipeline(AsyncAttrs, AbstractBase):
@@ -81,33 +149,12 @@ class ProcessingPipeline(AsyncAttrs, AbstractBase):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Creation date of this pipeline")
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)
 
-    __table_args__ = (
-        Index('idx_version_description', 'version', 'description'),
-    )
+    __table_args__ = (Index('idx_version_description', 'version', 'description'))
 
-    ingests: Mapped[list["Ingest"]] = relationship(
-        "Ingest",
-        secondary="ingest_pipeline",
-        back_populates="processing_pipelines"
-    )
+    # Relationships
+    ingests: Mapped[list["Ingest"]] = relationship("Ingest", secondary="ingest_pipeline", back_populates="processing_pipelines")  # noqa
     processing_steps: Mapped[list["ProcessingStep"]] = relationship("ProcessingStep", back_populates="pipeline")
     entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="pipeline")
-
-
-class StepType(str, PythonEnum):
-    INGEST = "ingest"
-    EXTRACT = "extract"
-    CHUNK = "chunk"
-    FEATURIZE = "featurize"
-    EMBED = "embed"
-    UPSERT = "upsert"
-
-
-class Status(str, PythonEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
 
 
 class ProcessingStep(AsyncAttrs, AbstractBase):
@@ -130,9 +177,7 @@ class ProcessingStep(AsyncAttrs, AbstractBase):
     previous_step: Mapped[Optional["ProcessingStep"]] = relationship("ProcessingStep", remote_side=[id], back_populates="next_steps")
     next_steps: Mapped[list["ProcessingStep"]] = relationship("ProcessingStep", back_populates="previous_step")
 
-    __table_args__ = (
-        UniqueConstraint('pipeline_id', 'order', name='uq_pipeline_step_order')
-    )
+    __table_args__ = (UniqueConstraint('pipeline_id', 'order', name='uq_pipeline_step_order'))
 
     @validates('step_type')
     def validate_step_type(self, key, value): # noqa
@@ -151,49 +196,52 @@ class ProcessingStep(AsyncAttrs, AbstractBase):
         return value
 
 
-class RelationshipType(str, PythonEnum):
-    CITES_GENERAL = "cites_general"
-    CITES_BACKGROUND = "cites_background"
-    CITES_METHOD = "cites_method"
-    CITES_RESULT = "cites_result"
-    CITED_BY = "cited_by"
-    ATTACHMENT = "attachment"
-    SECTION_REFERENCE = "section_reference"
-    ONTOLOGICAL = "ontological"
-    SNIPPET = "snippet"
-    SYNTHETIC = "synthetic"
-    CAPTION = "caption"
-
-
 class Entry(AsyncAttrs, AbstractBase):
     __tablename__ = 'entries'
 
     uuid: Mapped[str] = mapped_column(String(255), unique=True, primary_key=True, nullable=False, comment="Unique identifier for the entry (e.g., URL, UUID)")  # noqa
-    collection_name: Mapped[str] = mapped_column(String(100), index=True, nullable=False, comment="Name of the collection the entry belongs to")
-
-    keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the entry")
+    # Core fields
     string: Mapped[str] = mapped_column(Text, nullable=False, comment="The text of the entry")
-    context_summary_string: Mapped[str] = mapped_column(Text, nullable=True, comment="A summary of the entry in the context of the document")
-    synthetic_questions: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Questions generated from the entry")
-    added_featurization: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Additional features added to the entry")
-    index_numbers: Mapped[str] = mapped_column(Text, nullable=True, comment="Index numbers for the entry")
-    # min_primary_index:
-    # max_primary_index:
-
-    __table_args__ = (
-       UniqueConstraint('collection_name', 'uuid', name='uq_collection_uuid'),
-       Index('ix_collection_uuid', 'collection_name', 'uuid'),
-    )
+    # Featurization fields
+    entry_title: Mapped[str] = mapped_column(Text, nullable=True, comment="The title of the entry")
+    keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the entry")
+    # Chunk location fields. Used for reconstruction
+    consolidated_feature_type: Mapped[str] = mapped_column(String(100), nullable=True, comment="The type of the feature being embedded")
+    chunk_locations: Mapped[list[JSON]] = mapped_column(JSON, nullable=True, comment="The locations of the chunks in the entry")
+    min_primary_index: Mapped[int] = mapped_column(Integer, nullable=True, comment="The minimum primary index of the entry")
+    max_primary_index: Mapped[int] = mapped_column(Integer, nullable=True, comment="The maximum primary index of the entry")
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=True, comment="The index of the chunk in the entry")
+    table_number: Mapped[int] = mapped_column(Integer, nullable=True, comment="The number of the table in the entry")
+    figure_number: Mapped[int] = mapped_column(Integer, nullable=True, comment="The number of the figure in the entry")
+    # Embedding Fields
+    embedded_feature_type: Mapped[str] = mapped_column(String(100), nullable=True, comment="The type of the feature being embedded")
+    embedding_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Date the embedding was created")
+    embedding_model: Mapped[str] = mapped_column(String(100), nullable=True, comment="The model used to embed the feature")
+    embedding_dimensions: Mapped[int] = mapped_column(Integer, nullable=True, comment="The dimensions of the embedding")
 
     pipeline_id: Mapped[Optional[int]] = mapped_column(ForeignKey('processing_pipelines.id'), nullable=True, index=True)
-    pipeline: Mapped[Optional[ProcessingPipeline]] = relationship("ProcessingPipeline", back_populates="entries")
-
     ingestion_id: Mapped[Optional[int]] = mapped_column(ForeignKey('ingest.id'), nullable=True, index=True)
-    ingest: Mapped[Optional[Ingest]] = relationship("Ingest", back_populates="entries")
-
     # Relationships
+    pipeline: Mapped[Optional[ProcessingPipeline]] = relationship("ProcessingPipeline", back_populates="entries")
+    ingest: Mapped[Optional[Ingest]] = relationship("Ingest", back_populates="entries")
     outgoing_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.source_id]", back_populates="source")  # noqa
     incoming_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.target_id]", back_populates="target")  # noqa
+
+    @validates('consolidated_feature_type')
+    def validate_consolidated_feature_type(self, key, value):  # noqa
+        if isinstance(value, ExtractedFeatureType):
+            return value.value
+        if value not in ExtractedFeatureType._value2member_map_:
+            raise ValueError(f"Invalid consolidated feature type: {value}")
+        return value
+
+    @validates('embedded_feature_type')
+    def validate_embedded_feature_type(self, key, value):  # noqa
+        if isinstance(value, EmbeddedFeatureType):
+            return value.value
+        if value not in EmbeddedFeatureType._value2member_map_:
+            raise ValueError(f"Invalid embedded feature type: {value}")
+        return value
 
 
 class EntryRelationship(Base):
@@ -223,33 +271,6 @@ class EntryRelationship(Base):
         return value
 
 
-class DocumentRelationship(Base):
-    __tablename__ = 'document_relationships'
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    source_id: Mapped[int] = mapped_column(ForeignKey('ingest.id'), nullable=False)
-    target_id: Mapped[int] = mapped_column(ForeignKey('ingest.id'), nullable=False)
-    relationship_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    metadata_field: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the relationship")
-
-    source: Mapped["Ingest"] = relationship("Ingest", foreign_keys=[source_id], back_populates="outgoing_relationships")
-    target: Mapped["Ingest"] = relationship("Ingest", foreign_keys=[target_id], back_populates="incoming_relationships")
-
-    __table_args__ = (
-        UniqueConstraint('source_id', 'target_id', 'relationship_type', name='uq_document_relationship'),
-        Index('ix_document_relationship_source', 'source_id'),
-        Index('ix_document_relationship_target', 'target_id'),
-    )
-
-    @validates('relationship_type')
-    def validate_relationship_type(self, key, value):  # noqa
-        if isinstance(value, RelationshipType):
-            return value.value
-        if value not in RelationshipType._value2member_map_:
-            raise ValueError(f"Invalid relationship type: {value}")
-        return value
-
-
 # New association table
 ingest_pipeline = Table(
     'ingest_pipeline', Base.metadata,
@@ -260,6 +281,7 @@ ingest_pipeline = Table(
 
 if __name__ == '__main__':
     import asyncio
+
     from sqlalchemy import text
     from sqlalchemy.future import select
     from sqlalchemy.orm import sessionmaker
