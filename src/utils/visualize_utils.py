@@ -5,42 +5,46 @@ from typing import Dict, List, Union
 
 # Define colors for each ExtractedFeatureType
 FEATURE_COLORS = {
-    # Common content types
-    ExtractedFeatureType.text: "green",
-    ExtractedFeatureType.word: "lightgreen",
-    ExtractedFeatureType.line: "darkgreen",
-    ExtractedFeatureType.image: "red",
-    ExtractedFeatureType.table: "blue",
-    ExtractedFeatureType.figure: "red",
-    ExtractedFeatureType.code: "purple",
-    ExtractedFeatureType.equation: "brown",
-    ExtractedFeatureType.form: "orange",
-    ExtractedFeatureType.header: "darkblue",
-    ExtractedFeatureType.footer: "darkblue",
-    ExtractedFeatureType.section_header: "purple",
-    ExtractedFeatureType.list: "cyan",
-    ExtractedFeatureType.page_number: "gray",
-    # Marker-specific types
-    ExtractedFeatureType.span: "lightgray",
-    ExtractedFeatureType.figuregroup: "darkred",
-    ExtractedFeatureType.tablegroup: "darkblue",
-    ExtractedFeatureType.listgroup: "darkcyan",
-    ExtractedFeatureType.picturegroup: "darkred",
-    ExtractedFeatureType.picture: "red",
-    ExtractedFeatureType.page: "yellow",
-    ExtractedFeatureType.caption: "darkgreen",
-    ExtractedFeatureType.footnote: "pink",
-    ExtractedFeatureType.handwriting: "violet",
-    ExtractedFeatureType.textinlinemath: "brown",
-    ExtractedFeatureType.tableofcontents: "teal",
-    ExtractedFeatureType.document: "black",
-    ExtractedFeatureType.complexregion: "olive",
-    # Textract-specific types
-    ExtractedFeatureType.key_value: "magenta",
-    # Catch-all types
-    ExtractedFeatureType.combined_text: "blue",
-    ExtractedFeatureType.section_text: "darkblue",
-    ExtractedFeatureType.other: "gray",
+    # Primary content types (distinct colors)
+    ExtractedFeatureType.text: "#1f77b4",  # Blue
+    ExtractedFeatureType.combined_text: "#2ca02c",  # Green
+    ExtractedFeatureType.section_text: "#17becf",  # Cyan
+    ExtractedFeatureType.table: "#ff7f0e",  # Orange
+    ExtractedFeatureType.figure: "#d62728",  # Red
+    ExtractedFeatureType.image: "#e377c2",  # Pink
+    # Text hierarchy (blue family)
+    ExtractedFeatureType.word: "#aec7e8",  # Light blue
+    ExtractedFeatureType.line: "#7fb1e3",  # Medium blue
+    ExtractedFeatureType.section_header: "#1f77b4",  # Standard blue
+    ExtractedFeatureType.header: "#2d4b8e",  # Dark blue
+    ExtractedFeatureType.footer: "#2d4b8e",  # Dark blue
+    # Tables and forms (orange family)
+    ExtractedFeatureType.tablegroup: "#ff7f0e",  # Standard orange
+    ExtractedFeatureType.form: "#ffbb78",  # Light orange
+    ExtractedFeatureType.key_value: "#ff9f51",  # Medium orange
+    # Figures and images (red/pink family)
+    ExtractedFeatureType.figuregroup: "#d62728",  # Standard red
+    ExtractedFeatureType.picture: "#e377c2",  # Pink
+    ExtractedFeatureType.picturegroup: "#f7b6d2",  # Light pink
+    # Lists and structure (green family)
+    ExtractedFeatureType.list: "#2ca02c",  # Standard green
+    ExtractedFeatureType.listgroup: "#98df8a",  # Light green
+    ExtractedFeatureType.page: "#a1d99b",  # Pale green
+    # Special content (purple family)
+    ExtractedFeatureType.equation: "#9467bd",  # Standard purple
+    ExtractedFeatureType.code: "#c5b0d5",  # Light purple
+    ExtractedFeatureType.textinlinemath: "#8c564b",  # Brown-purple
+    # Annotations (gray family)
+    ExtractedFeatureType.caption: "#7f7f7f",  # Medium gray
+    ExtractedFeatureType.footnote: "#c7c7c7",  # Light gray
+    ExtractedFeatureType.span: "#d9d9d9",  # Pale gray
+    ExtractedFeatureType.page_number: "#bcbcbc",  # Another gray
+    # Miscellaneous
+    ExtractedFeatureType.handwriting: "#8c564b",  # Brown
+    ExtractedFeatureType.tableofcontents: "#17becf",  # Cyan
+    ExtractedFeatureType.document: "#1f77b4",  # Blue
+    ExtractedFeatureType.complexregion: "#9edae5",  # Light cyan
+    ExtractedFeatureType.other: "#c7c7c7",  # Light gray
 }
 
 
@@ -64,7 +68,7 @@ def group_entries_by_page(entries: list) -> Dict[int, List[dict]]:
 
             entries_by_page[page_num].append(
                 {
-                    "feature_type": entry.consolidated_feature_type,
+                    "feature_type": location.extracted_feature_type,
                     "bbox": {
                         "left": location.bounding_box.left,
                         "top": location.bounding_box.top,

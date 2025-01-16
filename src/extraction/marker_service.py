@@ -519,6 +519,7 @@ async def main_datalab(
         parsed_data = json.loads(ret)
         # Create output directories (these should be virtual paths for cloud storage)
         base_dir = os.path.dirname(ingestion.extracted_document_file_path)
+        base_dir = os.path.dirname(Path(__file__).resolve())  # current file directory
         pages_dir = os.path.join(base_dir, "pages")
         extracts_dir = os.path.join(base_dir, "extracts")
 

@@ -18,6 +18,8 @@ from src.schemas.schemas import (
     Ingestion,
     ExtractedFeatureType,
     ExtractionMethod,
+    RelationshipType,
+    Citation,
 )
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.utils.extraction_utils import convert_to_pdf
@@ -63,7 +65,281 @@ def _convert_bbox(bbox: list[float], page_width: float, page_height: float) -> d
     }
 
 
-def _process_para_blocks(
+async def _extract_region(
+    bbox: list[float],
+    page_num: int,
+    secondary_index: int,
+    page_file_path: str,
+    page_width: float,
+    page_height: float,
+    extracts_dir: str,
+    feature_type: ExtractedFeatureType,
+    read=None,
+    write=None,
+) -> str:
+    """Extract a region from a page image and save it."""
+    # Open the image
+    if read:
+        img_bytes = await read(page_file_path)
+        img = Image.open(io.BytesIO(img_bytes))
+    else:
+        img = Image.open(page_file_path)
+
+    # Convert relative coordinates to absolute
+    left = bbox[0] * page_width
+    top = bbox[1] * page_height
+    right = bbox[2] * page_width
+    bottom = bbox[3] * page_height
+
+    # Crop the region
+    region = img.crop((left, top, right, bottom))
+
+    # Save extracted region
+    extracted_path = (
+        f"{extracts_dir}/{feature_type.value}_{page_num + 1}_{secondary_index}.jpg"
+    )
+    img_byte_arr = io.BytesIO()
+    region.save(img_byte_arr, format="JPEG")
+    img_byte_arr = img_byte_arr.getvalue()
+
+    if write:
+        await write(extracted_path, img_byte_arr)
+    else:
+        os.makedirs(os.path.dirname(extracted_path), exist_ok=True)
+        with open(extracted_path, "wb") as f:
+            f.write(img_byte_arr)
+
+    img.close()
+    return extracted_path
+
+
+async def _process_para_blocks(
+    blocks: list,
+    page_num: int,
+    ingestion: Ingestion,
+    page_file_path: str,
+    chunk_idx: int,
+    counters: dict,
+    page_width: float,
+    page_height: float,
+    extracts_dir: str,
+    mode: str = "by_page",
+    write=None,
+    read=None,
+) -> tuple[list[Entry], int, list[str], list[ChunkLocation]]:
+    """Recursively process para_blocks to extract entries."""
+    entries = []
+    current_chunk_text = []
+    current_chunk_locations = []
+
+    # Track parent elements for citations
+    parent_elements = {
+        ExtractedFeatureType.figure: None,
+        ExtractedFeatureType.table: None,
+    }
+
+    for block in blocks:
+        feature_type = _map_mineru_type(block["type"])
+        content = ""
+        extracted_path = None
+
+        # Handle visual elements (tables and figures)
+        if feature_type in [ExtractedFeatureType.figure, ExtractedFeatureType.table]:
+            # Extract region
+            extracted_path = await _extract_region(
+                bbox=block.get("bbox", []),
+                page_num=page_num,
+                secondary_index=len(current_chunk_locations),
+                page_file_path=page_file_path,
+                page_width=page_width,
+                page_height=page_height,
+                extracts_dir=extracts_dir,
+                feature_type=feature_type,
+                read=read,
+                write=write,
+            )
+
+            # Create element entry
+            element_uuid = str(uuid.uuid4())
+            location = ChunkLocation(
+                index=Index(
+                    primary=page_num + 1,
+                    secondary=len(current_chunk_locations) + 1,
+                ),
+                extracted_feature_type=feature_type,
+                extracted_file_path=extracted_path,
+                page_file_path=page_file_path,
+                bounding_box=_convert_bbox(
+                    block.get("bbox", []), page_width, page_height
+                ),
+            )
+
+            if feature_type == ExtractedFeatureType.figure:
+                counters["figure_count"] += 1
+                figure_number = counters["figure_count"]
+                parent_elements[ExtractedFeatureType.figure] = element_uuid
+                element_entry = Entry(
+                    uuid=element_uuid,
+                    ingestion=ingestion,
+                    string="",  # Empty string as content is visual
+                    consolidated_feature_type=feature_type,
+                    chunk_locations=[location],
+                    chunk_index=chunk_idx + 1,
+                    min_primary_index=page_num + 1,
+                    max_primary_index=page_num + 1,
+                    figure_number=figure_number,
+                )
+            else:  # Table
+                counters["table_count"] += 1
+                table_number = counters["table_count"]
+                parent_elements[ExtractedFeatureType.table] = element_uuid
+                element_entry = Entry(
+                    uuid=element_uuid,
+                    ingestion=ingestion,
+                    string=block.get("html", ""),
+                    consolidated_feature_type=feature_type,
+                    chunk_locations=[location],
+                    chunk_index=chunk_idx + 1,
+                    min_primary_index=page_num + 1,
+                    max_primary_index=page_num + 1,
+                    table_number=table_number,
+                )
+
+            entries.append(element_entry)
+            chunk_idx += 1
+            current_chunk_text.append(block.get("html", ""))
+            current_chunk_locations.append(location)
+
+        # Handle captions
+        elif feature_type == ExtractedFeatureType.caption:
+            # Determine parent element type based on context
+            parent_type = None
+            parent_uuid = None
+            if block.get("parent_type") == "figure":
+                parent_type = RelationshipType.FIGURE_CAPTION
+                parent_uuid = parent_elements.get(ExtractedFeatureType.figure)
+            elif block.get("parent_type") == "table":
+                parent_type = RelationshipType.TABLE_CAPTION
+                parent_uuid = parent_elements.get(ExtractedFeatureType.table)
+
+            if parent_uuid and parent_type:
+                caption_uuid = str(uuid.uuid4())
+                citation = Citation(
+                    relationship_type=parent_type,
+                    target_uuid=parent_uuid,
+                    source_uuid=caption_uuid,
+                )
+
+                location = ChunkLocation(
+                    index=Index(
+                        primary=page_num + 1,
+                        secondary=len(current_chunk_locations) + 1,
+                    ),
+                    extracted_feature_type=feature_type,
+                    page_file_path=page_file_path,
+                    bounding_box=_convert_bbox(
+                        block.get("bbox", []), page_width, page_height
+                    ),
+                )
+
+                caption_entry = Entry(
+                    uuid=caption_uuid,
+                    ingestion=ingestion,
+                    string=block.get("text", ""),
+                    consolidated_feature_type=feature_type,
+                    chunk_locations=[location],
+                    chunk_index=chunk_idx + 1,
+                    min_primary_index=page_num + 1,
+                    max_primary_index=page_num + 1,
+                    citations=[citation],
+                )
+                entries.append(caption_entry)
+                chunk_idx += 1
+                current_chunk_text.append(block.get("text", ""))
+                current_chunk_locations.append(location)
+
+        # Handle text content
+        else:
+            # Process text content from lines or spans
+            if "lines" in block:
+                for line in block["lines"]:
+                    for span in line.get("spans", []):
+                        if span["type"] == "text":
+                            content += f"{span['content']} "
+                        elif span["type"] == "inline_equation":
+                            content += f"{span.get('latex', '')} "
+            elif "spans" in block:
+                for span in block["spans"]:
+                    if span["type"] == "text":
+                        content += f"{span['content']} "
+                    elif span["type"] == "inline_equation":
+                        content += f"{span.get('latex', '')} "
+
+            content = content.strip()
+            if content:
+                location = ChunkLocation(
+                    index=Index(
+                        primary=page_num + 1,
+                        secondary=len(current_chunk_locations) + 1,
+                    ),
+                    extracted_feature_type=feature_type,
+                    page_file_path=page_file_path,
+                    bounding_box=_convert_bbox(
+                        block.get("bbox", []), page_width, page_height
+                    ),
+                )
+
+                # For by_title mode, create new chunk at section headers
+                if (
+                    mode == "by_title"
+                    and feature_type == ExtractedFeatureType.section_header
+                ):
+                    if current_chunk_text and current_chunk_locations:
+                        combined_text = " ".join(current_chunk_text)
+                        chunk_entry = Entry(
+                            uuid=str(uuid.uuid4()),
+                            ingestion=ingestion,
+                            string=combined_text,
+                            consolidated_feature_type=ExtractedFeatureType.combined_text,
+                            chunk_locations=current_chunk_locations.copy(),
+                            min_primary_index=page_num + 1,
+                            max_primary_index=page_num + 1,
+                            chunk_index=chunk_idx + 1,
+                        )
+                        entries.append(chunk_entry)
+                        chunk_idx += 1
+                        current_chunk_text = []
+                        current_chunk_locations = []
+
+                current_chunk_text.append(content)
+                current_chunk_locations.append(location)
+
+        # Recursively process nested blocks
+        if "blocks" in block:
+            nested_entries, chunk_idx, nested_text, nested_locations = (
+                await _process_para_blocks(
+                    block["blocks"],
+                    page_num,
+                    ingestion,
+                    page_file_path,
+                    chunk_idx,
+                    counters,
+                    page_width,
+                    page_height,
+                    extracts_dir,
+                    mode,
+                    write,
+                    read,
+                )
+            )
+            entries.extend(nested_entries)
+            current_chunk_text.extend(nested_text)
+            current_chunk_locations.extend(nested_locations)
+
+    return entries, chunk_idx, current_chunk_text, current_chunk_locations
+
+
+async def __process_para_blocks(
     blocks: list,
     page_num: int,
     ingestion: Ingestion,
@@ -152,7 +428,7 @@ def _process_para_blocks(
 
         # Recursively process nested blocks if any
         if "blocks" in block:
-            nested_entries, chunk_idx = _process_para_blocks(
+            nested_entries, chunk_idx = await __process_para_blocks(
                 block["blocks"],
                 page_num,
                 ingestion,
@@ -175,6 +451,7 @@ async def main_mineru(
     write=None,
     read=None,
     visualize=False,
+    mode="by_page",
     **kwargs,
 ) -> list[Entry]:
     """Parse documents using the MinerU library.
@@ -231,7 +508,7 @@ async def main_mineru(
 
         # Create output directories
         base_dir = os.path.dirname(ingestion.extracted_document_file_path)
-        base_dir = os.path.dirname(Path(__file__).resolve())  # current file directory
+        # base_dir = os.path.dirname(Path(__file__).resolve())  # current file directory
         pages_dir = os.path.join(base_dir, "pages")
         extracts_dir = os.path.join(base_dir, "extracts")
 
@@ -264,7 +541,7 @@ async def main_mineru(
             page_file_path = f"{pages_dir}/page_{page_num + 1}.jpg"
 
             # Process para_blocks
-            entries, chunk_idx = _process_para_blocks(
+            entries, chunk_idx = await _process_para_blocks(
                 blocks=page_result.get("para_blocks", []),
                 page_num=page_num,
                 ingestion=ingestion,

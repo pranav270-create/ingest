@@ -3,9 +3,6 @@ import xml.etree.ElementTree as ET
 
 import modal
 
-cls = modal.Cls.lookup("grobid-modal", "Model")
-obj = cls()
-
 
 def parse_tei_xml(tei_content: str) -> dict:
     # Define the namespaces
@@ -64,6 +61,8 @@ def parse_tei_xml(tei_content: str) -> dict:
 
 
 def parse_document(fname: bytes) -> dict:
+    cls = modal.Cls.lookup("grobid-modal", "Model")
+    obj = cls()
     response = obj.parse_document.remote(fname)
     if response["status"] == "success":
         return parse_tei_xml(response["tei"])
