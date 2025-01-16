@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, cast
 
 from pydantic import BaseModel
 
@@ -28,4 +28,4 @@ class SchemaRegistry(RegistryBase):
     @classmethod
     def get(cls, name: str) -> type[BaseModel]:
         """Retrieve a schema class by its name."""
-        return cls._registry.get(name)
+        return cast(type[BaseModel], cls._registry.get(name))

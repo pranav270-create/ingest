@@ -80,7 +80,10 @@ async def update_pipeline_ids(results: list[BaseModelListType], new_pipeline_id:
 
 
 async def batched_ingestion(session, items: list[Ingestion], pipeline: ProcessingPipeline, batch_size: int = 100) -> list[Ingestion]:
-    processed_results = []
+    """
+    adds/updates ingestions to database in batchese
+    """
+    processed_results: list[Ingestion] = []
     for batch_start in range(0, len(items), batch_size):
         # get batch of data
         batch = items[batch_start : batch_start + batch_size]
@@ -89,7 +92,7 @@ async def batched_ingestion(session, items: list[Ingestion], pipeline: Processin
         # Process batch
         ingests = await create_or_update_ingest_batch(session, batch_data, pipeline)
 
-        # Update items with their IDs
+        # Update items
         for item in batch:
             item.ingestion_id = ingests[item.document_hash].id # use the new ingestion hash to get the right ingestion id
             item.pipeline_id = pipeline.id
