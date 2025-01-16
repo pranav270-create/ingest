@@ -332,7 +332,7 @@ def process_embedding(embedding: dict, dense_model_name: str, sparse_model_name:
 
     # build the payload based on the Upsert schema
     vdb_payload = {
-        key: value for key, value in embedding["ingestion"].items() if value is not None and key in Upsert.__fields__.keys()
+        key: value for key, value in embedding["ingestion"].items() if value is not None and key in Upsert.model_fields.keys()
     }
     vdb_payload.pop("schema__", None)  # Use None to avoid KeyError if "schema__" is not present
     upsert_payload = vdb_payload.copy()

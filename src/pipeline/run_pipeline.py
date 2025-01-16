@@ -5,6 +5,8 @@ import logging
 import sys
 from pathlib import Path
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.pipeline import PipelineOrchestrator
@@ -12,7 +14,7 @@ from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.schema_registry import SchemaRegistry
 from src.pipeline.storage_backend import StorageBackend
 from src.schemas.schemas import BaseModelListType, Ingestion, RegisteredSchemaListType
-from src.sql_db.database_simple import get_session
+from src.sql_db.database_simple import get_async_db_session
 from src.sql_db.etl_crud import (
     clone_pipeline,
     create_entries,
@@ -43,7 +45,7 @@ async def validate_collection_name(stages: list[dict], collection_name: str):
                 raise ValueError("Collection name in upsert stage params must match pipeline collection name")
 
 
-async def get_step_results(session, pipeline_id: int, resume_from_step: int, storage: StorageBackend) -> list[RegisteredSchemaListType]:
+async def get_step_results(session: AsyncSession, pipeline_id: int, resume_from_step: int, storage: StorageBackend) -> list[RegisteredSchemaListType]:
     """
     Get results from a specific step
     """
@@ -55,7 +57,7 @@ async def get_step_results(session, pipeline_id: int, resume_from_step: int, sto
     return [SchemaRegistry.get(item["schema__"]).model_validate(item) for item in results]
 
 
-async def get_last_step_results(session, pipeline_id: int, storage: StorageBackend) -> tuple[int, list[RegisteredSchemaListType]]:
+async def get_last_step_results(session: AsyncSession, pipeline_id: int, storage: StorageBackend) -> tuple[int, list[RegisteredSchemaListType]]:
     """
     Get results from the last successful step and begin the next step
     """
@@ -79,7 +81,7 @@ async def update_pipeline_ids(results: list[BaseModelListType], new_pipeline_id:
     return results
 
 
-async def batched_ingestion(session, items: list[Ingestion], pipeline: ProcessingPipeline, batch_size: int = 100) -> list[Ingestion]:
+async def batched_ingestion(session: AsyncSession, items: list[Ingestion], pipeline: ProcessingPipeline, batch_size: int = 100) -> list[Ingestion]:
     """
     adds/updates ingestions to database in batchese
     """
@@ -101,7 +103,7 @@ async def batched_ingestion(session, items: list[Ingestion], pipeline: Processin
 
 
 async def pipeline_step(
-        session,
+        session: AsyncSession,
         pipeline: ProcessingPipeline,
         storage: StorageBackend,
         stage: str,
@@ -109,6 +111,9 @@ async def pipeline_step(
         function_name: str,
         **params
 ):
+    """
+    Run a single step in the pipeline
+    """
     try:
         output_path = f"{pipeline.id}_{stage}_{function_name}_{order}.json"
         step = await create_processing_step(
@@ -121,7 +126,7 @@ async def pipeline_step(
             output_path=output_path,
             metadata={"params": params},
         )
-        session.commit()
+        await session.commit()
 
         # Run the function
         func = FunctionRegistry.get(stage, function_name)
@@ -137,24 +142,27 @@ async def pipeline_step(
         await storage.write(output_path, json.dumps(result_dicts))
 
         # Update SQL database with latest information
-        await update_ingests_from_results(results, session)
+        await update_ingests_from_results(session, results)
         step.status = "completed"
-        session.commit()
+        await session.commit()
 
         return results
 
     except Exception as e:
-        session.rollback()
+        await session.rollback()
         step.status = "failed"
-        session.commit()
+        await session.commit()
         raise e
 
 
-async def etl_pipeline(orchestrator: PipelineOrchestrator):
+async def run_pipeline(orchestrator: PipelineOrchestrator):
+    """
+    Run the pipeline
+    """
     config = orchestrator.config
     pipeline_config = config["pipeline"]
 
-    for session in get_session():
+    async with get_async_db_session() as session:
         await validate_collection_name(config["stages"], pipeline_config["collection_name"])
 
         # Create or load existing processing pipeline
@@ -217,7 +225,9 @@ if __name__ == "__main__":
     # Initialize the orchestrator to register functions
     config_path = Path(__file__).resolve().parent.parent / "config" / config
     orchestrator = PipelineOrchestrator(str(config_path))
+
+    # Set storage backend
     storage = orchestrator.storage
     FunctionRegistry.set_storage_backend(storage)
 
-    asyncio.run(etl_pipeline())
+    asyncio.run(run_pipeline(orchestrator))

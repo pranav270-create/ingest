@@ -1,13 +1,13 @@
-import modal
 import json
 import xml.etree.ElementTree as ET
-from typing import Dict
+
+import modal
 
 cls = modal.Cls.lookup("grobid-modal", "Model")
 obj = cls()
 
 
-def parse_tei_xml(tei_content: str) -> Dict:
+def parse_tei_xml(tei_content: str) -> dict:
     # Define the namespaces
     namespaces = {
         "tei": "http://www.tei-c.org/ns/1.0",

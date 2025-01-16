@@ -82,7 +82,7 @@ class Ingest(AsyncAttrs, AbstractBase):
     unprocessed_citations: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Unprocessed citations")
 
     hash: Mapped[str] = mapped_column(String(64), primary_key=True, nullable=False, index=True, unique=True, comment="SHA256 hash of the data")
-    __table_args__ = (UniqueConstraint('hash', name='uq_ingest_hash'))
+    __table_args__ = (UniqueConstraint('hash', name='uq_ingest_hash'),)
 
     # Relationships
     processing_pipelines: Mapped[list["ProcessingPipeline"]] = relationship("ProcessingPipeline", secondary="ingest_pipeline", back_populates="ingests")  # noqa
@@ -149,7 +149,7 @@ class ProcessingPipeline(AsyncAttrs, AbstractBase):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Creation date of this pipeline")
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)
 
-    __table_args__ = (Index('idx_version_description', 'version', 'description'))
+    __table_args__ = (Index('idx_version_description', 'version', 'description'),)
 
     # Relationships
     ingests: Mapped[list["Ingest"]] = relationship("Ingest", secondary="ingest_pipeline", back_populates="processing_pipelines")  # noqa
@@ -177,7 +177,7 @@ class ProcessingStep(AsyncAttrs, AbstractBase):
     previous_step: Mapped[Optional["ProcessingStep"]] = relationship("ProcessingStep", remote_side=[id], back_populates="next_steps")
     next_steps: Mapped[list["ProcessingStep"]] = relationship("ProcessingStep", back_populates="previous_step")
 
-    __table_args__ = (UniqueConstraint('pipeline_id', 'order', name='uq_pipeline_step_order'))
+    __table_args__ = (UniqueConstraint('pipeline_id', 'order', name='uq_pipeline_step_order'),)
 
     @validates('step_type')
     def validate_step_type(self, key, value): # noqa
@@ -205,6 +205,9 @@ class Entry(AsyncAttrs, AbstractBase):
     # Featurization fields
     entry_title: Mapped[str] = mapped_column(Text, nullable=True, comment="The title of the entry")
     keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the entry")
+    context_summary_string: Mapped[str] = mapped_column(Text, nullable=True, comment="The summary of the document")
+    added_featurization: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="The featurization added to the entry")
+    index_numbers: Mapped[list[int]] = mapped_column(JSON, nullable=True, comment="The index numbers of the entry")
     # Chunk location fields. Used for reconstruction
     consolidated_feature_type: Mapped[str] = mapped_column(String(100), nullable=True, comment="The type of the feature being embedded")
     chunk_locations: Mapped[list[JSON]] = mapped_column(JSON, nullable=True, comment="The locations of the chunks in the entry")
@@ -219,6 +222,7 @@ class Entry(AsyncAttrs, AbstractBase):
     embedding_model: Mapped[str] = mapped_column(String(100), nullable=True, comment="The model used to embed the feature")
     embedding_dimensions: Mapped[int] = mapped_column(Integer, nullable=True, comment="The dimensions of the embedding")
 
+    collection_name: Mapped[str] = mapped_column(String(100), nullable=True, comment="The name of the collection the entry belongs to")
     pipeline_id: Mapped[Optional[int]] = mapped_column(ForeignKey('processing_pipelines.id'), nullable=True, index=True)
     ingestion_id: Mapped[Optional[int]] = mapped_column(ForeignKey('ingest.id'), nullable=True, index=True)
     # Relationships
