@@ -512,6 +512,41 @@ async def _process_child_element(
     return entries, chunk_idx, secondary_idx, counters, html_content
 
 
+async def _process_title_chunk(
+    accumulated_text: list,
+    chunk_locations: list,
+    ingestion: Ingestion,
+    chunk_idx: int
+) -> tuple[Entry, int]:
+    """
+    Process accumulated text and locations into a single chunk Entry.
+    
+    Args:
+        accumulated_text: List of text strings in the chunk
+        chunk_locations: List of ChunkLocation objects
+        ingestion: Ingestion object
+        chunk_idx: Current chunk index
+    
+    Returns:
+        tuple[Entry, int]: (Created entry, incremented chunk index)
+    """
+    if not accumulated_text or not chunk_locations:
+        return None, chunk_idx
+
+    combined_text = " ".join(accumulated_text)
+    entry = Entry(
+        uuid=str(uuid.uuid4()),
+        ingestion=ingestion,
+        string=combined_text,
+        consolidated_feature_type=ExtractedFeatureType.combined_text,
+        chunk_locations=chunk_locations,
+        min_primary_index=min(loc.index.primary for loc in chunk_locations),
+        max_primary_index=max(loc.index.primary for loc in chunk_locations),
+        chunk_index=chunk_idx + 1,
+    )
+    return entry, chunk_idx + 1
+
+
 @FunctionRegistry.register("parse", "datalab")
 async def main_datalab(
     ingestions: list[Ingestion],
@@ -562,8 +597,6 @@ async def main_datalab(
             continue
 
         parsed_data = json.loads(ret)
-        with open("parsed_data.json", "w") as f:
-            json.dump(parsed_data, f, indent=4)
         # Create output directories (these should be virtual paths for cloud storage)
         base_dir = os.path.dirname(ingestion.extracted_document_file_path)
         pages_dir = os.path.join(base_dir, "pages")
@@ -746,6 +779,114 @@ async def main_datalab(
                     all_entries.append(page_entry)
                     all_text[page_num + 1] = combined_page_text
 
+        elif mode == "by_title":
+            chunk_idx = 0
+            counters = {"figure_count": 0, "table_count": 0}
+            
+            # Variables for title-based chunking
+            current_chunk_text = []
+            current_chunk_locations = []
+            all_text = {}
+            
+            for page_num, page in enumerate(parsed_data["children"]):
+                if not page.get("children"):
+                    continue
+
+                # Get page dimensions
+                if read:
+                    img_bytes = await read(page_image_paths[page_num])
+                    img = Image.open(io.BytesIO(img_bytes))
+                    page_width, page_height = img.size
+                    img.close()
+                else:
+                    with Image.open(page_image_paths[page_num]) as img:
+                        page_width, page_height = img.size
+
+                secondary_idx = 0
+                for child in page["children"]:
+                    block_type = child["block_type"]
+                    feature_type = _map_marker_type(block_type)
+
+                    # Process visual elements the same way as by_page mode
+                    if feature_type in [
+                        ExtractedFeatureType.figure,
+                        ExtractedFeatureType.figuregroup,
+                        ExtractedFeatureType.picture,
+                        ExtractedFeatureType.picturegroup,
+                        ExtractedFeatureType.complexregion,
+                        ExtractedFeatureType.table,
+                        ExtractedFeatureType.tablegroup,
+                    ]:
+                        entries, chunk_idx, secondary_idx, counters, html_content = (
+                            await _process_child_element(
+                                child=child,
+                                parent_feature_type=feature_type,
+                                page_num=page_num,
+                                secondary_idx=secondary_idx,
+                                ingestion=ingestion,
+                                page_image_paths=page_image_paths,
+                                page_dimensions=(page_width, page_height),
+                                extracts_dir=extracts_dir,
+                                chunk_idx=chunk_idx,
+                                counters=counters,
+                                read=read,
+                                write=write,
+                            )
+                        )
+                        all_entries.extend(entries)
+                        current_chunk_text.append(html_content)
+                    else:
+                        # Check if we hit a new section header or page header
+                        if feature_type in [ExtractedFeatureType.section_header, ExtractedFeatureType.header]:
+                            # Process previous chunk if it exists
+                            if current_chunk_text and current_chunk_locations:
+                                entry, chunk_idx = await _process_title_chunk(
+                                    current_chunk_text,
+                                    current_chunk_locations,
+                                    ingestion,
+                                    chunk_idx
+                                )
+                                if entry:
+                                    all_entries.append(entry)
+                                    all_text[entry.min_primary_index] = entry.string
+                                
+                                # Reset accumulators
+                                current_chunk_text = []
+                                current_chunk_locations = []
+
+                        # Add current text to chunk
+                        if "html" in child:
+                            current_chunk_text.append(child["html"])
+                            location = ChunkLocation(
+                                index=Index(
+                                    primary=page_num + 1,
+                                    secondary=secondary_idx + 1,
+                                ),
+                                extracted_feature_type=feature_type,
+                                page_file_path=page_image_paths[page_num],
+                                bounding_box=_polygon_to_bbox(
+                                    child["polygon"], page_width, page_height
+                                ),
+                            )
+                            current_chunk_locations.append(location)
+                            secondary_idx += 1
+
+                # Process any remaining text at the end of each page
+                if current_chunk_text and current_chunk_locations:
+                    entry, chunk_idx = await _process_title_chunk(
+                        current_chunk_text,
+                        current_chunk_locations,
+                        ingestion,
+                        chunk_idx
+                    )
+                    if entry:
+                        all_entries.append(entry)
+                        all_text[entry.min_primary_index] = entry.string
+
+                    # Reset accumulators
+                    current_chunk_text = []
+                    current_chunk_locations = []
+
         # write the combined text to the file
         if write:
             await write(
@@ -774,17 +915,23 @@ if __name__ == "__main__":
             ingestion_date="2024-03-20T12:00:00Z",  # Required
             file_path="/Users/pranaviyer/Downloads/TR0722-315a Appendix A.pdf",
         ),
-        Ingestion(
-            scope=Scope.INTERNAL,
-            creator_name="Test User",
-            ingestion_method=IngestionMethod.LOCAL_FILE,
-            ingestion_date="2024-03-20T12:00:00Z",
-            file_type=FileType.PDF,
-            file_path="/Users/pranaviyer/Desktop/AstralisData/E5_Paper.pdf",
-        )
+        # Ingestion(
+        #     scope=Scope.INTERNAL,
+        #     creator_name="Test User",
+        #     ingestion_method=IngestionMethod.LOCAL_FILE,
+        #     ingestion_date="2024-03-20T12:00:00Z",
+        #     file_type=FileType.PDF,
+        #     file_path="/Users/pranaviyer/Desktop/AstralisData/E5_Paper.pdf",
+        # )
     ]
     output = asyncio.run(main_datalab(test_ingestions, mode="by_page", visualize=True))
     with open("datalab_output.json", "w") as f:
         for entry in output:
+            f.write(json.dumps(entry.model_dump(), indent=4))
+            f.write("\n")
+
+    title_output = asyncio.run(main_datalab(test_ingestions, mode="by_title", visualize=True))
+    with open("title_output.json", "w") as f:
+        for entry in title_output:
             f.write(json.dumps(entry.model_dump(), indent=4))
             f.write("\n")

@@ -152,24 +152,11 @@ class MinerU:
                 with open(file_path, "rb") as f:
                     output_files[file] = f.read()
 
-        base_name = os.path.basename(name_without_suff)
-        pdf_files = {
-            "model": f"{base_name}_model.pdf",
-            "layout": f"{base_name}_layout.pdf",
-            "spans": f"{base_name}_spans.pdf"
-        }
-
-        # Add some debugging to see what files we actually have
-        print("Available files:", list(output_files.keys()))
-        print("Looking for PDFs:", pdf_files)
-
         return {
-            "data": middle_json_content, 
+            "middle_json": middle_json_content,
+            "inference_result": model_inference_result,
+            "content_list": content_list_content,
             "output_files": output_files,
-            "annotated_pdfs": {
-                key: output_files.get(filename)
-                for key, filename in pdf_files.items()
-            }
         }
 
 
@@ -189,8 +176,16 @@ if __name__ == "__main__":
     with open(os.path.join(output_dir, "data.json"), "w") as f:
         import json
         # Parse the string into a Python object first, then dump with indentation
-        json_data = json.loads(result["data"]) if isinstance(result["data"], str) else result["data"]
+        json_data = json.loads(result["middle_json"]) if isinstance(result["middle_json"], str) else result["middle_json"]
         json.dump(json_data, f, indent=2)
+
+    # Save the inference result
+    with open(os.path.join(output_dir, "inference_result.json"), "w") as f:
+        json.dump(result["inference_result"], f, indent=2)
+
+    # Save the content list
+    with open(os.path.join(output_dir, "content_list.json"), "w") as f:
+        json.dump(result["content_list"], f, indent=2)
 
     # Save all output files
     for filename, file_content in result["output_files"].items():
@@ -200,16 +195,3 @@ if __name__ == "__main__":
         # Write the file
         with open(output_path, "wb") as f:
             f.write(file_content)
-
-    # Save annotated PDFs separately for easy access
-    annotated_pdfs_dir = os.path.join(output_dir, "annotated_pdfs")
-    os.makedirs(annotated_pdfs_dir, exist_ok=True)
-
-    for pdf_type, pdf_content in result["annotated_pdfs"].items():
-        if pdf_content:  # Check if PDF content exists
-            output_path = os.path.join(annotated_pdfs_dir, f"{pdf_type}.pdf")
-            with open(output_path, "wb") as f:
-                f.write(pdf_content)
-
-    print(f"Results saved to {output_dir}/")
-    print(f"Annotated PDFs saved to {annotated_pdfs_dir}/")
