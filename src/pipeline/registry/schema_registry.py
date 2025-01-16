@@ -1,4 +1,5 @@
 from typing import Callable
+
 from pydantic import BaseModel
 
 from src.pipeline.registry.base import RegistryBase
