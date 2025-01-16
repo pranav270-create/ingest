@@ -4,8 +4,7 @@ from src.sql_db.etl_model import Ingest, ProcessingStep, Entry, ProcessingPipeli
 import hashlib
 from datetime import datetime
 import json
-from sqlalchemy import insert, select, inspect, and_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, inspect, and_
 from sqlalchemy.dialects.mysql import insert as mysql_insert  # Add this import
 
 
