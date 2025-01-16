@@ -1,9 +1,9 @@
 import sys
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, TypeVar, Union
+from typing import Annotated, Any, Optional, TypeVar, Union
+
 from pydantic import BaseModel, Field
-from typing_extensions import Annotated
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -212,6 +212,21 @@ class EmbeddedFeatureType(str, Enum):
     SYNTHETIC_FACTS = "synthetic_facts"
 
 
+class RelationshipType(str, Enum):
+    CITES_GENERAL = "cites_general"
+    CITES_BACKGROUND = "cites_background"
+    CITES_METHOD = "cites_method"
+    CITES_RESULT = "cites_result"
+    CITED_BY = "cited_by"
+    ATTACHMENT = "attachment"
+    SECTION_REFERENCE = "section_reference"
+    ONTOLOGICAL = "ontological"
+    SNIPPET = "snippet"
+    SYNTHETIC = "synthetic"
+    FIGURE_CAPTION = "figure_caption"
+    TABLE_CAPTION = "table_caption"
+
+
 class Index(BaseModel):
     """
     This is a list of indices that can be used to index a larger object. (float for video/audio, int for everything else)
@@ -290,21 +305,6 @@ class BoundingBox(BaseModel):
         }
 
 
-class RelationshipType(str, Enum):
-    CITES_GENERAL = "cites_general"
-    CITES_BACKGROUND = "cites_background"
-    CITES_METHOD = "cites_method"
-    CITES_RESULT = "cites_result"
-    CITED_BY = "cited_by"
-    ATTACHMENT = "attachment"
-    SECTION_REFERENCE = "section_reference"
-    ONTOLOGICAL = "ontological"
-    SNIPPET = "snippet"
-    SYNTHETIC = "synthetic"
-    FIGURE_CAPTION = "figure_caption"
-    TABLE_CAPTION = "table_caption"
-
-
 class Citation(BaseModel):
     relationship_type: RelationshipType
     target_uuid: str
@@ -358,10 +358,10 @@ class Ingestion(BaseModel):
     chunking_method: Optional[ChunkingMethod] = None
     chunking_metadata: Optional[dict[str, Any]] = None
     chunking_date: Optional[str] = None
-    # Featurization fields -> feature_models = name of model used, feature_types = name of prompt from PromptRegistry, feature_dates = date of prompt from PromptRegistry
-    feature_models: Optional[list[str]] = None
-    feature_dates: Optional[list[str]] = None
-    feature_types: Optional[list[str]] = None
+    # Featurization fields
+    feature_models: Optional[list[str]] = None # feature_models = name of model used
+    feature_dates: Optional[list[str]] = None # feature_types = name of prompt from PromptRegistry
+    feature_types: Optional[list[str]] = None # feature_dates = date of prompt from PromptRegistry
     # Unprocessed citations
     unprocessed_citations: Optional[dict[str, Any]] = None  # This is for citations that have not been processed yet
 
@@ -389,11 +389,11 @@ class Entry(BaseModel):
     table_number: Optional[int] = None  # This is for a table specifically
     figure_number: Optional[int] = None  # This is for a figure specifically
 
-    # Embedding fields -> embedded_feature_type = type of feature being embedded, embedding_date = date of embedding, embedding_model = name of model used, embedding_dimensions = dimensions of embedding
-    embedded_feature_type: Optional[EmbeddedFeatureType] = None  # This is the type of feature that is being embedded
-    embedding_date: Optional[str] = None
-    embedding_model: Optional[str] = None
-    embedding_dimensions: Optional[int] = None
+    # Embedding fields
+    embedded_feature_type: Optional[EmbeddedFeatureType] = None  # embedded_feature_type = type of feature being embedded
+    embedding_date: Optional[str] = None # embedding_date = date of embedding
+    embedding_model: Optional[str] = None # embedding_model = name of model used
+    embedding_dimensions: Optional[int] = None # embedding_dimensions = dimensions of embedding
 
     # Graph DB
     citations: Optional[list[Citation]] = None
