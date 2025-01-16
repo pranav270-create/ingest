@@ -1,8 +1,18 @@
-from typing import Any, Callable, Union
+from enum import Enum
 from functools import wraps
+from typing import Any, Callable, Union
 
 from src.pipeline.registry.base import RegistryBase
 from src.pipeline.storage_backend import StorageBackend
+
+
+class StepType(str, Enum):
+    INGEST = "ingest"
+    EXTRACT = "extract"
+    CHUNK = "chunk"
+    FEATURIZE = "featurize"
+    EMBED = "embed"
+    UPSERT = "upsert"
 
 
 class FunctionRegistry(RegistryBase):
