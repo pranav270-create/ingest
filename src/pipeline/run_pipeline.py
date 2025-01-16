@@ -1,7 +1,7 @@
 import argparse
 import asyncio
-import hashlib
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,7 +11,8 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from src.pipeline.pipeline import PipelineOrchestrator
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.schema_registry import SchemaRegistry
-from src.sql_db.database_simple import get_async_session
+from src.pipeline.storage_backend import StorageBackend
+from src.sql_db.database_simple import get_session
 from src.sql_db.etl_crud import (
     clone_pipeline,
     create_entries,
@@ -23,6 +24,7 @@ from src.sql_db.etl_crud import (
     update_ingests_from_results,
 )
 
+logger = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run ETL pipeline")
@@ -30,25 +32,7 @@ def parse_args():
     return parser.parse_args()
 
 
-args = parse_args()
-CONFIG = args.config
-
-if not CONFIG.endswith(".yaml"):
-    CONFIG = f"{CONFIG}.yaml"
-
-# Initialize the orchestrator to register functions
-config_path = Path(__file__).resolve().parent.parent / "config" / CONFIG
-orchestrator = PipelineOrchestrator(str(config_path))
-storage = orchestrator.storage
-FunctionRegistry.set_storage_backend(storage)
-
-
-# TODO: Change this to use the hash from Ingest that is a part of it
 async def process_batch(session, items, pipeline):
-    def create_item_hash(item):
-        """Create a hash for an item based on key fields."""
-        hash_fields = {k: getattr(item, k) for k in ["public_url", "document_title", "creator_name"]}
-        return hashlib.sha256(json.dumps(hash_fields, sort_keys=True).encode()).hexdigest()
 
     # Process items in batches of 100
     batch_size = 100
@@ -60,7 +44,7 @@ async def process_batch(session, items, pipeline):
         ingests = await create_or_update_ingest_batch(session, batch_data, pipeline)
         # Update items with their IDs
         for item in batch:
-            item_hash = create_item_hash(item)
+            item_hash = 0  # TODO: Change this to use the hash from Ingest that is a part of it
             ingest = ingests[item_hash]
             item.ingestion_id = ingest.id
             item.pipeline_id = pipeline.id
@@ -68,7 +52,7 @@ async def process_batch(session, items, pipeline):
     return processed_results
 
 
-async def pipeline_step(session, pipeline, stage: str, order: int, function_name: str, input_data=None, **params):
+async def pipeline_step(session, pipeline, storage: StorageBackend, stage: str, order: int, function_name: str, input_data=None, **params):
     try:
         output_path = f"{pipeline.id}_{stage}_{function_name}_{order}.json"
         step = await create_processing_step(
@@ -81,17 +65,16 @@ async def pipeline_step(session, pipeline, stage: str, order: int, function_name
             output_path=output_path,
             metadata={"params": params},
         )
-        session.commit()  # Commit step creation separately
+        session.commit()
 
         func = FunctionRegistry.get(stage, function_name)
-        if order == 0:  # Ingestion step
-            results = await func(**params, simple_mode=False)
-            print("Function Done Running")
-            processed_results = await process_batch(session, results, pipeline)
-            results = processed_results
-        else:  # Processing step
-            results = await func(input_data, **params, simple_mode=False)
-            print("Function Done Running")
+
+        results = await func(**params, simple_mode=False)
+        logger.info(f"Function {function_name} Done Running")
+
+        is_ingestion_step = order == 0
+        if is_ingestion_step:
+            results = await process_batch(session, results, pipeline)
 
         # Save results and handle special cases
         result_dicts = [item.model_dump() for item in results]
@@ -111,7 +94,7 @@ async def pipeline_step(session, pipeline, stage: str, order: int, function_name
         raise e
 
 
-async def get_latest_step_results(session, pipeline_id: int) -> tuple[int, list[dict[str, Any]]]:
+async def get_latest_step_results(session, pipeline_id: int, storage: StorageBackend) -> tuple[int, list[dict[str, Any]]]:
     latest_step = await get_latest_processing_step(session, pipeline_id)
     if latest_step:
         results = json.loads(await storage.read(latest_step.output_path))
@@ -120,7 +103,7 @@ async def get_latest_step_results(session, pipeline_id: int) -> tuple[int, list[
     return 0, []
 
 
-async def get_step_results(session, pipeline_id: int, resume_from_step: int) -> tuple[int, list[dict[str, Any]]]:
+async def get_step_results(session, pipeline_id: int, resume_from_step: int, storage: StorageBackend) -> tuple[int, list[dict[str, Any]]]:
     step = await get_specific_processing_step(session, pipeline_id, resume_from_step)
     if step:
         results = json.loads(await storage.read(step.output_path))
@@ -145,9 +128,10 @@ async def update_pipeline_ids(results: list, new_pipeline_id: int) -> list:
     return results
 
 
-async def etl_pipeline():
+async def etl_pipeline(orchestrator: PipelineOrchestrator):
     config = orchestrator.config
-    for session in get_async_session():
+
+    for session in get_session():
         for stage_config in config["stages"]:
             if stage_config["name"] == "upsert":
                 assert (
@@ -161,14 +145,14 @@ async def etl_pipeline():
         # Note: The options are to clone a pipeline, overwrite and continue an old pipeline, or start a new one (step 0)
         if resume_from_step:
             # old pipeline to get the intermediate results
-            resume_from_step, latest_results = await get_step_results(session, pipeline.id, resume_from_step)
+            resume_from_step, latest_results = await get_step_results(session, pipeline.id, resume_from_step, orchestrator.storage)
             if fork_pipeline:  # fork the pipeline starting at 'resume_from_step'
                 pipeline = await clone_pipeline(
                     session, pipeline, resume_from_step, new_description=config["pipeline"].get("description")
                 )  # noqa
                 latest_results = await update_pipeline_ids(latest_results, pipeline.id)
         else:  # pick up from last successful step
-            latest_step, latest_results = await get_latest_step_results(session, pipeline.id)
+            latest_step, latest_results = await get_latest_step_results(session, pipeline.id, orchestrator.storage)
             resume_from_step = latest_step
 
         step_order = resume_from_step
@@ -183,6 +167,7 @@ async def etl_pipeline():
                 result = await pipeline_step(
                     session,
                     pipeline,
+                    orchestrator.storage,
                     stage,
                     step_order,
                     function["name"],
@@ -200,4 +185,16 @@ async def etl_pipeline():
 
 
 if __name__ == "__main__":
+    args = parse_args()
+    config = args.config
+
+    if not config.endswith(".yaml"):
+        config = f"{config}.yaml"
+
+    # Initialize the orchestrator to register functions
+    config_path = Path(__file__).resolve().parent.parent / "config" / config
+    orchestrator = PipelineOrchestrator(str(config_path))
+    storage = orchestrator.storage
+    FunctionRegistry.set_storage_backend(storage)
+
     asyncio.run(etl_pipeline())

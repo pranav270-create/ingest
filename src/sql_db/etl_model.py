@@ -87,8 +87,8 @@ class Ingest(AsyncAttrs, AbstractBase):
     # Relationships
     processing_pipelines: Mapped[list["ProcessingPipeline"]] = relationship("ProcessingPipeline", secondary="ingest_pipeline", back_populates="ingests")  # noqa
     entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="ingest")
-    # outgoing_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.source_id]", back_populates="source")  # noqa
-    # incoming_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.target_id]", back_populates="target")  # noqa
+    outgoing_relationships: Mapped[list["IngestRelationship"]] = relationship("IngestRelationship", foreign_keys="[IngestRelationship.source_id]", back_populates="source")  # noqa
+    incoming_relationships: Mapped[list["IngestRelationship"]] = relationship("IngestRelationship", foreign_keys="[IngestRelationship.target_id]", back_populates="target")  # noqa
 
     @validates('scope')
     def validate_scope(self, key, value):  # noqa
@@ -224,8 +224,8 @@ class Entry(AsyncAttrs, AbstractBase):
     # Relationships
     pipeline: Mapped[Optional[ProcessingPipeline]] = relationship("ProcessingPipeline", back_populates="entries")
     ingest: Mapped[Optional[Ingest]] = relationship("Ingest", back_populates="entries")
-    outgoing_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.source_id]", back_populates="source")  # noqa
-    incoming_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.target_id]", back_populates="target")  # noqa
+    outgoing_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.source_uuid]", back_populates="source")  # noqa
+    incoming_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.target_uuid]", back_populates="target")  # noqa
 
     @validates('consolidated_feature_type')
     def validate_consolidated_feature_type(self, key, value):  # noqa
@@ -244,26 +244,55 @@ class Entry(AsyncAttrs, AbstractBase):
         return value
 
 
+
 class EntryRelationship(Base):
     __tablename__ = 'entry_relationships'
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    source_id: Mapped[str] = mapped_column(ForeignKey('entries.uuid'), nullable=False)
-    target_id: Mapped[str] = mapped_column(ForeignKey('entries.uuid'), nullable=False)
+    source_uuid: Mapped[str] = mapped_column(ForeignKey('entries.uuid'), nullable=False)
+    target_uuid: Mapped[str] = mapped_column(ForeignKey('entries.uuid'), nullable=False)
     relationship_type: Mapped[str] = mapped_column(String(50), nullable=False)
     metadata_field: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the relationship")
 
-    source: Mapped["Entry"] = relationship("Entry", foreign_keys=[source_id], back_populates="outgoing_relationships")
-    target: Mapped["Entry"] = relationship("Entry", foreign_keys=[target_id], back_populates="incoming_relationships")
+    # Relationships
+    source: Mapped["Entry"] = relationship("Entry", foreign_keys=[source_uuid], back_populates="outgoing_relationships")
+    target: Mapped["Entry"] = relationship("Entry", foreign_keys=[target_uuid], back_populates="incoming_relationships")
 
     __table_args__ = (
-        UniqueConstraint('source_id', 'target_id', 'relationship_type', name='uq_entry_relationship'),
-        Index('ix_entry_relationship_source', 'source_id'),
-        Index('ix_entry_relationship_target', 'target_id'),
+        UniqueConstraint('source_uuid', 'target_uuid', 'relationship_type', name='uq_entry_relationship'),
+        Index('ix_entry_relationship_source', 'source_uuid'),
+        Index('ix_entry_relationship_target', 'target_uuid'),
     )
 
     @validates('relationship_type')
     def validate_relationship_type(self, key, value):  # noqa
+        if isinstance(value, RelationshipType):
+            return value.value
+        if value not in RelationshipType._value2member_map_:
+            raise ValueError(f"Invalid relationship type: {value}")
+        return value
+
+
+class IngestRelationship(Base):
+    __tablename__ = 'ingest_relationships'
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey('ingest.id'), nullable=False)
+    target_id: Mapped[int] = mapped_column(ForeignKey('ingest.id'), nullable=False)
+    relationship_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    metadata_field: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the relationship")
+
+    source: Mapped["Ingest"] = relationship("Ingest", foreign_keys=[source_id], back_populates="outgoing_relationships")
+    target: Mapped["Ingest"] = relationship("Ingest", foreign_keys=[target_id], back_populates="incoming_relationships")
+
+    __table_args__ = (
+        UniqueConstraint('source_id', 'target_id', 'relationship_type', name='uq_document_relationship'),
+        Index('ix_document_relationship_source', 'source_id'),
+        Index('ix_document_relationship_target', 'target_id'),
+    )
+
+    @validates('relationship_type')
+    def validate_relationship_type(self, key, value): # noqa
         if isinstance(value, RelationshipType):
             return value.value
         if value not in RelationshipType._value2member_map_:
