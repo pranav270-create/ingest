@@ -224,16 +224,16 @@ async def clone_pipeline(session: AsyncSession,
 
 
 async def create_processing_step(
-        session: AsyncSession,
-        pipeline_id: int,
-        order: int,
-        step_type: str,
-        function_name: str,
-        status: str,
-        previous_step_id: int = None,
-        output_path: str = None,
-        metadata: dict = None
-    ) -> ProcessingStep:
+    session: AsyncSession,
+    pipeline_id: int,
+    order: int,
+    step_type: str,
+    function_name: str,
+    status: str,
+    previous_step_id: int = None,
+    output_path: str = None,
+    metadata: dict = None
+) -> ProcessingStep:
     # see if step exists with that pipeline_id and order
     stmt = select(ProcessingStep).where(
         (ProcessingStep.pipeline_id == pipeline_id) &

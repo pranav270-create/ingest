@@ -11,7 +11,7 @@ from src.pipeline.pipeline import PipelineOrchestrator
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.schema_registry import SchemaRegistry
 from src.pipeline.storage_backend import StorageBackend
-from src.schemas.schemas import BaseModelListType, RegisteredSchemaListType
+from src.schemas.schemas import BaseModelListType, Ingestion, RegisteredSchemaListType
 from src.sql_db.database_simple import get_session
 from src.sql_db.etl_crud import (
     clone_pipeline,
@@ -23,6 +23,7 @@ from src.sql_db.etl_crud import (
     get_specific_processing_step,
     update_ingests_from_results,
 )
+from src.sql_db.etl_model import ProcessingPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -78,27 +79,33 @@ async def update_pipeline_ids(results: list[BaseModelListType], new_pipeline_id:
     return results
 
 
-async def process_batch(session, items, pipeline):
-
-    # Process items in batches of 100
-    batch_size = 100
+async def batched_ingestion(session, items: list[Ingestion], pipeline: ProcessingPipeline, batch_size: int = 100) -> list[Ingestion]:
     processed_results = []
-    for i in range(0, len(items), batch_size):
-        batch = items[i : i + batch_size]
+    for batch_start in range(0, len(items), batch_size):
+        # get batch of data
+        batch = items[batch_start : batch_start + batch_size]
         batch_data = [item.model_dump() for item in batch]
+
         # Process batch
         ingests = await create_or_update_ingest_batch(session, batch_data, pipeline)
+
         # Update items with their IDs
         for item in batch:
-            item_hash = 0  # TODO: Change this to use the hash from Ingest that is a part of it
-            ingest = ingests[item_hash]
-            item.ingestion_id = ingest.id
+            item.ingestion_id = ingests[item.document_hash].id # use the new ingestion hash to get the right ingestion id
             item.pipeline_id = pipeline.id
             processed_results.append(item)
     return processed_results
 
 
-async def pipeline_step(session, pipeline, storage: StorageBackend, stage: str, order: int, function_name: str, **params):
+async def pipeline_step(
+        session,
+        pipeline: ProcessingPipeline,
+        storage: StorageBackend,
+        stage: str,
+        order: int,
+        function_name: str,
+        **params
+):
     try:
         output_path = f"{pipeline.id}_{stage}_{function_name}_{order}.json"
         step = await create_processing_step(
@@ -113,14 +120,14 @@ async def pipeline_step(session, pipeline, storage: StorageBackend, stage: str, 
         )
         session.commit()
 
+        # Run the function
         func = FunctionRegistry.get(stage, function_name)
-
         results = await func(**params, simple_mode=False)
-        logger.info(f"Function {function_name} Done Running")
+        logger.info(f"Function {function_name} \033[92mComplete\033[0m")
 
-        is_ingestion_step = order == 0
-        if is_ingestion_step:
-            results = await process_batch(session, results, pipeline)
+        # If this is the first step, run batched ingestion
+        if order == 0:
+            results = await batched_ingestion(session, results, pipeline)
 
         # Save results and handle special cases
         result_dicts = [item.model_dump() for item in results]
@@ -128,15 +135,15 @@ async def pipeline_step(session, pipeline, storage: StorageBackend, stage: str, 
 
         # Update SQL database with latest information
         await update_ingests_from_results(results, session)
-
         step.status = "completed"
         session.commit()
+
         return results
 
     except Exception as e:
         session.rollback()
         step.status = "failed"
-        session.commit()  # Commit the failure status
+        session.commit()
         raise e
 
 
