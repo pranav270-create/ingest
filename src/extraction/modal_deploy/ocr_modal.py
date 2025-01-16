@@ -100,3 +100,10 @@ class Model:
             # Clean up the temporary file
             os.remove(filename)
         return res
+
+
+if __name__ == "__main__":
+    cls = modal.Cls.lookup("ocr-modal", "Model")
+    obj = cls()
+    image_data = open("/Users/pranaviyer/Desktop/Screenshot 2025-01-06 at 7.12.32 PM.png", "rb").read()
+    print(obj.moondream_ocr.remote(image_data, "Please describe this image in detail"))

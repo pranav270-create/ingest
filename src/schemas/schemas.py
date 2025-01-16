@@ -356,9 +356,6 @@ class Entry(BaseModel):
 
     # Featurization fields
     entry_title: Optional[str] = None  # Title of a figure, table, or other content
-    table_number: Optional[int] = None  # This is for a table specifically
-    figure_number: Optional[int] = None  # This is for a figure specifically
-    main_headers: Optional[list[str]] = None  # This is for a table specifically
     keywords: Optional[list[str]] = None  # This is for any keywords that we have not captured in other fields yet
 
     # Chunk location fields. Used for reconstruction.
@@ -367,17 +364,14 @@ class Entry(BaseModel):
     min_primary_index: Optional[int] = None  # Cached for quick access
     max_primary_index: Optional[int] = None  # Cached for quick access
     chunk_index: Optional[Annotated[int, Field(gt=0)]] = None  # Ensure chunk index is greater than 0
+    table_number: Optional[int] = None  # This is for a table specifically
+    figure_number: Optional[int] = None  # This is for a figure specifically
 
     # Embedding fields -> embedded_feature_type = type of feature being embedded, embedding_date = date of embedding, embedding_model = name of model used, embedding_dimensions = dimensions of embedding
     embedded_feature_type: Optional[EmbeddedFeatureType] = None  # This is the type of feature that is being embedded
     embedding_date: Optional[str] = None
     embedding_model: Optional[str] = None
     embedding_dimensions: Optional[int] = None
-
-    # Add fields for parent-child relationships in textract extraction
-    # id: Optional[str] = None  # Unique identifier for this entry
-    # parent_id: Optional[str] = None  # ID of the parent entry (e.g., table containing cells)
-    # child_ids: Optional[list[str]] = None  # IDs of child entries (e.g., cells in a table)
 
     # Graph DB
     citations: Optional[dict[str, str]] = None  # This is for citations that we have not processed yet

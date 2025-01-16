@@ -57,7 +57,8 @@ class Model:
         )
 
     @method()
-    def warmup(self): return
+    def warmup(self):
+        return
 
     @method()
     def parse_document(self, fname: bytes) -> dict:

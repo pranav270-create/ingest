@@ -70,9 +70,9 @@ def _map_marker_type(block_type: str) -> ExtractedFeatureType:
         "line": ExtractedFeatureType.line,
         "image": ExtractedFeatureType.image,
         "table": ExtractedFeatureType.table,
-        "tablegroup": ExtractedFeatureType.table,  # Map to common table type
+        "tablegroup": ExtractedFeatureType.tablegroup,  # Map to common table type
         "figure": ExtractedFeatureType.figure,
-        "figuregroup": ExtractedFeatureType.figure,  # Map to common figure type
+        "figuregroup": ExtractedFeatureType.figuregroup,  # Map to common figure type
         "code": ExtractedFeatureType.code,
         "equation": ExtractedFeatureType.equation,
         "form": ExtractedFeatureType.form,
@@ -80,7 +80,7 @@ def _map_marker_type(block_type: str) -> ExtractedFeatureType:
         "pagefooter": ExtractedFeatureType.footer,
         "sectionheader": ExtractedFeatureType.section_header,
         "listitem": ExtractedFeatureType.list,
-        "listgroup": ExtractedFeatureType.list,
+        "listgroup": ExtractedFeatureType.listgroup,
         "pagenumber": ExtractedFeatureType.page_number,
         # Marker-specific types
         "span": ExtractedFeatureType.span,
@@ -95,8 +95,10 @@ def _map_marker_type(block_type: str) -> ExtractedFeatureType:
         "document": ExtractedFeatureType.document,
         "complexregion": ExtractedFeatureType.complexregion,
     }
-    # Return common type if exists, otherwise use the original type
-    return marker_to_common.get(block_type_lower, ExtractedFeatureType.other)
+    output = marker_to_common.get(block_type_lower, ExtractedFeatureType.other)
+    if output == ExtractedFeatureType.other:
+        print(f"Unknown block type: {block_type_lower}")
+    return output
 
 
 def _polygon_to_bbox(polygon, page_width, page_height):
@@ -254,254 +256,260 @@ async def _extract_region(
     return extracted_path, bbox
 
 
-def _clean_html_text(html: str) -> str:
-    """Clean HTML text for basic text content types"""
-    # Remove all HTML tags and their content if they're refs
-    text = (
-        html.replace("<content-ref", "\n")  # Start new line for content refs
-        .replace("</content-ref>", "\n")  # End content ref
-        # Remove common HTML tags
-        .replace("<p>", "")
-        .replace("</p>", "")
-        .replace("<h1>", "")
-        .replace("</h1>", "")
-        .replace("<h2>", "")
-        .replace("</h2>", "")
-        .replace("<h3>", "")
-        .replace("</h3>", "")
-        .replace("<h4>", "")
-        .replace("</h4>", "")
-    )
-    # Remove any remaining HTML tags
-    text = re.sub(r"<[^>]+>", "", text)
-    # Clean up whitespace
-    text = text.replace("\u00a0", " ").replace(  # Replace non-breaking spaces
-        "\u200b", ""
-    )  # Remove zero-width spaces
-    # Normalize whitespace: multiple spaces/newlines to single
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-
-def _process_special_block(child, feature_type):
-    """Helper to process special blocks like tables and figures with their captions"""
-    caption_text = ""
-    main_content = ""
-    # If this is a group with children, process them
-    if child.get("children"):
-        for sub_child in child["children"]:
-            sub_type = _map_marker_type(sub_child["block_type"])
-            if sub_type == ExtractedFeatureType.caption:
-                caption_text = _clean_html_text(sub_child["html"])
-            elif sub_type in [ExtractedFeatureType.table, ExtractedFeatureType.list]:
-                # Preserve original HTML for structured content
-                main_content = sub_child["html"]
-            else:
-                # For other types, clean the text
-                main_content = _clean_html_text(sub_child["html"])
-    else:
-        # If no children, process based on type
-        if feature_type in [
-            ExtractedFeatureType.table,
-            ExtractedFeatureType.tablegroup,
-            ExtractedFeatureType.list,
-            ExtractedFeatureType.listgroup,
-        ]:
-            main_content = child["html"]  # Preserve structure
-        elif feature_type != ExtractedFeatureType.page:  # Ignore page type
-            main_content = _clean_html_text(child["html"])
-    return main_content, caption_text
-
-
-def process_children(
-    children: list,
+async def _process_child_element(
+    child: dict,
+    parent_feature_type: ExtractedFeatureType,
     page_num: int,
-    parent_index: int,
-    page_image_path: str,
+    secondary_idx: int,
+    ingestion: Ingestion,
+    page_image_paths: dict,
     page_dimensions: tuple[int, int],
-) -> list[tuple]:
+    extracts_dir: str,
+    chunk_idx: int,
+    counters: dict,
+    read=None,
+    write=None,
+) -> tuple[list[Entry], int, int, dict, str]:
     """
-    Recursively process children elements and return list of
-    (feature_type, content, location, child_dict, secondary_index) tuples
-    """
-    results = []
-    for idx, child in enumerate(children):
-        if "html" not in child:
-            continue
-        feature_type = _map_marker_type(child["block_type"])
-        secondary_index = parent_index + idx
-        # Process this child
-        if feature_type == ExtractedFeatureType.page:
-            # Skip page type but process its children
-            if child.get("children"):
-                results.extend(
-                    process_children(
-                        child["children"],
-                        page_num,
-                        secondary_index,
-                        page_image_path,
-                        page_dimensions,
-                    )
-                )
-            continue
-        # Process current child
-        content = child["html"]
-        location = ChunkLocation(
-            index=Index(
-                primary=page_num + 1,
-                secondary=secondary_index + 1,
-            ),
-            extracted_feature_type=feature_type,
-            page_file_path=page_image_path,
-            bounding_box=_polygon_to_bbox(child["polygon"], *page_dimensions),
-        )
-        # Include the child dict and secondary_index in results
-        results.append((feature_type, content, location, child, secondary_index))
-        # Recursively process any children
-        if child.get("children"):
-            results.extend(
-                process_children(
-                    child["children"],
-                    page_num,
-                    secondary_index,
-                    page_image_path,
-                    page_dimensions,
-                )
-            )
-    return results
-
-
-def process_grouped_elements(processed_elements: list[tuple]) -> list[tuple]:
-    """
-    Process elements to group related items (figures/tables with captions) and handle text appropriately.
-
+    Process a child element and its immediate children (depth 2).
     Args:
-        processed_elements: List of (feature_type, content, location, child, secondary_index) tuples
-
+        child: The child element containing polygon information
+        parent_feature_type: Type of the parent feature
+        page_num: Page number
+        secondary_idx: Index within the page
+        ingestion: Ingestion object
+        page_image_paths: Dictionary of page image paths
+        page_dimensions: Tuple of (width, height) of the page
+        extracts_dir: Directory to save extracted regions
+        chunk_idx: Index within the chunk
+        counters: Dictionary tracking figure and table counts
+        read: Optional async read function
+        write: Optional async write function
     Returns:
-        List of (feature_type, content, description, locations, secondary_indices) tuples
-        where:
-        - content is the main content (preserved HTML for tables, empty for figures)
-        - description is the caption text if any
-        - locations is a list of ChunkLocations for all related elements
-        - secondary_indices is a list of indices for all related elements
+        tuple[list[Entry], int, int, dict, str]: (entries, chunk_idx, secondary_idx, counters, html_content)
     """
-    results = []
-    current_group = None
+    entries = []
+    page_width, page_height = page_dimensions
 
-    def finish_group():
-        nonlocal current_group
-        if current_group:
-            results.append(current_group)
-            current_group = None
+    if "html" not in child:
+        return entries, chunk_idx, secondary_idx, counters
 
-    for elem in processed_elements:
-        feature_type, content, location, child, secondary_index = elem
+    parent_content = child["html"]
 
-        # Skip page type entirely
-        if feature_type == ExtractedFeatureType.page:
-            continue
+    # Handle visual elements
+    if parent_feature_type in [
+        ExtractedFeatureType.figure,
+        ExtractedFeatureType.figuregroup,
+        ExtractedFeatureType.picture,
+        ExtractedFeatureType.picturegroup,
+        ExtractedFeatureType.complexregion,
+        ExtractedFeatureType.table,
+        ExtractedFeatureType.tablegroup,
+    ]:
+        parent_extracted_path, parent_bbox = await _extract_region(
+            child=child,
+            page_num=page_num,
+            secondary_index=secondary_idx,
+            page_image_path=page_image_paths[page_num],
+            page_dimensions=(page_width, page_height),
+            extracts_dir=extracts_dir,
+            feature_type=parent_feature_type,
+            read=read,
+            write=write,
+        )
 
-        # Handle groups and their related elements
-        if feature_type in [
-            ExtractedFeatureType.figuregroup,
-            ExtractedFeatureType.tablegroup,
+        # Simple case: Individual figure/picture/table
+        if parent_feature_type in [
             ExtractedFeatureType.figure,
+            ExtractedFeatureType.picture,
             ExtractedFeatureType.table,
-        ]:
-            # Start new group if none exists
-            if not current_group:
-                current_group = {
-                    "type": feature_type,
-                    "contents": [],
-                    "description": "",
-                    "locations": [],
-                    "indices": [],
-                }
-            # If different type of group, finish current and start new
-            elif current_group["type"] != feature_type:
-                finish_group()
-                current_group = {
-                    "type": feature_type,
-                    "contents": [],
-                    "description": "",
-                    "locations": [],
-                    "indices": [],
-                }
-
-            # Add to current group
-            current_group["contents"].append(content)
-            current_group["locations"].append(location)
-            current_group["indices"].append(secondary_index)
-
-        # Handle captions - attach to current group if exists
-        elif feature_type == ExtractedFeatureType.caption:
-            if current_group:
-                caption_text = _clean_html_text(content)
-                current_group["description"] = caption_text
-            # If no current group, treat as regular text
+        ] and parent_content:
+            if parent_feature_type in [ExtractedFeatureType.figure, ExtractedFeatureType.picture]:
+                counters["figure_count"] += 1
+                element_number = counters["figure_count"]
+                number_type = "figure_number"
+            elif parent_feature_type == ExtractedFeatureType.table:
+                counters["table_count"] += 1
+                element_number = counters["table_count"]
+                number_type = "table_number"
             else:
-                results.append(
-                    (
-                        feature_type,
-                        _clean_html_text(content),
-                        "",
-                        [location],
-                        [secondary_index],
+                element_number = None
+                number_type = None
+
+            entry_data = {
+                "uuid": str(uuid.uuid4()),
+                "ingestion": ingestion,
+                "string": parent_content,
+                "consolidated_feature_type": parent_feature_type,
+                "chunk_locations": [
+                    ChunkLocation(
+                        index=Index(primary=page_num + 1, secondary=secondary_idx + 1),
+                        extracted_feature_type=parent_feature_type,
+                        page_file_path=page_image_paths[page_num],
+                        extracted_file_path=parent_extracted_path,
+                        bounding_box=parent_bbox,
                     )
-                )
+                ],
+                "min_primary_index": page_num + 1,
+                "max_primary_index": page_num + 1,
+                "chunk_index": chunk_idx + 1,
+            }
+            if number_type:
+                entry_data[number_type] = element_number
+            chunk_idx += 1
+            secondary_idx += 1
+            entries.append(Entry(**entry_data))
+            return entries, chunk_idx, secondary_idx, counters, parent_content
 
-        # Handle regular text blocks
-        else:
-            # First finish any existing group
-            finish_group()
+        # Complex case: Groups with multiple elements
+        children = child.get("children", []) or []
+        html_content = ""
 
-            # Process text based on type
-            if feature_type in [
-                ExtractedFeatureType.text,
-                ExtractedFeatureType.section_header,
-            ]:
-                processed_text = _clean_html_text(content)
-            else:
-                processed_text = content
+        # Track parent elements for citation linking
+        parent_elements = {
+            ExtractedFeatureType.figure: None,
+            ExtractedFeatureType.table: None,
+            ExtractedFeatureType.picture: None,
+        }
 
-            if processed_text.strip():
-                results.append(
-                    (
-                        feature_type,
-                        processed_text,
-                        "",  # No description for regular text
-                        [location],
-                        [secondary_index],
-                    )
-                )
+        # First pass: Process figures and tables
+        for sub_child in children:
+            block_type = sub_child.get("block_type", "").lower()
+            child_feature_type = _map_marker_type(block_type)
 
-    # Finish any remaining group
-    finish_group()
+            # Skip captions in first pass
+            if child_feature_type == ExtractedFeatureType.caption:
+                continue
 
-    # Convert groups to final format
-    final_results = []
-    for item in results:
-        if isinstance(item, dict):  # It's a group
-            final_results.append(
-                (
-                    item["type"],
-                    (
-                        "\n".join(item["contents"])
-                        if item["type"]
-                        in [ExtractedFeatureType.table, ExtractedFeatureType.tablegroup]
-                        else ""
-                    ),
-                    
-                    item["description"],
-                    item["locations"],
-                    item["indices"],
-                )
+            child_extracted_path, child_bbox = await _extract_region(
+                child=sub_child,
+                page_num=page_num,
+                secondary_index=secondary_idx,
+                page_image_path=page_image_paths[page_num],
+                page_dimensions=(page_width, page_height),
+                extracts_dir=extracts_dir,
+                feature_type=child_feature_type,
+                read=read,
+                write=write,
             )
-        else:  # It's already in tuple format
-            final_results.append(item)
 
-    return final_results
+            child_chunk_location = ChunkLocation(
+                index=Index(
+                    primary=page_num + 1,
+                    secondary=secondary_idx + 1,
+                ),
+                extracted_feature_type=child_feature_type,
+                page_file_path=page_image_paths[page_num],
+                extracted_file_path=child_extracted_path,
+                bounding_box=child_bbox,
+            )
+
+            # Process figures and tables
+            if child_feature_type in [
+                ExtractedFeatureType.figure,
+                ExtractedFeatureType.picture,
+            ]:
+                figure_uuid = str(uuid.uuid4())
+                figure_entry = Entry(
+                    uuid=figure_uuid,
+                    ingestion=ingestion,
+                    string="",
+                    consolidated_feature_type=child_feature_type,
+                    chunk_locations=[child_chunk_location],
+                    chunk_index=chunk_idx + 1,
+                    min_primary_index=child_chunk_location.index.primary,
+                    max_primary_index=child_chunk_location.index.primary,
+                    figure_number=counters["figure_count"],
+                )
+                chunk_idx += 1
+                counters["figure_count"] += 1
+                entries.append(figure_entry)
+
+                llm_caption_entry = Entry(
+                    uuid=str(uuid.uuid4()),
+                    ingestion=ingestion,
+                    string=sub_child["html"],
+                    consolidated_feature_type=ExtractedFeatureType.caption,
+                    chunk_locations=[child_chunk_location],
+                    chunk_index=chunk_idx + 1,
+                    min_primary_index=child_chunk_location.index.primary,
+                    max_primary_index=child_chunk_location.index.primary,
+                    citations={figure_uuid: "figure_caption"},
+                )
+                chunk_idx += 1
+                entries.append(llm_caption_entry)
+                parent_elements[child_feature_type] = figure_uuid
+                html_content += sub_child["html"]
+
+            elif child_feature_type == ExtractedFeatureType.table:
+                table_uuid = str(uuid.uuid4())
+                table_entry = Entry(
+                    uuid=table_uuid,
+                    ingestion=ingestion,
+                    string=sub_child["html"],
+                    consolidated_feature_type=child_feature_type,
+                    chunk_locations=[child_chunk_location],
+                    chunk_index=chunk_idx + 1,
+                    min_primary_index=child_chunk_location.index.primary,
+                    max_primary_index=child_chunk_location.index.primary,
+                    table_number=counters["table_count"],
+                )
+                chunk_idx += 1
+                counters["table_count"] += 1
+                entries.append(table_entry)
+                parent_elements[child_feature_type] = table_uuid
+                html_content += sub_child["html"]
+            secondary_idx += 1
+
+        # Second pass: Process captions and llm_captions and link to parent elements
+        for sub_child in children:
+            if not isinstance(sub_child, dict):
+                continue
+
+            block_type = sub_child.get("block_type", "").lower()
+            child_feature_type = _map_marker_type(block_type)
+
+            if child_feature_type != ExtractedFeatureType.caption:
+                continue
+
+            child_chunk_location = ChunkLocation(
+                index=Index(
+                    primary=page_num + 1,
+                    secondary=secondary_idx + 1,
+                ),
+                extracted_feature_type=child_feature_type,
+                page_file_path=page_image_paths[page_num],
+                bounding_box=_polygon_to_bbox(sub_child["polygon"], page_width, page_height),
+            )
+
+            # Determine which parent to link to
+            parent_uuid = None
+            citation_type = None
+            if parent_feature_type in [ExtractedFeatureType.figuregroup, ExtractedFeatureType.picturegroup]:
+                parent_uuid = parent_elements.get(ExtractedFeatureType.figure) or parent_elements.get(ExtractedFeatureType.picture)
+                citation_type = "figure_caption"
+            elif parent_feature_type == ExtractedFeatureType.tablegroup:
+                parent_uuid = parent_elements.get(ExtractedFeatureType.table)
+                citation_type = "table_caption"
+
+            if parent_uuid and sub_child.get("html"):
+                caption_entry = Entry(
+                    uuid=str(uuid.uuid4()),
+                    ingestion=ingestion,
+                    string=sub_child["html"],
+                    consolidated_feature_type=ExtractedFeatureType.caption,
+                    chunk_locations=[child_chunk_location],
+                    chunk_index=chunk_idx + 1,
+                    min_primary_index=child_chunk_location.index.primary,
+                    max_primary_index=child_chunk_location.index.primary,
+                    citations={parent_uuid: citation_type},
+                )
+                chunk_idx += 1
+                entries.append(caption_entry)
+                secondary_idx += 1
+                html_content += sub_child["html"]
+
+    return entries, chunk_idx, secondary_idx, counters, html_content
 
 
 @FunctionRegistry.register("parse", "datalab")
@@ -509,7 +517,7 @@ async def main_datalab(
     ingestions: list[Ingestion],
     write=None,
     read=None,
-    mode="simple",
+    mode="by_page",
     visualize=False,
     **kwargs,
 ) -> list[Entry]:
@@ -520,7 +528,7 @@ async def main_datalab(
         ingestions: List of Ingestion objects
         write: Optional async write function
         read: Optional async read function
-        mode: "simple" or "structured" parsing mode
+        mode: "by_page" or "by_section" parsing mode
         visualize: If True, saves annotated PDFs with bounding boxes
         **kwargs: Additional arguments
     """
@@ -623,15 +631,17 @@ async def main_datalab(
                             f.write(annotated_image)
 
         all_text = {}
-        if mode == "simple":
+        if mode == "by_page":
             chunk_idx = 0
-            figure_count = 0
-            table_count = 0
+            # Initialize counters dictionary
+            counters = {"figure_count": 0, "table_count": 0}
+
             for page_num, page in enumerate(parsed_data["children"]):
                 page_text = []
                 all_chunk_locations = []
                 if not page.get("children"):
                     continue
+
                 # Get page dimensions
                 if read:
                     img_bytes = await read(page_image_paths[page_num])
@@ -642,22 +652,13 @@ async def main_datalab(
                     with Image.open(page_image_paths[page_num]) as img:
                         page_width, page_height = img.size
 
-                # Process all nested children
-                processed_elements = process_children(
-                    page["children"],
-                    page_num,
-                    0,
-                    page_image_paths[page_num],
-                    (page_width, page_height)
-                )
+                # Process all children of the Page
+                secondary_idx = 0
+                for child in page["children"]:
+                    block_type = child["block_type"]
+                    feature_type = _map_marker_type(block_type)
 
-                # Group related elements
-                grouped_elements = process_grouped_elements(processed_elements)
-
-                page_text = []
-                all_chunk_locations = []
-
-                for feature_type, content, description, locations, secondary_indices in grouped_elements:
+                    # Process visual elements
                     if feature_type in [
                         ExtractedFeatureType.figure,
                         ExtractedFeatureType.figuregroup,
@@ -667,73 +668,68 @@ async def main_datalab(
                         ExtractedFeatureType.table,
                         ExtractedFeatureType.tablegroup,
                     ]:
-                        # Process each location in the group
-                        chunk_locations = []
-                        for loc, sec_idx in zip(locations, secondary_indices):
-                            extracted_path, bbox = await _extract_region(
-                                child=loc.child,
+                        # Process visual elements using _process_child_element
+                        entries, chunk_idx, secondary_idx, counters, html_content = (
+                            await _process_child_element(
+                                child=child,
+                                parent_feature_type=feature_type,
                                 page_num=page_num,
-                                secondary_index=sec_idx,
-                                page_image_path=page_image_paths[page_num],
+                                secondary_idx=secondary_idx,
+                                ingestion=ingestion,
+                                page_image_paths=page_image_paths,
                                 page_dimensions=(page_width, page_height),
                                 extracts_dir=extracts_dir,
-                                feature_type=feature_type,
+                                chunk_idx=chunk_idx,
+                                counters=counters,
                                 read=read,
                                 write=write,
                             )
-                            chunk_locations.append(
-                                ChunkLocation(
-                                    index=Index(
-                                        primary=page_num + 1,
-                                        secondary=sec_idx + 1,
-                                    ),
-                                    extracted_feature_type=feature_type,
-                                    page_file_path=page_image_paths[page_num],
-                                    extracted_file_path=extracted_path,
-                                    bounding_box=bbox,
-                                )
-                            )
-
-                        if feature_type in [ExtractedFeatureType.figure, ExtractedFeatureType.figuregroup]:
-                            figure_count += 1
-                            entry = Entry(
-                                uuid=str(uuid.uuid4()),
-                                ingestion=ingestion,
-                                string="",  # Empty for figures
-                                description=description,  # Use the grouped description
-                                figure_number=figure_count,
-                                title=f"Figure {figure_count}",
-                                consolidated_feature_type=feature_type,
-                                chunk_locations=chunk_locations,
-                                chunk_index=chunk_idx + 1,
-                            )
-                        else:  # Table types
-                            table_count += 1
-                            entry = Entry(
-                                uuid=str(uuid.uuid4()),
-                                ingestion=ingestion,
-                                string=content,  # Use the grouped content
-                                description=description,  # Use the grouped description
-                                table_number=table_count,
-                                title=f"Table {table_count}",
-                                consolidated_feature_type=feature_type,
-                                chunk_locations=chunk_locations,
-                                chunk_index=chunk_idx + 1,
-                            )
-                        chunk_idx += 1
-                        all_entries.append(entry)
-
-                    # Handle regular text blocks
+                        )
+                        all_entries.extend(entries)
+                        page_text.append(html_content)
+                    elif feature_type == ExtractedFeatureType.listgroup:
+                        # Handle nested list structures
+                        if "children" in child:
+                            for list_child in child["children"]:
+                                if "html" in list_child:
+                                    page_text.append(list_child["html"])
+                                    location = ChunkLocation(
+                                        index=Index(
+                                            primary=page_num + 1,
+                                            secondary=secondary_idx + 1,
+                                        ),
+                                        extracted_feature_type=_map_marker_type(list_child["block_type"]),
+                                        page_file_path=page_image_paths[page_num],
+                                        bounding_box=_polygon_to_bbox(
+                                            list_child["polygon"], page_width, page_height
+                                        ),
+                                    )
+                                    all_chunk_locations.append(location)
+                                    secondary_idx += 1
                     else:
-                        if content.strip():
-                            page_text.append(content)
-                            all_chunk_locations.extend(locations)
+                        # Collect regular text chunks
+                        if "html" in child:
+                            page_text.append(child["html"])
+                            location = ChunkLocation(
+                                index=Index(
+                                    primary=page_num + 1,
+                                    secondary=secondary_idx + 1,
+                                ),
+                                extracted_feature_type=feature_type,
+                                page_file_path=page_image_paths[page_num],
+                                bounding_box=_polygon_to_bbox(
+                                    child["polygon"], page_width, page_height
+                                ),
+                            )
+                            all_chunk_locations.append(location)
+                            secondary_idx += 1
 
-                # Create combined page entry only for regular text
-                if all_chunk_locations:
+                # After processing all children, create combined text Entry
+                if page_text:
                     combined_page_text = " ".join(page_text)
+                    page_entry_uuid = str(uuid.uuid4())
                     page_entry = Entry(
-                        uuid=str(uuid.uuid4()),
+                        uuid=page_entry_uuid,
                         ingestion=ingestion,
                         string=combined_page_text,
                         consolidated_feature_type=ExtractedFeatureType.combined_text,
@@ -750,262 +746,6 @@ async def main_datalab(
                     all_entries.append(page_entry)
                     all_text[page_num + 1] = combined_page_text
 
-        elif mode == "title":
-            current_section = []
-            current_section_locations = []
-            current_header = None
-            chunk_idx = 0
-            figure_count = 0  # Track figure numbers
-            table_count = 0  # Track table numbers
-            max_chunk_size = kwargs.get("max_chunk_size", 1000)
-
-            def create_section_chunks(
-                text: str, locations: list, header: str | None
-            ) -> list[Entry]:
-                """Helper function to create chunks from section text"""
-                if not text.strip() or not locations:
-                    return []
-
-                words = text.split()
-                chunks = []
-                current_chunk = []
-                current_size = 0
-
-                for word in words:
-                    new_size = current_size + len(word) + (1 if current_chunk else 0)
-                    if new_size > max_chunk_size and current_chunk:
-                        chunks.append(" ".join(current_chunk))
-                        current_chunk = [word]
-                        current_size = len(word)
-                    else:
-                        current_chunk.append(word)
-                        current_size = new_size
-
-                if current_chunk:
-                    chunks.append(" ".join(current_chunk))
-
-                nonlocal chunk_idx
-                entries = []
-                for chunk_text in chunks:
-                    chunk_idx += 1
-                    entries.append(
-                        Entry(
-                            uuid=str(uuid.uuid4()),
-                            ingestion=ingestion,
-                            string=chunk_text,
-                            consolidated_feature_type=ExtractedFeatureType.section_text,
-                            chunk_locations=locations,
-                            min_primary_index=min(
-                                loc.index.primary for loc in locations
-                            ),
-                            max_primary_index=max(
-                                loc.index.primary for loc in locations
-                            ),
-                            title=header,
-                            chunk_index=chunk_idx,
-                        )
-                    )
-                return entries
-
-            for page_num, page in enumerate(parsed_data["children"]):
-                if not page.get("children"):
-                    continue
-
-                # Get page dimensions
-                if read:
-                    img_bytes = await read(page_image_paths[page_num])
-                    img = Image.open(io.BytesIO(img_bytes))
-                    page_width, page_height = img.size
-                    img.close()
-                else:
-                    with Image.open(page_image_paths[page_num]) as img:
-                        page_width, page_height = img.size
-
-                for secondary_index, child in enumerate(page["children"]):
-                    if "html" not in child:
-                        continue
-
-                    # Clean text and get feature type
-                    text = (
-                        child["html"]
-                        .replace("<p>", "")
-                        .replace("</p>", "")
-                        .replace("<h1>", "")
-                        .replace("</h1>", "")
-                        .replace("<h2>", "")
-                        .replace("</h2>", "")
-                        .replace("<h4>", "")
-                        .replace("</h4>", "")
-                    ).strip()
-
-                    if not text:
-                        continue
-
-                    feature_type = _map_marker_type(child["block_type"])
-
-                    # Handle special blocks first
-                    if feature_type in [
-                        ExtractedFeatureType.table,
-                        ExtractedFeatureType.tablegroup,
-                        ExtractedFeatureType.figure,
-                        ExtractedFeatureType.figuregroup,
-                        ExtractedFeatureType.picture,
-                        ExtractedFeatureType.picturegroup,
-                        ExtractedFeatureType.complexregion,
-                    ]:
-                        extracted_path, bbox = await _extract_region(
-                            child=child,
-                            page_num=page_num,
-                            secondary_index=secondary_index,
-                            page_image_path=page_image_paths[page_num],
-                            page_dimensions=(page_width, page_height),
-                            extracts_dir=extracts_dir,
-                            feature_type=feature_type,
-                            read=read,
-                            write=write,
-                        )
-
-                        main_content, caption_text = _process_special_block(
-                            child, feature_type
-                        )
-
-                        chunk_idx += 1
-                        # Increment counters and set specific fields
-                        if feature_type in [
-                            ExtractedFeatureType.figure,
-                            ExtractedFeatureType.figuregroup,
-                        ]:
-                            figure_count += 1
-                            entry = Entry(
-                                uuid=str(uuid.uuid4()),
-                                ingestion=ingestion,
-                                string="",  # Empty for figures
-                                description=caption_text
-                                or main_content,  # Use caption if available, else content
-                                figure_number=figure_count,
-                                consolidated_feature_type=feature_type,
-                                chunk_locations=[
-                                    ChunkLocation(
-                                        index=Index(
-                                            primary=page_num + 1,
-                                            secondary=secondary_index + 1,
-                                        ),
-                                        extracted_feature_type=feature_type,
-                                        page_file_path=page_image_paths[page_num],
-                                        extracted_file_path=extracted_path,
-                                        bounding_box=bbox,
-                                    )
-                                ],
-                                chunk_index=chunk_idx,
-                                title=f"Figure {figure_count}",  # Add figure title
-                            )
-                        elif feature_type in [
-                            ExtractedFeatureType.table,
-                            ExtractedFeatureType.tablegroup,
-                        ]:
-                            table_count += 1
-                            entry = Entry(
-                                uuid=str(uuid.uuid4()),
-                                ingestion=ingestion,
-                                string=main_content,  # Keep table content in string
-                                description=caption_text,  # Add caption as description
-                                table_number=table_count,
-                                consolidated_feature_type=feature_type,
-                                chunk_locations=[
-                                    ChunkLocation(
-                                        index=Index(
-                                            primary=page_num + 1,
-                                            secondary=secondary_index + 1,
-                                        ),
-                                        extracted_feature_type=feature_type,
-                                        page_file_path=page_image_paths[page_num],
-                                        extracted_file_path=extracted_path,
-                                        bounding_box=bbox,
-                                    )
-                                ],
-                                chunk_index=chunk_idx,
-                                title=f"Table {table_count}",  # Add table title
-                            )
-                        else:
-                            # Handle other special blocks
-                            entry = Entry(
-                                uuid=str(uuid.uuid4()),
-                                ingestion=ingestion,
-                                string=text,
-                                consolidated_feature_type=feature_type,
-                                chunk_locations=[
-                                    ChunkLocation(
-                                        index=Index(
-                                            primary=page_num + 1,
-                                            secondary=secondary_index + 1,
-                                        ),
-                                        extracted_feature_type=feature_type,
-                                        page_file_path=page_image_paths[page_num],
-                                        extracted_file_path=extracted_path,
-                                        bounding_box=bbox,
-                                    )
-                                ],
-                                chunk_index=chunk_idx,
-                            )
-
-                        all_entries.append(entry)
-                        continue
-
-                    # Handle headers and text
-                    is_header = feature_type in [
-                        ExtractedFeatureType.section_header,
-                        ExtractedFeatureType.header,
-                    ]
-
-                    if is_header:
-                        # Process previous section before starting new one
-                        if current_section:
-                            section_entries = create_section_chunks(
-                                " ".join(current_section),
-                                current_section_locations,
-                                current_header,
-                            )
-                            all_entries.extend(section_entries)
-
-                        # Update header and reset section
-                        current_header = text
-                        current_section = []
-                        current_section_locations = []
-                    else:
-                        # Add text to current section
-                        current_section.append(text)
-                        current_section_locations.append(
-                            ChunkLocation(
-                                index=Index(
-                                    primary=page_num + 1,
-                                    secondary=secondary_index + 1,
-                                ),
-                                extracted_feature_type=ExtractedFeatureType.text,
-                                page_file_path=page_image_paths[page_num],
-                                bounding_box=_polygon_to_bbox(
-                                    child["polygon"],
-                                    page_width,
-                                    page_height,
-                                ),
-                            )
-                        )
-
-                        # Check if current section exceeds max size
-                        current_text = " ".join(current_section)
-                        if len(current_text) > max_chunk_size:
-                            section_entries = create_section_chunks(
-                                current_text, current_section_locations, current_header
-                            )
-                            all_entries.extend(section_entries)
-                            current_section = []
-                            current_section_locations = []
-
-            # Process final section if it exists
-            if current_section:
-                final_entries = create_section_chunks(
-                    " ".join(current_section), current_section_locations, current_header
-                )
-                all_entries.extend(final_entries)
         # write the combined text to the file
         if write:
             await write(
@@ -1026,14 +766,14 @@ if __name__ == "__main__":
 
     storage_client = LocalStorageBackend(base_path="/tmp/marker_service")
     test_ingestions = [
-        # Ingestion(
-        #     scope=Scope.INTERNAL,  # Required
-        #     creator_name="Test User",  # Required
-        #     ingestion_method=IngestionMethod.LOCAL_FILE,  # Required
-        #     file_type=FileType.PDF,
-        #     ingestion_date="2024-03-20T12:00:00Z",  # Required
-        #     file_path="/Users/pranaviyer/Downloads/TR0722-315a Appendix A.pdf",
-        # ),
+        Ingestion(
+            scope=Scope.INTERNAL,  # Required
+            creator_name="Test User",  # Required
+            ingestion_method=IngestionMethod.LOCAL_FILE,  # Required
+            file_type=FileType.PDF,
+            ingestion_date="2024-03-20T12:00:00Z",  # Required
+            file_path="/Users/pranaviyer/Downloads/TR0722-315a Appendix A.pdf",
+        ),
         Ingestion(
             scope=Scope.INTERNAL,
             creator_name="Test User",
@@ -1043,7 +783,7 @@ if __name__ == "__main__":
             file_path="/Users/pranaviyer/Desktop/AstralisData/E5_Paper.pdf",
         )
     ]
-    output = asyncio.run(main_datalab(test_ingestions, mode="simple", visualize=True))
+    output = asyncio.run(main_datalab(test_ingestions, mode="by_page", visualize=True))
     with open("datalab_output.json", "w") as f:
         for entry in output:
             f.write(json.dumps(entry.model_dump(), indent=4))
