@@ -4,7 +4,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -12,6 +11,7 @@ from src.pipeline.pipeline import PipelineOrchestrator
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.schema_registry import SchemaRegistry
 from src.pipeline.storage_backend import StorageBackend
+from src.schemas.schemas import BaseModelListType, RegisteredSchemaListType
 from src.sql_db.database_simple import get_session
 from src.sql_db.etl_crud import (
     clone_pipeline,
@@ -30,6 +30,52 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run ETL pipeline")
     parser.add_argument("--config", type=str, default="youtube_labels", help="config file name (default: youtube_labels)")
     return parser.parse_args()
+
+
+async def validate_collection_name(stages: list[dict], collection_name: str):
+    """
+    Ensure Qdrant collection name in Upsert stage is same as in Pipeline Config
+    """
+    for stage_config in stages:
+        if stage_config["name"] == "upsert":
+            if stage_config["functions"][0]["params"]["collection_name"] != collection_name:
+                raise ValueError("Collection name in upsert stage params must match pipeline collection name")
+
+
+async def get_step_results(session, pipeline_id: int, resume_from_step: int, storage: StorageBackend) -> list[RegisteredSchemaListType]:
+    """
+    Get results from a specific step
+    """
+    step = await get_specific_processing_step(session, pipeline_id, resume_from_step)
+    if not step:
+        return []
+
+    results = json.loads(await storage.read(step.output_path))
+    return [SchemaRegistry.get(item["schema__"]).model_validate(item) for item in results]
+
+
+async def get_last_step_results(session, pipeline_id: int, storage: StorageBackend) -> tuple[int, list[RegisteredSchemaListType]]:
+    """
+    Get results from the last successful step and begin the next step
+    """
+    latest_step = await get_latest_processing_step(session, pipeline_id)
+    if not latest_step:
+        return 0, []
+    results = json.loads(await storage.read(latest_step.output_path))
+    results = [SchemaRegistry.get(item["schema__"]).model_validate(item) for item in results]
+    return latest_step.order + 1, results
+
+
+async def update_pipeline_ids(results: list[BaseModelListType], new_pipeline_id: int) -> list[BaseModelListType]:
+    """
+    Update pipeline_id in Ingestions and Entries.
+    """
+    for item in results:
+        if hasattr(item, "pipeline_id"):  # Ingestion
+            item.pipeline_id = new_pipeline_id
+        elif hasattr(item, "ingestion"):  # Entry
+            item.ingestion.pipeline_id = new_pipeline_id
+    return results
 
 
 async def process_batch(session, items, pipeline):
@@ -52,7 +98,7 @@ async def process_batch(session, items, pipeline):
     return processed_results
 
 
-async def pipeline_step(session, pipeline, storage: StorageBackend, stage: str, order: int, function_name: str, input_data=None, **params):
+async def pipeline_step(session, pipeline, storage: StorageBackend, stage: str, order: int, function_name: str, **params):
     try:
         output_path = f"{pipeline.id}_{stage}_{function_name}_{order}.json"
         step = await create_processing_step(
@@ -94,77 +140,43 @@ async def pipeline_step(session, pipeline, storage: StorageBackend, stage: str, 
         raise e
 
 
-async def get_latest_step_results(session, pipeline_id: int, storage: StorageBackend) -> tuple[int, list[dict[str, Any]]]:
-    latest_step = await get_latest_processing_step(session, pipeline_id)
-    if latest_step:
-        results = json.loads(await storage.read(latest_step.output_path))
-        results = [SchemaRegistry.get(item["schema__"]).model_validate(item) for item in results]
-        return latest_step.order + 1, results  # start from the next step with the results from the last successful step
-    return 0, []
-
-
-async def get_step_results(session, pipeline_id: int, resume_from_step: int, storage: StorageBackend) -> tuple[int, list[dict[str, Any]]]:
-    step = await get_specific_processing_step(session, pipeline_id, resume_from_step)
-    if step:
-        results = json.loads(await storage.read(step.output_path))
-        results = [SchemaRegistry.get(item["schema__"]).model_validate(item) for item in results]
-        return resume_from_step, results
-    return 0, []
-
-
-async def update_pipeline_ids(results: list, new_pipeline_id: int) -> list:
-    """Update pipeline_id in results based on their schema type."""
-    for item in results:
-        if hasattr(item, "pipeline_id"):  # Ingestion
-            item.pipeline_id = new_pipeline_id
-        elif hasattr(item, "ingestion"):  # Entry
-            item.ingestion.pipeline_id = new_pipeline_id
-        if hasattr(item, "entries"):  # Document
-            for entry in item.entries:
-                if hasattr(entry, "pipeline_id"):
-                    entry.pipeline_id = new_pipeline_id
-                if hasattr(entry, "ingestion"):
-                    entry.ingestion.pipeline_id = new_pipeline_id
-    return results
-
-
 async def etl_pipeline(orchestrator: PipelineOrchestrator):
     config = orchestrator.config
+    pipeline_config = config["pipeline"]
 
     for session in get_session():
-        for stage_config in config["stages"]:
-            if stage_config["name"] == "upsert":
-                assert (
-                    stage_config["functions"][0]["params"]["collection_name"] == config["pipeline"]["collection_name"]
-                ), "Collection name in upsert stage params must match pipeline collection name"
-        # Create or get existing processing pipeline
-        pipeline = await create_or_get_processing_pipeline(session, config["pipeline"], config["storage"])
-        resume_from_step = config["pipeline"].get("resume_from_step", None)
-        fork_pipeline = config["pipeline"].get("fork_pipeline", None)
+        await validate_collection_name(config["stages"], pipeline_config["collection_name"])
 
-        # Note: The options are to clone a pipeline, overwrite and continue an old pipeline, or start a new one (step 0)
-        if resume_from_step:
-            # old pipeline to get the intermediate results
-            resume_from_step, latest_results = await get_step_results(session, pipeline.id, resume_from_step, orchestrator.storage)
-            if fork_pipeline:  # fork the pipeline starting at 'resume_from_step'
-                pipeline = await clone_pipeline(
-                    session, pipeline, resume_from_step, new_description=config["pipeline"].get("description")
-                )  # noqa
-                latest_results = await update_pipeline_ids(latest_results, pipeline.id)
-        else:  # pick up from last successful step
-            latest_step, latest_results = await get_latest_step_results(session, pipeline.id, orchestrator.storage)
-            resume_from_step = latest_step
+        # Create or load existing processing pipeline
+        pipeline = await create_or_get_processing_pipeline(session, pipeline_config, config["storage"])
 
-        step_order = resume_from_step
-        current_results = latest_results
-        print(f"Resuming from step {step_order} with Pipeline ID: {pipeline.id}", flush=True)
+        resume_from_step = pipeline_config.get("resume_from_step", None)
+        fork_pipeline = pipeline_config.get("fork_pipeline", None)
 
-        # Process all stages including ingestion
+        if not resume_from_step:
+            # start from last successful step
+            step_order, current_results = await get_last_step_results(session, pipeline.id, orchestrator.storage)
+
+        # resume from specific step or start from the first step
+        current_results = await get_step_results(session, pipeline.id, resume_from_step, orchestrator.storage)
+        step_order = resume_from_step if current_results else 0
+
+        if fork_pipeline:
+            # Create new pipeline branch
+            pipeline = await clone_pipeline(session, pipeline, resume_from_step, new_description=pipeline_config.get("description"))  # noqa
+            current_results = await update_pipeline_ids(current_results, pipeline.id)
+
+        logger.info(f"Resuming from step {step_order} with Pipeline ID: {pipeline.id}")
+
+        # process all stages
         for stage_config in config["stages"][step_order:]:
             stage = stage_config["name"].split("_")[0] if "_" in stage_config["name"] else stage_config["name"]
-            processed_results = []
+
+            # process all functions in the stage
+            stage_results = []
             for function in stage_config["functions"]:
-                result = await pipeline_step(
+
+                step_results = await pipeline_step(
                     session,
                     pipeline,
                     orchestrator.storage,
@@ -174,14 +186,15 @@ async def etl_pipeline(orchestrator: PipelineOrchestrator):
                     current_results if step_order > 0 else None,
                     **function.get("params", {}),
                 )
-                processed_results.extend(result)
-            step_order += 1
-            current_results = processed_results
+                stage_results.extend(step_results)
 
-        print("Creating Entries. No more processing steps to run", flush=True)
-        # TODO: Let us do this if we have type Entry
-        if current_results[0].schema__ == "Entry":
-            await create_entries(session, current_results, config["pipeline"].get("collection_name"))
+            # move to the next step and update current results
+            step_order += 1
+            current_results = stage_results
+
+        logger.info("Creating Entries. No more processing steps to run")
+        if current_results and current_results[0].schema__ == "Entry":
+            await create_entries(session, current_results, pipeline_config.get("collection_name"))
 
 
 if __name__ == "__main__":
