@@ -1,6 +1,7 @@
 import modal
 from modal import App, method
 import os
+import json
 from magic_pdf.data.data_reader_writer import FileBasedDataWriter, FileBasedDataReader
 from magic_pdf.data.dataset import PymuDocDataset
 from magic_pdf.model.doc_analyze_by_custom_model import doc_analyze
@@ -67,7 +68,7 @@ image = (
 )
 class MinerU:
     @method()
-    def process_pdf(self, pdf_data: bytes) -> dict:
+    def process_pdf_full(self, pdf_data: bytes) -> dict:
         # print if there is the config file
         print(f"Config file contents: {os.path.exists('/root/magic-pdf.json')}")
         print(f"Config file contents: {open('/root/magic-pdf.json').read()}")
@@ -152,12 +153,29 @@ class MinerU:
                 with open(file_path, "rb") as f:
                     output_files[file] = f.read()
 
-        return {
-            "middle_json": middle_json_content,
-            "inference_result": model_inference_result,
-            "content_list": content_list_content,
-            "output_files": output_files,
-        }
+        return json.loads(middle_json_content)
+
+    @method()
+    def process_pdf(self, pdf_data: bytes) -> dict:
+        pdf_file_name = "/tmp/abc.pdf"  # replace with the real pdf path
+        with open(pdf_file_name, "wb") as f:
+            f.write(pdf_data)
+        local_image_dir, local_md_dir = "output/images", "output"
+        os.makedirs(local_image_dir, exist_ok=True)
+        image_writer, md_writer = FileBasedDataWriter(
+            local_image_dir
+        ), FileBasedDataWriter(local_md_dir)
+        reader1 = FileBasedDataReader("")
+        pdf_bytes = reader1.read(pdf_file_name)  # read the pdf content
+        ds = PymuDocDataset(pdf_bytes)
+        if ds.classify() == SupportedPdfParseMethod.OCR:
+            infer_result = ds.apply(doc_analyze, ocr=True)
+            pipe_result = infer_result.pipe_ocr_mode(image_writer)
+        else:
+            infer_result = ds.apply(doc_analyze, ocr=False)
+            pipe_result = infer_result.pipe_txt_mode(image_writer)
+        middle_json_content = pipe_result.get_middle_json()
+        return json.loads(middle_json_content)
 
 
 if __name__ == "__main__":

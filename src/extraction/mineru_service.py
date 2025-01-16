@@ -21,113 +21,43 @@ from src.schemas.schemas import (
 )
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.utils.extraction_utils import convert_to_pdf
+from src.utils.visualize_utils import visualize_page_results, group_entries_by_page
 
 
-async def _visualize_page_results(
-    image_path: str, parsed_elements: list, read=None
-) -> bytes:
-    """
-    Visualize the parsed elements by drawing bounding boxes over the original image.
-    Returns the annotated image as bytes.
-    """
-    # Colors for different types of elements (based on MinerU CategoryType)
-    colors = {
-        0: "purple",  # title
-        1: "green",  # plain_text
-        2: "gray",  # abandon (headers, footers, etc)
-        3: "red",  # figure
-        4: "darkgreen",  # figure_caption
-        5: "blue",  # table
-        6: "darkblue",  # table_caption
-        7: "pink",  # table_footnote
-        8: "brown",  # isolate_formula
-        9: "darkbrown",  # formula_caption
-        13: "teal",  # embedding (inline formula)
-        14: "orange",  # isolated (block formula)
-        15: "green",  # text (OCR result)
-    }
-
-    # Read the image using the provided read function or directly
-    if read:
-        img_bytes = await read(image_path, mode="rb")
-        image = Image.open(io.BytesIO(img_bytes))
-    else:
-        image = Image.open(image_path)
-
-    draw = ImageDraw.Draw(image)
-
-    try:
-        font = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20
-        )
-    except Exception as e:
-        print(f"Error loading font: {e}")
-        font = ImageFont.load_default()
-
-    page_width, page_height = image.size
-
-    for element in parsed_elements:
-        # Convert polygon coordinates to bbox
-        x_coords = [element["polygon"][i] for i in range(0, len(element["polygon"]), 2)]
-        y_coords = [element["polygon"][i] for i in range(1, len(element["polygon"]), 2)]
-
-        left, top = min(x_coords), min(y_coords)
-        right, bottom = max(x_coords), max(y_coords)
-
-        color = colors.get(element["parsed_feature_type"], "white")
-        draw.rectangle([left, top, right, bottom], outline=color, width=2)
-
-        # Add label with type
-        label = str(element["parsed_feature_type"])
-        draw.rectangle(
-            [left, max(0, top - 10), left + 10, max(0, top - 10) + 10], fill="white"
-        )
-        draw.text((left, max(0, top - 10)), label, fill=color, font=font)
-
-    # Save to bytes instead of file
-    img_byte_arr = io.BytesIO()
-    image.save(img_byte_arr, format="PNG")
-    image.close()
-    return img_byte_arr.getvalue()
-
-
-def _map_mineru_type(category_id: int) -> ExtractedFeatureType:
-    """Maps MinerU CategoryType to our common ExtractedFeatureType enum"""
-    # CategoryType mapping to our ExtractedFeatureType
+def _map_mineru_type(block_type: str) -> ExtractedFeatureType:
+    """Maps MinerU BlockType to our common ExtractedFeatureType enum"""
+    # BlockType mapping to our ExtractedFeatureType
     mineru_to_common = {
-        0: ExtractedFeatureType.section_header,  # title
-        1: ExtractedFeatureType.text,  # plain_text
-        2: ExtractedFeatureType.other,  # abandon (headers, footers, etc)
-        3: ExtractedFeatureType.figure,  # figure
-        4: ExtractedFeatureType.caption,  # figure_caption
-        5: ExtractedFeatureType.table,  # table
-        6: ExtractedFeatureType.caption,  # table_caption
-        7: ExtractedFeatureType.footnote,  # table_footnote
-        8: ExtractedFeatureType.equation,  # isolate_formula
-        9: ExtractedFeatureType.caption,  # formula_caption
-        13: ExtractedFeatureType.textinlinemath,  # embedding (inline formula)
-        14: ExtractedFeatureType.equation,  # isolated (block formula)
-        15: ExtractedFeatureType.text,  # text (OCR result)
+        "image": ExtractedFeatureType.figure,
+        "image_body": ExtractedFeatureType.figure,
+        "image_caption": ExtractedFeatureType.caption,
+        "image_footnote": ExtractedFeatureType.footnote,
+        "table": ExtractedFeatureType.table,
+        "table_body": ExtractedFeatureType.table,
+        "table_caption": ExtractedFeatureType.caption,
+        "table_footnote": ExtractedFeatureType.footnote,
+        "text": ExtractedFeatureType.text,
+        "title": ExtractedFeatureType.section_header,
+        "interline_equation": ExtractedFeatureType.equation,
+        "footnote": ExtractedFeatureType.footnote,
+        "discarded": ExtractedFeatureType.other,
+        "list": ExtractedFeatureType.list,
+        "index": ExtractedFeatureType.other,
     }
-    output = mineru_to_common.get(category_id, ExtractedFeatureType.other)
+    output = mineru_to_common.get(block_type, ExtractedFeatureType.other)
     if output == ExtractedFeatureType.other:
-        print(f"Unknown category_id: {category_id}")
+        print(f"Unknown block_type: {block_type}")
     return output
 
 
-def _convert_poly_to_bbox(
-    poly: list[float], page_width: float, page_height: float
-) -> dict:
-    """Convert MinerU polygon format to our bbox format"""
-    # Poly format is [x1,y1,x2,y2,x3,y3,x4,y4] representing corners
-    x_coords = [poly[i] for i in range(0, len(poly), 2)]
-    y_coords = [poly[i] for i in range(1, len(poly), 2)]
-
+def _convert_bbox(bbox: list[float], page_width: float, page_height: float) -> dict:
+    """Convert MinerU bbox format to our bbox format"""
+    # MinerU bbox format is [left, top, right, bottom]
     return {
-        "left": min(x_coords),
-        "top": min(y_coords),
-        "width": max(x_coords) - min(x_coords),
-        "height": max(y_coords) - min(y_coords),
+        "left": bbox[0],
+        "top": bbox[1],
+        "width": bbox[2] - bbox[0],  # right - left
+        "height": bbox[3] - bbox[1],  # bottom - top
         "page_width": page_width,
         "page_height": page_height,
     }
@@ -153,6 +83,7 @@ def _process_para_blocks(
 
         # Initialize content
         content = ""
+        extracted_path = None
 
         # Recursively process nested lines or spans
         if "lines" in block:
@@ -199,11 +130,11 @@ def _process_para_blocks(
                     secondary=chunk_idx + 1,
                 ),
                 extracted_feature_type=feature_type,
+                extracted_file_path=extracted_path,
                 page_file_path=page_file_path,
-                bounding_box=_convert_poly_to_bbox(
-                    block.get("poly", []), page_width, page_height
+                bounding_box=_convert_bbox(
+                    block.get("bbox", []), page_width, page_height
                 ),
-                extracted_image_path=None,  # Update if extracting images
             )
 
             entry = Entry(
@@ -284,14 +215,23 @@ async def main_mineru(
         file_bytes.append(pdf_content)
 
     all_entries = []
-    # Process files in parallel using async map
-    async for result in obj.process_pdf.map.aio(file_bytes, return_exceptions=True):
-        if isinstance(result, Exception):
-            print(f"Error processing document: {result}")
-            continue
+    # # Process files in parallel using async map
+    # async for result in obj.process_pdf.map.aio(file_bytes, return_exceptions=True):
+    #     if isinstance(result, Exception):
+    #         print(f"Error processing document: {result}")
+    #         continue
+
+    for ingestion in ingestions:
+        # Read the JSON content from the file
+        with open("mineru_result.json", "r", encoding="utf-8") as f:
+            result = json.load(f)
+
+        # with open("mineru_result.json", "w") as f:
+        #     json.dump(result, f, indent=4)
 
         # Create output directories
         base_dir = os.path.dirname(ingestion.extracted_document_file_path)
+        base_dir = os.path.dirname(Path(__file__).resolve())  # current file directory
         pages_dir = os.path.join(base_dir, "pages")
         extracts_dir = os.path.join(base_dir, "extracts")
 
@@ -299,7 +239,7 @@ async def main_mineru(
         page_image_paths = {}
         if visualize:
             with fitz.open(stream=io.BytesIO(pdf_content), filetype="pdf") as doc:
-                for page_num in range(len(result["middle_json"]["pdf_info"])):
+                for page_num in range(len(result["pdf_info"])):
                     # Convert page to image
                     pix = doc[page_num].get_pixmap(matrix=fitz.Matrix(1, 1))
                     img_bytes = pix.tobytes("jpg")
@@ -318,12 +258,12 @@ async def main_mineru(
         counters = {"figure_count": 0, "table_count": 0}
 
         # Process each page
-        for page_result in result["middle_json"]["pdf_info"]:
+        for page_result in result["pdf_info"]:
             page_num = page_result["page_idx"]
             page_width, page_height = page_result["page_size"]
             page_file_path = f"{pages_dir}/page_{page_num + 1}.jpg"
 
-            # Process para_blocks recursively
+            # Process para_blocks
             entries, chunk_idx = _process_para_blocks(
                 blocks=page_result.get("para_blocks", []),
                 page_num=page_num,
@@ -337,6 +277,27 @@ async def main_mineru(
                 write=write,
             )
             all_entries.extend(entries)
+
+            # Visualize if requested
+            if visualize:
+                output_dir = os.path.join(base_dir, "annotated")
+                entries_by_page = group_entries_by_page(all_entries)
+
+                for page_num, elements in entries_by_page.items():
+                    if not elements:
+                        continue
+
+                    output_path = f"{output_dir}/page_{page_num + 1}_annotated.png"
+                    annotated_image = await visualize_page_results(
+                        page_image_paths[page_num], elements, read
+                    )
+
+                    if write:
+                        await write(output_path, annotated_image)
+                    else:
+                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                        with open(output_path, "wb") as f:
+                            f.write(annotated_image)
 
         # Write combined entries to file
         if write:

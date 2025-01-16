@@ -29,6 +29,7 @@ from src.schemas.schemas import (
 )
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.utils.extraction_utils import convert_to_pdf
+from src.utils.visualize_utils import visualize_page_results, group_entries_by_page
 
 
 def _map_marker_type(block_type: str) -> ExtractedFeatureType:
@@ -86,83 +87,6 @@ def _polygon_to_bbox(polygon, page_width, page_height):
         "page_width": page_width,
         "page_height": page_height,
     }
-
-
-async def _visualize_page_results(
-    image_path: str, parsed_elements: list, read=None
-) -> bytes:
-    """
-    Visualize the parsed elements by drawing bounding boxes over the original image.
-    Returns the annotated image as bytes.
-    """
-    # Colors for different types of elements
-    colors = {
-        "Figure": "red",
-        "FigureGroup": "red",
-        "Picture": "red",
-        "PictureGroup": "red",
-        "Table": "blue",
-        "TableGroup": "blue",
-        "Text": "green",
-        "Page": "yellow",
-        "PageHeader": "orange",
-        "PageFooter": "orange",
-        "SectionHeader": "purple",
-        "ListGroup": "cyan",
-        "ListItem": "magenta",
-        "Footnote": "pink",
-        "Equation": "brown",
-        "TextInlineMath": "teal",
-        "Line": "gray",
-        "Span": "lightgray",
-        "Caption": "darkgreen",
-        "Code": "darkblue",
-        "Form": "darkred",
-        "Handwriting": "violet",
-        "TableOfContents": "navy",
-        "Document": "white",
-        "ComplexRegion": "olive",
-    }
-
-    # Read the image using the provided read function or directly
-    if read:
-        img_bytes = await read(image_path, mode="rb")
-        image = Image.open(io.BytesIO(img_bytes))
-    else:
-        image = Image.open(image_path)
-
-    draw = ImageDraw.Draw(image)
-
-    try:
-        font = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20
-        )
-    except Exception as e:
-        print(f"Error loading font: {e}")
-        font = ImageFont.load_default()
-
-    page_width, page_height = image.size
-
-    for element in parsed_elements:
-        bbox = _polygon_to_bbox(element["polygon"], page_width, page_height)
-        left, top = bbox["left"], bbox["top"]
-        right = left + bbox["width"]
-        bottom = top + bbox["height"]
-
-        color = colors.get(element["parsed_feature_type"], "white")
-        draw.rectangle([left, top, right, bottom], outline=color, width=2)
-
-        label = element["parsed_feature_type"]
-        draw.rectangle(
-            [left, max(0, top - 10), left + 10, max(0, top - 10) + 10], fill="white"
-        )
-        draw.text((left, max(0, top - 10)), label, fill=color, font=font)
-
-    # Save to bytes instead of file
-    img_byte_arr = io.BytesIO()
-    image.save(img_byte_arr, format="PNG")
-    image.close()
-    return img_byte_arr.getvalue()
 
 
 async def _extract_region(
@@ -291,12 +215,19 @@ async def _process_child_element(
         )
 
         # Simple case: Individual figure/picture/table
-        if parent_feature_type in [
-            ExtractedFeatureType.figure,
-            ExtractedFeatureType.picture,
-            ExtractedFeatureType.table,
-        ] and parent_content:
-            if parent_feature_type in [ExtractedFeatureType.figure, ExtractedFeatureType.picture]:
+        if (
+            parent_feature_type
+            in [
+                ExtractedFeatureType.figure,
+                ExtractedFeatureType.picture,
+                ExtractedFeatureType.table,
+            ]
+            and parent_content
+        ):
+            if parent_feature_type in [
+                ExtractedFeatureType.figure,
+                ExtractedFeatureType.picture,
+            ]:
                 counters["figure_count"] += 1
                 element_number = counters["figure_count"]
                 number_type = "figure_number"
@@ -457,14 +388,21 @@ async def _process_child_element(
                 ),
                 extracted_feature_type=child_feature_type,
                 page_file_path=page_image_paths[page_num],
-                bounding_box=_polygon_to_bbox(sub_child["polygon"], page_width, page_height),
+                bounding_box=_polygon_to_bbox(
+                    sub_child["polygon"], page_width, page_height
+                ),
             )
 
             # Determine which parent to link to
             parent_uuid = None
             citation_type = None
-            if parent_feature_type in [ExtractedFeatureType.figuregroup, ExtractedFeatureType.picturegroup]:
-                parent_uuid = parent_elements.get(ExtractedFeatureType.figure) or parent_elements.get(ExtractedFeatureType.picture)
+            if parent_feature_type in [
+                ExtractedFeatureType.figuregroup,
+                ExtractedFeatureType.picturegroup,
+            ]:
+                parent_uuid = parent_elements.get(
+                    ExtractedFeatureType.figure
+                ) or parent_elements.get(ExtractedFeatureType.picture)
                 citation_type = RelationshipType.FIGURE_CAPTION
             elif parent_feature_type == ExtractedFeatureType.tablegroup:
                 parent_uuid = parent_elements.get(ExtractedFeatureType.table)
@@ -497,20 +435,17 @@ async def _process_child_element(
 
 
 async def _process_title_chunk(
-    accumulated_text: list,
-    chunk_locations: list,
-    ingestion: Ingestion,
-    chunk_idx: int
+    accumulated_text: list, chunk_locations: list, ingestion: Ingestion, chunk_idx: int
 ) -> tuple[Entry, int]:
     """
     Process accumulated text and locations into a single chunk Entry.
-    
+
     Args:
         accumulated_text: List of text strings in the chunk
         chunk_locations: List of ChunkLocation objects
         ingestion: Ingestion object
         chunk_idx: Current chunk index
-    
+
     Returns:
         tuple[Entry, int]: (Created entry, incremented chunk index)
     """
@@ -550,7 +485,7 @@ async def main_datalab(
         mode: "by_page" or "by_section" parsing mode
         visualize: If True, saves annotated PDFs with bounding boxes
         **kwargs: Additional arguments
-    
+
     Returns:
         List of Entry objects
     """
@@ -595,7 +530,7 @@ async def main_datalab(
             for page_num, page in enumerate(parsed_data["children"]):
                 # Convert page to image
                 pix = doc[page_num].get_pixmap(matrix=fitz.Matrix(1, 1))
-                img_bytes = pix.tobytes("jpg")  # Convert to jpg bytes
+                img_bytes = pix.tobytes("jpg")
                 page_image_path = f"{pages_dir}/page_{page_num + 1}.jpg"
                 if write:
                     await write(page_image_path, img_bytes)
@@ -604,51 +539,6 @@ async def main_datalab(
                     with open(page_image_path, "wb") as f:
                         f.write(img_bytes)
                 page_image_paths[page_num] = page_image_path
-
-                if visualize:
-                    output_dir = os.path.join(base_dir, "annotated")
-                    # Convert page to image for visualization
-                    pix = doc[page_num].get_pixmap(matrix=fitz.Matrix(1, 1))
-                    temp_bytes = pix.tobytes("png")
-                    temp_image_path = f"{output_dir}/temp_page_{page_num + 1}.png"
-
-                    # Save temporary image
-                    if write:
-                        await write(temp_image_path, temp_bytes)
-                    else:
-                        os.makedirs(os.path.dirname(temp_image_path), exist_ok=True)
-                        with open(temp_image_path, "wb") as f:
-                            f.write(temp_bytes)
-
-                    # Prepare elements for visualization
-                    elements = [
-                        {
-                            "parsed_feature_type": page["block_type"],
-                            "polygon": page["polygon"],
-                        }
-                    ]
-                    if page.get("children"):
-                        elements.extend(
-                            [
-                                {
-                                    "parsed_feature_type": child["block_type"],
-                                    "polygon": child["polygon"],
-                                }
-                                for child in page["children"]
-                            ]
-                        )
-
-                    # Create and save annotated version
-                    output_path = f"{output_dir}/page_{page_num + 1}_annotated.png"
-                    annotated_image = await _visualize_page_results(
-                        temp_image_path, elements, read
-                    )
-                    if write:
-                        await write(output_path, annotated_image)
-                    else:
-                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                        with open(output_path, "wb") as f:
-                            f.write(annotated_image)
 
         all_text = {}
         if mode == "by_page":
@@ -718,10 +608,14 @@ async def main_datalab(
                                             primary=page_num + 1,
                                             secondary=secondary_idx + 1,
                                         ),
-                                        extracted_feature_type=_map_marker_type(list_child["block_type"]),
+                                        extracted_feature_type=_map_marker_type(
+                                            list_child["block_type"]
+                                        ),
                                         page_file_path=page_image_paths[page_num],
                                         bounding_box=_polygon_to_bbox(
-                                            list_child["polygon"], page_width, page_height
+                                            list_child["polygon"],
+                                            page_width,
+                                            page_height,
                                         ),
                                     )
                                     all_chunk_locations.append(location)
@@ -769,12 +663,12 @@ async def main_datalab(
         elif mode == "by_title":
             chunk_idx = 0
             counters = {"figure_count": 0, "table_count": 0}
-            
+
             # Variables for title-based chunking
             current_chunk_text = []
             current_chunk_locations = []
             all_text = {}
-            
+
             for page_num, page in enumerate(parsed_data["children"]):
                 if not page.get("children"):
                     continue
@@ -824,19 +718,22 @@ async def main_datalab(
                         current_chunk_text.append(html_content)
                     else:
                         # Check if we hit a new section header or page header
-                        if feature_type in [ExtractedFeatureType.section_header, ExtractedFeatureType.header]:
+                        if feature_type in [
+                            ExtractedFeatureType.section_header,
+                            ExtractedFeatureType.header,
+                        ]:
                             # Process previous chunk if it exists
                             if current_chunk_text and current_chunk_locations:
                                 entry, chunk_idx = await _process_title_chunk(
                                     current_chunk_text,
                                     current_chunk_locations,
                                     ingestion,
-                                    chunk_idx
+                                    chunk_idx,
                                 )
                                 if entry:
                                     all_entries.append(entry)
                                     all_text[entry.min_primary_index] = entry.string
-                                
+
                                 # Reset accumulators
                                 current_chunk_text = []
                                 current_chunk_locations = []
@@ -864,7 +761,7 @@ async def main_datalab(
                         current_chunk_text,
                         current_chunk_locations,
                         ingestion,
-                        chunk_idx
+                        chunk_idx,
                     )
                     if entry:
                         all_entries.append(entry)
@@ -873,6 +770,29 @@ async def main_datalab(
                     # Reset accumulators
                     current_chunk_text = []
                     current_chunk_locations = []
+
+        # Handle visualization after processing entries if requested
+        if visualize:
+            output_dir = os.path.join(base_dir, "annotated")
+            # Group entries by page using the utility function
+            entries_by_page = group_entries_by_page(all_entries)
+
+            # Create visualizations for each page
+            for page_num, elements in entries_by_page.items():
+                if not elements:
+                    continue
+
+                output_path = f"{output_dir}/page_{page_num + 1}_annotated.png"
+                annotated_image = await visualize_page_results(
+                    page_image_paths[page_num], elements, read
+                )
+
+                if write:
+                    await write(output_path, annotated_image)
+                else:
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    with open(output_path, "wb") as f:
+                        f.write(annotated_image)
 
         # write the combined text to the file
         if write:
@@ -915,7 +835,9 @@ if __name__ == "__main__":
             f.write(json.dumps(entry.model_dump(), indent=4))
             f.write("\n")
 
-    title_output = asyncio.run(main_datalab(test_ingestions, mode="by_title", visualize=True))
+    title_output = asyncio.run(
+        main_datalab(test_ingestions, mode="by_title", visualize=True)
+    )
     with open("title_output.json", "w") as f:
         for entry in title_output:
             f.write(json.dumps(entry.model_dump(), indent=4))
