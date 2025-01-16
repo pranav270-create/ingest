@@ -2,14 +2,12 @@ import sys
 from pathlib import Path
 import modal
 import io
-import pandas as pd
 from docx import Document as DocxDocument
 from PIL import Image, ImageDraw, ImageFont
 import fitz
 import os
 import json
 import uuid
-import re
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
