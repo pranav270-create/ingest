@@ -1,12 +1,14 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import insert, select, inspect, and_
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 import hashlib
-from datetime import datetime
 import json
+from datetime import datetime
 
-from src.sql_db.etl_model import Ingest, ProcessingStep, Entry, ProcessingPipeline, ingest_pipeline, StepType
+from sqlalchemy import and_, insert, inspect, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.sql_db.etl_model import Entry, Ingest, ProcessingPipeline, ProcessingStep, StepType, ingest_pipeline
+
 
 async def create_or_update_ingest(session: AsyncSession, data: dict, pipeline=None) -> Ingest:
     # Get all column names of the Ingest model
@@ -57,12 +59,12 @@ async def create_or_update_ingest_batch(session: AsyncSession, items: list[dict]
     for data in items:
         # Filter and prepare the data
         ingest_data = {k: v for k, v in data.items() if k in ingest_fields}
-        
+
         # Create hash
         hash_items = {k: v for k, v in ingest_data.items() if k in hash_fields}
         hash_string = json.dumps(hash_items, sort_keys=True)
         hash_value = hashlib.sha256(hash_string.encode()).hexdigest()
-        
+
         hash_to_data[hash_value] = ingest_data
 
     try:
@@ -84,7 +86,7 @@ async def create_or_update_ingest_batch(session: AsyncSession, items: list[dict]
                 # Create new ingest
                 ingest = Ingest(**data, hash=hash_value)
                 session.add(ingest)
-            
+
             ingests[hash_value] = ingest
 
         session.flush()
@@ -130,9 +132,7 @@ async def create_or_get_processing_pipeline(session: AsyncSession, pipeline_conf
 
     # see if exists with that version and description
     if pipeline_id:
-        stmt = select(ProcessingPipeline).where(
-            (ProcessingPipeline.id == pipeline_id)
-        )
+        stmt = select(ProcessingPipeline).where(ProcessingPipeline.id == pipeline_id)
         result = session.execute(stmt)
         existing_pipeline = result.scalar_one_or_none()
         if existing_pipeline:
@@ -168,7 +168,7 @@ async def clone_pipeline(session: AsyncSession,
     )
     result = session.execute(stmt)
     ingests = result.scalars().all()
-    
+
     # Create new pipeline with incremented version
     new_pipeline = ProcessingPipeline(
         version=f"{original.version}-branch",
@@ -218,12 +218,22 @@ async def clone_pipeline(session: AsyncSession,
             "pipeline_id": new_pipeline.id
         }).on_conflict_do_nothing()
         session.execute(stmt)
-    
+
     session.commit()
     return new_pipeline
 
 
-async def create_processing_step(session: AsyncSession, pipeline_id: int, order: int, step_type: str, function_name: str, status: str, previous_step_id: int = None, output_path: str = None, metadata: dict = None) -> ProcessingStep:
+async def create_processing_step(
+        session: AsyncSession,
+        pipeline_id: int,
+        order: int,
+        step_type: str,
+        function_name: str,
+        status: str,
+        previous_step_id: int = None,
+        output_path: str = None,
+        metadata: dict = None
+    ) -> ProcessingStep:
     # see if step exists with that pipeline_id and order
     stmt = select(ProcessingStep).where(
         (ProcessingStep.pipeline_id == pipeline_id) &
@@ -344,26 +354,26 @@ async def create_entries(session: AsyncSession, data_list: list[dict], collectio
 async def update_ingests_from_results(input_data, session):
     """Update ingest records with latest data from processing results."""
     ingestion_updates = {}
-    
+
     # Collect all updates based on schema type
     for item in input_data:
         ingestion_id = None
         update_data = {}
-        
+
         if item.schema__ == "Ingestion":
             ingestion_id = item.ingestion_id
             # Get all fields that exist in both the item and Ingest model
             ingest_fields = [c.key for c in inspect(Ingest).columns if c.key != 'id']
             update_data = {
-                k: getattr(item, k) 
-                for k in ingest_fields 
+                k: getattr(item, k)
+                for k in ingest_fields
                 if hasattr(item, k) and getattr(item, k) is not None
             }
         elif item.schema__ == "Entry":
             ingestion_id = item.ingestion.ingestion_id
             update_data = {
-                k: getattr(item.ingestion, k) 
-                for k in inspect(Ingest).columns.keys() 
+                k: getattr(item.ingestion, k)
+                for k in inspect(Ingest).columns.keys()
                 if hasattr(item.ingestion, k) and getattr(item.ingestion, k) is not None
             }
         if ingestion_id and update_data:
@@ -374,11 +384,11 @@ async def update_ingests_from_results(input_data, session):
         stmt = select(Ingest).where(Ingest.id.in_(ingestion_updates.keys()))
         result = session.execute(stmt)
         ingests = result.scalars().all()
-        
+
         for ingest in ingests:
             for key, value in ingestion_updates[ingest.id].items():
                 setattr(ingest, key, value)
-        
+
         session.commit()
-    
+
     return input_data
