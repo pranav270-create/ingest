@@ -28,46 +28,47 @@ class Ingest(AsyncAttrs, AbstractBase):
     __tablename__ = 'ingest'
 
     id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True)
+    # document fields
     document_title: Mapped[str] = mapped_column(Text, nullable=False, comment="Title of the document")
-    public_url: Mapped[str] = mapped_column(Text, nullable=True, index=True, comment="URL to the public data")
-    creator_name: Mapped[str] = mapped_column(String(100), nullable=True, comment="Name of the creator of the data")
-    file_path: Mapped[str] = mapped_column(Text, nullable=True, index=True, comment="Cloud bucket path")
-    total_length: Mapped[int] = mapped_column(Integer, nullable=True, comment="Total length of the data")
-    creation_date: Mapped[datetime] = mapped_column(DateTime, nullable=True, comment="Date the data was created")
-    ingestion_method: Mapped[str] = mapped_column(String(50), nullable=False, comment="Method used to ingest the data")
-    ingestion_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Date the data was ingested")
     scope: Mapped[str] = mapped_column(String(50), nullable=False, comment="Scope of the data")
     content_type: Mapped[str] = mapped_column(String(50), nullable=True, comment="Type of content")
+    creator_name: Mapped[str] = mapped_column(String(100), nullable=True, comment="Name of the creator of the data")
+    creation_date: Mapped[datetime] = mapped_column(DateTime, nullable=True, comment="Date the data was created")
     file_type: Mapped[str] = mapped_column(String(100), nullable=True, comment="Type of file")
-    summary: Mapped[str] = mapped_column(Text, nullable=True, comment="Summary of the data")
-    keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the data")
-    metadata_field: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the data")
-    # TODO: Add the processed_file_path. Should be independant of VDB.
-    processed_file_path: Mapped[str] = mapped_column(String(255), nullable=True, comment="Path to the processed file")
-
+    file_path: Mapped[str] = mapped_column(Text, nullable=True, index=True, comment="Cloud bucket path")
+    file_size: Mapped[int] = mapped_column(Integer, nullable=True, comment="Size of the file in bytes")
+    public_url: Mapped[str] = mapped_column(Text, nullable=True, index=True, comment="URL to the public data")
+    # Ingestion Fields
+    # total_length: Mapped[int] = mapped_column(Integer, nullable=True, comment="Total length of the data")
+    ingestion_method: Mapped[str] = mapped_column(String(50), nullable=False, comment="Method used to ingest the data")
+    ingestion_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Date the data was ingested")
+    # Added fields
+    document_summary: Mapped[str] = mapped_column(Text, nullable=True, comment="Summary of the data")
+    document_keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the data")
+    document_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the data")
+    # Extraction fields
+    extraction_method: Mapped[str] = mapped_column(String(50), nullable=True, comment="Method used to extract the data")
+    extraction_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Date the data was extracted")
+    extracted_document_file_path: Mapped[str] = mapped_column(String(255), nullable=True, comment="Path to the processed file")
+    # Chunking fields
+    chunking_method: Mapped[str] = mapped_column(String(50), nullable=True, comment="Method used to chunk the data")
+    chunking_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the chunking")
+    chunking_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Date the data was chunked")
+    # Featurization fields
+    feature_models: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Models used to featurize the data")
+    feature_types: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Types of features used")
+    feature_dates: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Dates of the features used")
+    # Unprocessed citations
     unprocessed_citations: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Unprocessed citations")
 
     hash: Mapped[str] = mapped_column(String(64), primary_key=True, nullable=False, index=True, unique=True, comment="SHA256 hash of the data")
-    __table_args__ = (
-        UniqueConstraint('hash', name='uq_ingest_hash'),
-    )
-    processing_pipelines: Mapped[list["ProcessingPipeline"]] = relationship(
-        "ProcessingPipeline",
-        secondary="ingest_pipeline",
-        back_populates="ingests"
-    )
-    entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="ingest")
+    __table_args__ = (UniqueConstraint('hash', name='uq_ingest_hash'))
 
-    outgoing_relationships: Mapped[list["DocumentRelationship"]] = relationship(
-        "DocumentRelationship",
-        foreign_keys="[DocumentRelationship.source_id]",
-        back_populates="source"
-    )
-    incoming_relationships: Mapped[list["DocumentRelationship"]] = relationship(
-        "DocumentRelationship",
-        foreign_keys="[DocumentRelationship.target_id]",
-        back_populates="target"
-    )
+    # Relationships
+    processing_pipelines: Mapped[list["ProcessingPipeline"]] = relationship("ProcessingPipeline", secondary="ingest_pipeline", back_populates="ingests")  # noqa
+    entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="ingest")
+    outgoing_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.source_id]", back_populates="source")  # noqa
+    incoming_relationships: Mapped[list["DocumentRelationship"]] = relationship("DocumentRelationship", foreign_keys="[DocumentRelationship.target_id]", back_populates="target")  # noqa
 
 
 class ProcessingPipeline(AsyncAttrs, AbstractBase):
@@ -134,7 +135,7 @@ class ProcessingStep(AsyncAttrs, AbstractBase):
     )
 
     @validates('step_type')
-    def validate_step_type(self, key, value):
+    def validate_step_type(self, key, value): # noqa
         if isinstance(value, StepType):
             return value.value
         if value not in StepType._value2member_map_:
@@ -142,7 +143,7 @@ class ProcessingStep(AsyncAttrs, AbstractBase):
         return value
 
     @validates('status')
-    def validate_status(self, key, value):
+    def validate_status(self, key, value):  # noqa
         if isinstance(value, Status):
             return value.value
         if value not in Status._value2member_map_:
@@ -167,7 +168,7 @@ class RelationshipType(str, PythonEnum):
 class Entry(AsyncAttrs, AbstractBase):
     __tablename__ = 'entries'
 
-    uuid: Mapped[str] = mapped_column(String(255), unique=True, primary_key=True, nullable=False, comment="Unique identifier for the entry (e.g., URL, UUID)")
+    uuid: Mapped[str] = mapped_column(String(255), unique=True, primary_key=True, nullable=False, comment="Unique identifier for the entry (e.g., URL, UUID)")  # noqa
     collection_name: Mapped[str] = mapped_column(String(100), index=True, nullable=False, comment="Name of the collection the entry belongs to")
 
     keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the entry")
@@ -191,8 +192,8 @@ class Entry(AsyncAttrs, AbstractBase):
     ingest: Mapped[Optional[Ingest]] = relationship("Ingest", back_populates="entries")
 
     # Relationships
-    outgoing_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.source_id]", back_populates="source")
-    incoming_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.target_id]", back_populates="target")
+    outgoing_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.source_id]", back_populates="source")  # noqa
+    incoming_relationships: Mapped[list["EntryRelationship"]] = relationship("EntryRelationship", foreign_keys="[EntryRelationship.target_id]", back_populates="target")  # noqa
 
 
 class EntryRelationship(Base):
@@ -214,7 +215,7 @@ class EntryRelationship(Base):
     )
 
     @validates('relationship_type')
-    def validate_relationship_type(self, key, value):
+    def validate_relationship_type(self, key, value):  # noqa
         if isinstance(value, RelationshipType):
             return value.value
         if value not in RelationshipType._value2member_map_:
@@ -241,7 +242,7 @@ class DocumentRelationship(Base):
     )
 
     @validates('relationship_type')
-    def validate_relationship_type(self, key, value):
+    def validate_relationship_type(self, key, value):  # noqa
         if isinstance(value, RelationshipType):
             return value.value
         if value not in RelationshipType._value2member_map_:
