@@ -252,6 +252,7 @@ class EntryRelationship(Base):
     source_uuid: Mapped[str] = mapped_column(ForeignKey('entries.uuid'), nullable=False)
     target_uuid: Mapped[str] = mapped_column(ForeignKey('entries.uuid'), nullable=False)
     relationship_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    metadata_field: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the relationship")
 
     # Relationships
     source: Mapped["Entry"] = relationship("Entry", foreign_keys=[source_uuid], back_populates="outgoing_relationships")
@@ -265,6 +266,33 @@ class EntryRelationship(Base):
 
     @validates('relationship_type')
     def validate_relationship_type(self, key, value):  # noqa
+        if isinstance(value, RelationshipType):
+            return value.value
+        if value not in RelationshipType._value2member_map_:
+            raise ValueError(f"Invalid relationship type: {value}")
+        return value
+
+
+class IngestRelationship(Base):
+    __tablename__ = 'ingest_relationships'
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey('ingest.id'), nullable=False)
+    target_id: Mapped[int] = mapped_column(ForeignKey('ingest.id'), nullable=False)
+    relationship_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    metadata_field: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the relationship")
+
+    source: Mapped["Ingest"] = relationship("Ingest", foreign_keys=[source_id], back_populates="outgoing_relationships")
+    target: Mapped["Ingest"] = relationship("Ingest", foreign_keys=[target_id], back_populates="incoming_relationships")
+
+    __table_args__ = (
+        UniqueConstraint('source_id', 'target_id', 'relationship_type', name='uq_document_relationship'),
+        Index('ix_document_relationship_source', 'source_id'),
+        Index('ix_document_relationship_target', 'target_id'),
+    )
+
+    @validates('relationship_type')
+    def validate_relationship_type(self, key, value): # noqa
         if isinstance(value, RelationshipType):
             return value.value
         if value not in RelationshipType._value2member_map_:
