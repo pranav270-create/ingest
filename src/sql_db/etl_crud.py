@@ -331,15 +331,24 @@ class EntryCreationResult:
     total_processed: int
     new_entries: int
     skipped_duplicates: int
+    updated_entries: int
     failed_entries: int
     error_messages: List[str]
 
 
-async def create_entries(session: AsyncSession, data_list: list[EntrySchema], collection_name: str, batch_size: int = 1000) -> EntryCreationResult:
+async def create_entries(
+    session: AsyncSession,
+    data_list: list[EntrySchema],
+    collection_name: str,
+    version: str,
+    update_on_collision: bool = False,
+    batch_size: int = 1000
+) -> EntryCreationResult:
     result = EntryCreationResult(
         total_processed=len(data_list),
         new_entries=0,
         skipped_duplicates=0,
+        updated_entries=0,
         failed_entries=0,
         error_messages=[]
     )
@@ -368,6 +377,7 @@ async def create_entries(session: AsyncSession, data_list: list[EntrySchema], co
             if string_value:
                 string_value = string_value.replace('\x00', '').encode('utf-8', 'ignore').decode('utf-8')
 
+            # Create content hash from relevant fields
             content_to_hash = {
                 "string": string_value,
                 "ingestion_id": ingestion_id,
@@ -377,21 +387,41 @@ async def create_entries(session: AsyncSession, data_list: list[EntrySchema], co
                 "consolidated_feature_type": data.get("consolidated_feature_type"),
                 "added_featurization": json.dumps(data.get("added_featurization", {})),
                 "citations": data.get("citations", []),
+                "version": version
             }
             content_hash = hashlib.sha256(
                 json.dumps(content_to_hash, sort_keys=True).encode()
             ).hexdigest()
 
+            # Map all fields from schema to SQL model
             entry_data = {
+                # Core identification fields
                 "content_hash": content_hash,
                 "uuid": data.get("uuid"),
                 "collection_name": collection_name,
-                "keywords": json.dumps(data.get("keywords", [])),
-                "string": string_value,
-                "added_featurization": json.dumps(data.get("added_featurization", {})),
-                "index_numbers": json.dumps(data.get("index_numbers", [])),
                 "pipeline_id": pipeline_id,
-                "ingestion_id": ingestion_id
+                "ingestion_id": ingestion_id,
+
+                # Core content fields
+                "string": string_value,
+                "entry_title": data.get("entry_title"),
+                "keywords": json.dumps(data.get("keywords", [])),
+                "added_featurization": json.dumps(data.get("added_featurization", {})),
+
+                # Chunk location fields
+                "consolidated_feature_type": data.get("consolidated_feature_type"),
+                "chunk_locations": json.dumps(data.get("chunk_locations", [])),
+                "min_primary_index": data.get("min_primary_index"),
+                "max_primary_index": data.get("max_primary_index"),
+                "chunk_index": data.get("chunk_index"),
+                "table_number": data.get("table_number"),
+                "figure_number": data.get("figure_number"),
+
+                # Embedding fields
+                "embedded_feature_type": data.get("embedded_feature_type"),
+                "embedding_date": data.get("embedding_date"),
+                "embedding_model": data.get("embedding_model"),
+                "embedding_dimensions": data.get("embedding_dimensions"),
             }
             values.append(entry_data)
 
@@ -409,7 +439,13 @@ async def create_entries(session: AsyncSession, data_list: list[EntrySchema], co
                     existing_entry = result_query.scalar_one_or_none()
 
                     if existing_entry:
-                        result.skipped_duplicates += 1
+                        if update_on_collision:
+                            # Update existing entry with new data
+                            for key, value in entry_data.items():
+                                setattr(existing_entry, key, value)
+                            result.updated_entries += 1
+                        else:
+                            result.skipped_duplicates += 1
                         continue
                     else:
                         new_entry = Entry(**entry_data)

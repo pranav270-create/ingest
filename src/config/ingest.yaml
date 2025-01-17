@@ -21,9 +21,10 @@ stages:
 pipeline:
   version: "1.0"
   description: "test_pipeline_pranav_ocr2_0"
-  pipeline_id: 1
-  resume_from_step: 1
-  fork_pipeline: true
+  # pipeline_id: 2
+  # resume_from_step: 2
+  # update_on_collision: true  # Add this flag
+  # fork_pipeline: true
   # collection_name: "test_collection_pranav"
 
 storage:
