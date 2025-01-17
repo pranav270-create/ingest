@@ -137,7 +137,7 @@ async def pipeline_step(
         else:
             if input_results is None:
                 raise ValueError(f"Stage '{stage}' requires input results from previous stage")
-            results = await func(ingestions=input_results, **params, simple_mode=False)
+            results = await func(input_results, **params, simple_mode=False)
         logger.info(f"Function {function_name} \033[92mComplete\033[0m")
 
         # If this is the first step, run batched ingestion
