@@ -14,15 +14,16 @@ stages:
 
   - name: extract
     functions:
-      - name: datalab
+      - name: marker
         input: Ingestion
         return: Entry
 
 pipeline:
   version: "1.0"
-  description: "test_pipeline_pranav"
+  description: "test_pipeline_pranav_marker"
+  # pipeline_id: 3
+  # resume_from_step: 2
   # collection_name: "test_collection_pranav"
-  # pipeline_id: 1
 
 storage:
   storage_type: "local"

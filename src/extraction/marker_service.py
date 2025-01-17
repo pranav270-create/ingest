@@ -516,8 +516,8 @@ async def _process_title_chunk(
     return entries, chunk_idx
 
 
-@FunctionRegistry.register("extract", "datalab")
-async def main_datalab(
+@FunctionRegistry.register("extract", "marker")
+async def main_marker(
     ingestions: list[Ingestion],
     write=None,
     read=None,
@@ -875,14 +875,14 @@ if __name__ == "__main__":
             file_path="/Users/pranaviyer/Desktop/AstralisData/E5_Paper.pdf",
         )
     ]
-    # output = asyncio.run(main_datalab(test_ingestions, mode="by_page", visualize=True))
+    # output = asyncio.run(main_marker(test_ingestions, mode="by_page", visualize=True))
     # with open("datalab_output.json", "w") as f:
     #     for entry in output:
     #         f.write(json.dumps(entry.model_dump(), indent=4))
     #         f.write("\n")
 
     title_output = asyncio.run(
-        main_datalab(test_ingestions, mode="by_title", visualize=True)
+        main_marker(test_ingestions, mode="by_title", visualize=True)
     )
     with open("title_output.json", "w") as f:
         for entry in title_output:

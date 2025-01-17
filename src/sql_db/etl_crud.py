@@ -2,6 +2,8 @@ import hashlib
 import json
 from datetime import datetime
 from typing import Callable, Union
+from dataclasses import dataclass
+from typing import List, Optional
 
 from sqlalchemy import and_, inspect, select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
@@ -324,60 +326,118 @@ async def get_next_processing_step(session: AsyncSession, pipeline_id: int, curr
     return result.scalar_one_or_none()
 
 
-async def create_entries(session: AsyncSession, data_list: list[EntrySchema], collection_name: str, batch_size: int = 1000) -> list[Entry]:
+@dataclass
+class EntryCreationResult:
+    total_processed: int
+    new_entries: int
+    skipped_duplicates: int
+    failed_entries: int
+    error_messages: List[str]
+
+
+async def create_entries(session: AsyncSession, data_list: list[EntrySchema], collection_name: str, batch_size: int = 1000) -> EntryCreationResult:
+    result = EntryCreationResult(
+        total_processed=len(data_list),
+        new_entries=0,
+        skipped_duplicates=0,
+        failed_entries=0,
+        error_messages=[]
+    )
+
+    # Add debug logging
+    print(f"Starting to process {len(data_list)} entries for pipeline")
+
     for i in range(0, len(data_list), batch_size):
         batch = data_list[i:i+batch_size]
-        # Prepare the data for insertion
         values = []
         for data in batch:
             data = data.model_dump()
+            
+            # Get pipeline_id from ingestion
+            pipeline_id = data.get("ingestion", {}).get("pipeline_id")
+            if not pipeline_id:
+                result.failed_entries += 1
+                result.error_messages.append(f"Missing pipeline_id for entry with hash {data.get('content_hash')}")
+                continue
+
+            ingestion_id = data.get("ingestion", {}).get("ingestion_id")
+            if not ingestion_id:
+                result.failed_entries += 1
+                result.error_messages.append(f"Missing ingestion_id for entry with hash {data.get('content_hash')}")
+                continue
 
             # Sanitize string fields
             string_value = data.get("string")
             if string_value:
                 string_value = string_value.replace('\x00', '').encode('utf-8', 'ignore').decode('utf-8')
 
-            context_summary = data.get("context_summary_string")
-            if context_summary:
-                context_summary = context_summary.replace('\x00', '').encode('utf-8', 'ignore').decode('utf-8')
+            content_to_hash = {
+                "string": string_value,
+                "ingestion_id": ingestion_id,
+                "chunk_locations": data.get("chunk_locations", []),
+                "entry_title": data.get("entry_title"),
+                "keywords": data.get("keywords"),
+                "consolidated_feature_type": data.get("consolidated_feature_type"),
+                "added_featurization": json.dumps(data.get("added_featurization", {})),
+                "citations": data.get("citations", []),
+            }
+            content_hash = hashlib.sha256(
+                json.dumps(content_to_hash, sort_keys=True).encode()
+            ).hexdigest()
 
             entry_data = {
+                "content_hash": content_hash,
                 "uuid": data.get("uuid"),
                 "collection_name": collection_name,
                 "keywords": json.dumps(data.get("keywords", [])),
                 "string": string_value,
-                "context_summary_string": context_summary,
                 "added_featurization": json.dumps(data.get("added_featurization", {})),
                 "index_numbers": json.dumps(data.get("index_numbers", [])),
-                "pipeline_id": data.get("pipeline_id"),
-                "ingestion_id": data.get("ingestion_id")
+                "pipeline_id": pipeline_id,
+                "ingestion_id": ingestion_id
             }
             values.append(entry_data)
 
         try:
-            # dialect = session.get_bind().dialect.name
-            # insert_stmt = await get_insert_stmt(dialect)
-
-            # Process each entry - check if exists and update, or create new
+            # Process each entry - check for hash collisions within same pipeline
             for entry_data in values:
-                # Check if entry exists
-                stmt = select(Entry).where(Entry.uuid == entry_data["uuid"])
-                result = await session.execute(stmt)
-                existing_entry = result.scalar_one_or_none()
+                try:
+                    # Debug logging for duplicate check
+                    print(f"Checking for duplicate: hash={entry_data['content_hash']}, pipeline_id={entry_data['pipeline_id']}")
+                    
+                    stmt = select(Entry).where(
+                        and_(
+                            Entry.content_hash == entry_data["content_hash"],
+                            Entry.pipeline_id == entry_data["pipeline_id"]
+                        )
+                    )
+                    result_query = await session.execute(stmt)
+                    existing_entry = result_query.scalar_one_or_none()
 
-                if existing_entry:
-                    # Update existing entry
-                    for key, value in entry_data.items():
-                        setattr(existing_entry, key, value)
-                else:
-                    # Create new entry
-                    new_entry = Entry(**entry_data)
-                    session.add(new_entry)
+                    if existing_entry:
+                        print(f"Found duplicate entry: hash={entry_data['content_hash']}, pipeline={entry_data['pipeline_id']}")
+                        result.skipped_duplicates += 1
+                        continue
+                    else:
+                        print(f"Creating new entry: hash={entry_data['content_hash']}, pipeline={entry_data['pipeline_id']}")
+                        new_entry = Entry(**entry_data)
+                        session.add(new_entry)
+                        result.new_entries += 1
+
+                except Exception as e:
+                    result.failed_entries += 1
+                    result.error_messages.append(f"Error processing entry: {str(e)}")
+                    print(f"Error processing entry: {str(e)}")
 
             await session.commit()
+
         except SQLAlchemyError as e:
             await session.rollback()
-            print(f"Error inserting batch: {e}")
+            result.error_messages.append(f"Error in batch commit: {str(e)}")
+            result.failed_entries += len(values)
+            print(f"SQLAlchemy error: {str(e)}")
+
+    return result
 
 
 async def update_ingests_from_results(session: AsyncSession, input_data: list[dict]):

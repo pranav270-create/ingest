@@ -59,7 +59,7 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
             ingestion.extracted_document_file_path = f"{base_path}_ocr.txt"
 
         # Get file content and process
-        file_content = await read(ingestion.file_path, mode="rb") if read else open(ingestion.file_path, "rb").read()
+        file_content = await read(ingestion.file_path) if read else open(ingestion.file_path, "rb").read()
         is_pdf = file_content.startswith(b'%PDF')
 
         if is_pdf:
@@ -98,10 +98,14 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
             uuid=str(uuid.uuid4()),
             ingestion=ingestions[ing_idx],
             string=ret,
-            consolidated_feature_type=ExtractedFeatureType.TEXT,
-            chunk_locations=[ChunkLocation(index=Index(primary=page_num), page_file_path=ingestions[ing_idx].file_path, extracted_feature_type=ExtractedFeatureType.TEXT)],
-            min_primary_index=page_num,
-            max_primary_index=page_num,
+            consolidated_feature_type=ExtractedFeatureType.text,
+            chunk_locations=[ChunkLocation(
+                index=Index(primary=page_num + 1),
+                page_file_path=ingestions[ing_idx].file_path,
+                extracted_feature_type=ExtractedFeatureType.text
+            )],
+            min_primary_index=page_num + 1,
+            max_primary_index=page_num + 1,
             chunk_index=idx + 1,
         )
         all_entries.append(entry)
@@ -113,7 +117,7 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
         if document_texts[ing_idx]:  # Only save if we have processed text
             combined_text = "\n\n=== PAGE BREAK ===\n\n".join(document_texts[ing_idx])
             if write:
-                await write(ingestion.extracted_document_file_path, combined_text, mode="w")
+                await write(ingestion.extracted_document_file_path, combined_text)
             else:
                 with open(ingestion.extracted_document_file_path, "w", encoding='utf-8') as f:
                     f.write(combined_text)
