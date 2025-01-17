@@ -445,7 +445,7 @@ async def __process_para_blocks(
     return entries, chunk_idx
 
 
-@FunctionRegistry.register("parse", "mineru")
+@FunctionRegistry.register("extract", "mineru")
 async def main_mineru(
     ingestions: list[Ingestion],
     write=None,

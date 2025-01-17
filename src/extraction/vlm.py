@@ -7,13 +7,12 @@ from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Entry, Ingestion, ExtractedFeatureType, ExtractionMethod
+from src.schemas.schemas import Entry, Ingestion, ExtractionMethod
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.utils.datetime_utils import get_current_utc_datetime
-from src.llm_utils.utils import Provider
+from src.llm_utils.utils import text_cost_parser
 
-
-client = AsyncOpenAI(api_key=get_api_key(Provider.OPENAI))
+client = AsyncOpenAI()
 
 
 async def compare_with_vlm(page_image: bytes) -> dict:
@@ -43,7 +42,7 @@ async def compare_with_vlm(page_image: bytes) -> dict:
         return eval(text)
     except Exception as e:
         print(e)
-        return {"error": "Failed to parse VLM response"} 
+        return {"error": "Failed to parse VLM response"}
 
 
 def pdf_to_images(pdf_content):
@@ -57,7 +56,7 @@ def pdf_to_images(pdf_content):
     return images
 
 
-@FunctionRegistry.register("parse", "vlm")
+@FunctionRegistry.register("extract", "vlm")
 async def vlm_parse(ingestions: list[Ingestion], read=None, write=None, **kwargs):
     all_entries = []
     for ingestion in ingestions:

@@ -464,7 +464,7 @@ async def _process_title_chunk(
     return entry, chunk_idx + 1
 
 
-@FunctionRegistry.register("parse", "datalab")
+@FunctionRegistry.register("extract", "datalab")
 async def main_datalab(
     ingestions: list[Ingestion],
     write=None,

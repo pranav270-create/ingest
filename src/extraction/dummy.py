@@ -7,7 +7,7 @@ from src.schemas.schemas import Entry, Ingestion, ExtractedFeatureType, Extracti
 from src.pipeline.registry.function_registry import FunctionRegistry
 
 
-@FunctionRegistry.register("parse", "dummy")
+@FunctionRegistry.register("extract", "dummy")
 async def parse_dummy(ingestions: list[Ingestion], read=None, write=None, **kwargs) -> list[Entry]:
     all_entries = []
     for ingestion in ingestions:
