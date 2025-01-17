@@ -1,17 +1,17 @@
 stages:
   - name: ingest
     functions:
-      - name: s3
+      - name: local
         input: null
         return: Ingestion
         params:
-          bucket_name: "astralis-data-4170a4f6"
-          prefix: "docbench/news/179"
-          ending_with: ".pdf"
+          directory_path:
+            - "/Users/pranaviyer/Desktop/AstralisData/"
+            - "/Users/pranaviyer/Desktop/Papers to Read"
           added_metadata:
             document_title: "docbench"
             content_type: "other"
-            ingestion_method: "s3"
+            ingestion_method: "local_file"
             file_type: "pdf"
 
   - name: extract
@@ -22,7 +22,7 @@ stages:
 
 pipeline:
   version: "1.0"
-  description: "test_pipeline_pranav_simple"
+  description: "test_pipeline_pranav_ingest_local"
   # pipeline_id: 1
   # resume_from_step: 2
   # update_on_collision: true  # Add this flag

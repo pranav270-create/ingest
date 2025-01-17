@@ -7,6 +7,7 @@ import fitz  # PyMuPDF
 import hashlib
 import aioboto3
 from botocore.exceptions import ClientError
+from typing import Union
 
 sys.path.append(str(Path(__file__).parents[3]))
 
@@ -32,20 +33,26 @@ def get_file_type(file_path: str) -> FileType:
         elif main_type == "application":
             if sub_type == "pdf":
                 return FileType.PDF
-            elif sub_type in ["msword", "vnd.openxmlformats-officedocument.wordprocessingml.document"]:
+            elif sub_type in [
+                "msword",
+                "vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ]:
                 return FileType.DOCX
-            elif sub_type in ["vnd.ms-powerpoint", "vnd.openxmlformats-officedocument.presentationml.presentation"]:
+            elif sub_type in [
+                "vnd.ms-powerpoint",
+                "vnd.openxmlformats-officedocument.presentationml.presentation",
+            ]:
                 return FileType.PPTX
-            elif sub_type in ["vnd.ms-excel", "vnd.openxmlformats-officedocument.spreadsheetml.sheet"]:
+            elif sub_type in [
+                "vnd.ms-excel",
+                "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ]:
                 return FileType.XLSX
     return FileType.TXT  # Default to TXT if unable to determine
 
 
 async def create_ingestion_from_s3(
-    session,
-    bucket_name: str,
-    s3_key: str,
-    write=None
+    session, bucket_name: str, s3_key: str, write=None
 ) -> Ingestion:
     # Get file info
     file_name = os.path.basename(s3_key)
@@ -59,11 +66,11 @@ async def create_ingestion_from_s3(
     ) as s3:
         # Get object metadata
         response = await s3.head_object(Bucket=bucket_name, Key=s3_key)
-        file_size = response['ContentLength']
+        file_size = response["ContentLength"]
 
         # Download file content
         response = await s3.get_object(Bucket=bucket_name, Key=s3_key)
-        async with response['Body'] as stream:
+        async with response["Body"] as stream:
             file_content = await stream.read()
 
         # Handle file upload if write function provided
@@ -84,8 +91,8 @@ async def create_ingestion_from_s3(
         document_title=file_name,
         scope=Scope.INTERNAL,
         content_type=None,
-        creator_name=document_metadata.get('author', DEFAULT_CREATOR),
-        creation_date=parse_datetime(response['LastModified'].timestamp()),
+        creator_name=document_metadata.get("author", DEFAULT_CREATOR),
+        creation_date=parse_datetime(response["LastModified"].timestamp()),
         file_type=file_type,
         file_path=s3_key,
         file_size=file_size,
@@ -105,58 +112,85 @@ async def create_ingestion_from_s3(
         feature_models=None,
         feature_dates=None,
         feature_types=None,
-        unprocessed_citations=None
+        unprocessed_citations=None,
     )
 
 
 @FunctionRegistry.register("ingest", "s3")
 async def ingest_s3_folder(
     bucket_name: str,
-    prefix: str = "",
+    prefix: Union[str, list[str]] = "",
     ending_with: str = "",
     added_metadata: dict = {},
     write=None,
-    **kwargs
+    batch_size: int = 10,
+    **kwargs,
 ) -> list[Ingestion]:
-    session = aioboto3.Session()
     all_ingestions = []
+    prefixes = prefix if isinstance(prefix, list) else [prefix]
 
+    async def process_batch(s3_client, batch_keys):
+        tasks = []
+        for key in batch_keys:
+            tasks.append(create_ingestion_from_s3(s3_client, bucket_name, key, write))
+        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+        return [
+            update_ingestion_with_metadata(result, added_metadata)
+            for result in batch_results
+            if not isinstance(result, Exception)
+        ]
+
+    session = aioboto3.Session()
     async with session.client(
         "s3",
         aws_access_key_id=aws_access_key_id,
         aws_secret_access_key=aws_secret_access_key,
         region_name=region_name,
     ) as s3:
-        paginator = s3.get_paginator('list_objects_v2')
-        async for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-            if 'Contents' not in page:
-                continue
-            for obj in page['Contents']:
-                key = obj['Key']
-                # Skip if it's just a folder marker (empty object ending with /)
-                if key.endswith('/') and obj['Size'] == 0:
+        for current_prefix in prefixes:
+            current_batch = []
+            paginator = s3.get_paginator("list_objects_v2")
+
+            async for page in paginator.paginate(
+                Bucket=bucket_name, Prefix=current_prefix
+            ):
+                if "Contents" not in page:
                     continue
-                # Skip files that don't match the ending if specified
-                if ending_with and not key.lower().endswith(ending_with.lower()):
-                    continue
+
+                for obj in page["Contents"]:
+                    key = obj["Key"]
+                    # Skip if it's just a folder marker or doesn't match ending
+                    if (key.endswith("/") and obj["Size"] == 0) or (
+                        ending_with and not key.lower().endswith(ending_with.lower())
+                    ):
+                        continue
+
+                    current_batch.append(key)
+
+                    # Process batch when it reaches batch_size
+                    if len(current_batch) >= batch_size:
+                        try:
+                            batch_results = await process_batch(s3, current_batch)
+                            all_ingestions.extend(batch_results)
+                        except Exception as e:
+                            print(f"Error processing batch: {str(e)}")
+                        current_batch = []
+
+            # Process remaining items in the last batch
+            if current_batch:
                 try:
-                    ingestion = await create_ingestion_from_s3(
-                        session,
-                        bucket_name,
-                        key,
-                        write
-                    )
-                    ingestion = update_ingestion_with_metadata(ingestion, added_metadata)
-                    all_ingestions.append(ingestion)
-                except ClientError as e:
-                    print(f"Error processing {obj['Key']}: {str(e)}")
-                    continue
+                    batch_results = await process_batch(s3, current_batch)
+                    all_ingestions.extend(batch_results)
+                except Exception as e:
+                    print(f"Error processing final batch: {str(e)}")
+
     return all_ingestions
 
 
 if __name__ == "__main__":
     import asyncio
     import sys
+
     if len(sys.argv) > 1:
         directory_path = sys.argv[1]
         asyncio.run(ingest_s3_folder(directory_path))

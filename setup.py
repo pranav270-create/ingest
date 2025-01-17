@@ -56,7 +56,10 @@ setup(
         "magic-pdf[full]",
         "unstructured",
         "unstructured-client",
-        "aioboto3"
+        "aioboto3",
+        "networkx",
+        "pyvis",
+        "alembic"
     ],
     extras_require={
         "dev": [
