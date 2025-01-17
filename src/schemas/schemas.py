@@ -179,6 +179,15 @@ class ExtractedFeatureType(str, Enum):
     document = "document"                # From Marker.Document
     complexregion = "complexregion"           # From Marker.ComplexRegion
 
+    # MinerU-specific types
+    table_body = "table_body"                 # From MinerU.LAYOUT_TABLE_BODY
+    table_caption = "table_caption"           # From MinerU.LAYOUT_TABLE_CAPTION
+    table_footnote = "table_footnote"           # From MinerU.LAYOUT_TABLE_FOOTNOTE
+    image_body = "image_body"                 # From MinerU.LAYOUT_IMAGE_BODY
+    image_caption = "image_caption"           # From MinerU.LAYOUT_IMAGE_CAPTION
+    image_footnote = "image_footnote"           # From MinerU.LAYOUT_IMAGE_FOOTNOTE
+    index = "index"                             # From MinerU.LAYOUT_INDEX
+
     # Textract-specific types (original: LAYOUT_* -> lowercase)
     key_value = "key_value"               # From Textract.LAYOUT_KEY_VALUE
 
@@ -225,6 +234,8 @@ class RelationshipType(str, Enum):
     SYNTHETIC = "synthetic"
     FIGURE_CAPTION = "figure_caption"
     TABLE_CAPTION = "table_caption"
+    TABLE_FOOTNOTE = "table_footnote"
+    FIGURE_FOOTNOTE = "figure_footnote"
 
 
 class Index(BaseModel):
@@ -394,6 +405,9 @@ class Entry(BaseModel):
     embedding_date: Optional[str] = None # embedding_date = date of embedding
     embedding_model: Optional[str] = None # embedding_model = name of model used
     embedding_dimensions: Optional[int] = None # embedding_dimensions = dimensions of embedding
+
+    # Random
+    added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
 
     # Graph DB
     citations: Optional[list[Citation]] = None

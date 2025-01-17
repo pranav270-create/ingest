@@ -30,6 +30,13 @@ wheels/
 *.xls
 *.pdf
 *.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.ico
+*.webp
 
 # Virtual Environment
 venv/

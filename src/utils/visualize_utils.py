@@ -108,14 +108,7 @@ async def visualize_page_results(
         image = Image.open(image_path)
 
     draw = ImageDraw.Draw(image)
-
-    try:
-        font = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20
-        )
-    except Exception as e:
-        print(f"Error loading font: {e}")
-        font = ImageFont.load_default()
+    font = ImageFont.load_default()
 
     for element in elements:
         feature_type = element["feature_type"]

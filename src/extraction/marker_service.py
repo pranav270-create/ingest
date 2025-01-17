@@ -432,36 +432,88 @@ async def _process_child_element(
     return entries, chunk_idx, secondary_idx, counters, html_content
 
 
-async def _process_title_chunk(
-    accumulated_text: list, chunk_locations: list, ingestion: Ingestion, chunk_idx: int
-) -> tuple[Entry, int]:
+def _is_header(text: str, feature_type: ExtractedFeatureType) -> tuple[bool, int]:
     """
-    Process accumulated text and locations into a single chunk Entry.
+    Check if text is a header and return its level.
+    Returns (is_header, header_level)
+    """
+    header_types = [ExtractedFeatureType.header, ExtractedFeatureType.section_header]
 
-    Args:
-        accumulated_text: List of text strings in the chunk
-        chunk_locations: List of ChunkLocation objects
-        ingestion: Ingestion object
-        chunk_idx: Current chunk index
+    if feature_type not in header_types:
+        return False, 0
 
-    Returns:
-        tuple[Entry, int]: (Created entry, incremented chunk index)
+    # Check HTML header tags
+    for i in range(1, 7):  # h1 through h6
+        if f"<h{i}" in text.lower():
+            return True, i
+
+    return True, 1  # Default to level 1 if no specific tag found
+
+
+async def _process_title_chunk(
+    accumulated_text: list,
+    chunk_locations: list,
+    ingestion: Ingestion,
+    chunk_idx: int,
+    force_create: bool = False
+) -> tuple[list[Entry], int]:
+    """
+    Process accumulated text and locations into chunks, splitting on headers.
+    Returns (list of entries, new chunk_idx)
     """
     if not accumulated_text or not chunk_locations:
-        return None, chunk_idx
+        return [], chunk_idx
 
-    combined_text = " ".join(accumulated_text)
-    entry = Entry(
-        uuid=str(uuid.uuid4()),
-        ingestion=ingestion,
-        string=combined_text,
-        consolidated_feature_type=ExtractedFeatureType.combined_text,
-        chunk_locations=chunk_locations,
-        min_primary_index=min(loc.index.primary for loc in chunk_locations),
-        max_primary_index=max(loc.index.primary for loc in chunk_locations),
-        chunk_index=chunk_idx + 1,
-    )
-    return entry, chunk_idx + 1
+    entries = []
+    current_text = []
+    current_locations = []
+    current_title = None
+
+    for text, location in zip(accumulated_text, chunk_locations):
+        is_header, level = _is_header(text, location.extracted_feature_type)
+
+        if is_header:
+            # Create chunk from accumulated content before this header
+            if current_text:
+                entry = Entry(
+                    uuid=str(uuid.uuid4()),
+                    ingestion=ingestion,
+                    string=" ".join(current_text),
+                    entry_title=current_title,
+                    consolidated_feature_type=ExtractedFeatureType.combined_text,
+                    chunk_locations=current_locations,
+                    min_primary_index=min(loc.index.primary for loc in current_locations),
+                    max_primary_index=max(loc.index.primary for loc in current_locations),
+                    chunk_index=chunk_idx + 1,
+                )
+                entries.append(entry)
+                chunk_idx += 1
+
+            # Start new chunk with this header
+            current_text = [text]  # Include header in the text
+            current_locations = [location]  # Include header location
+            current_title = text.strip()
+        else:
+            current_text.append(text)
+            current_locations.append(location)
+
+    # Handle remaining content
+    if current_text or force_create:
+        entry = Entry(
+            uuid=str(uuid.uuid4()),
+            ingestion=ingestion,
+            string=" ".join(current_text) if current_text else "",
+            entry_title=current_title,
+            consolidated_feature_type=ExtractedFeatureType.combined_text,
+            chunk_locations=current_locations,
+            min_primary_index=min(loc.index.primary for loc in current_locations) if current_locations else 0,
+            max_primary_index=max(loc.index.primary for loc in current_locations) if current_locations else 0,
+            chunk_index=chunk_idx + 1,
+        )
+        entries.append(entry)
+        chunk_idx += 1
+
+    return entries, chunk_idx
 
 
 @FunctionRegistry.register("extract", "datalab")
@@ -490,10 +542,10 @@ async def main_datalab(
     all_entries = []
     file_bytes = []
     ingestion_map = {}  # Map to track file_bytes index to ingestion
-    
+
     cls = modal.Cls.lookup("marker-modal", "Model")
     obj = cls()
-    
+
     # First collect all file bytes
     for idx, ingestion in enumerate(ingestions):
         ingestion.extraction_method = ExtractionMethod.MARKER
@@ -503,7 +555,11 @@ async def main_datalab(
             base_path = os.path.splitext(ingestion.file_path)[0]
             ingestion.extracted_document_file_path = f"{base_path}_marker.json"
 
-        file_content = await read(ingestion.file_path) if read else open(ingestion.file_path, "rb").read()
+        file_content = (
+            await read(ingestion.file_path)
+            if read
+            else open(ingestion.file_path, "rb").read()
+        )
         file_extension = Path(ingestion.file_path).suffix.lower()
         pdf_content = convert_to_pdf(file_content, file_extension)
         file_bytes.append(pdf_content)
@@ -664,11 +720,8 @@ async def main_datalab(
         elif mode == "by_title":
             chunk_idx = 0
             counters = {"figure_count": 0, "table_count": 0}
-
-            # Variables for title-based chunking
             current_chunk_text = []
             current_chunk_locations = []
-            all_text = {}
 
             for page_num, page in enumerate(parsed_data["children"]):
                 if not page.get("children"):
@@ -689,7 +742,7 @@ async def main_datalab(
                     block_type = child["block_type"]
                     feature_type = _map_marker_type(block_type)
 
-                    # Process visual elements the same way as by_page mode
+                    # Handle visual elements separately
                     if feature_type in [
                         ExtractedFeatureType.figure,
                         ExtractedFeatureType.figuregroup,
@@ -699,6 +752,7 @@ async def main_datalab(
                         ExtractedFeatureType.table,
                         ExtractedFeatureType.tablegroup,
                     ]:
+                        # Process visual element without clearing current chunk
                         entries, chunk_idx, secondary_idx, counters, html_content = (
                             await _process_child_element(
                                 child=child,
@@ -716,29 +770,8 @@ async def main_datalab(
                             )
                         )
                         all_entries.extend(entries)
-                        current_chunk_text.append(html_content)
+
                     else:
-                        # Check if we hit a new section header or page header
-                        if feature_type in [
-                            ExtractedFeatureType.section_header,
-                            ExtractedFeatureType.header,
-                        ]:
-                            # Process previous chunk if it exists
-                            if current_chunk_text and current_chunk_locations:
-                                entry, chunk_idx = await _process_title_chunk(
-                                    current_chunk_text,
-                                    current_chunk_locations,
-                                    current_ingestion,
-                                    chunk_idx,
-                                )
-                                if entry:
-                                    all_entries.append(entry)
-                                    all_text[entry.min_primary_index] = entry.string
-
-                                # Reset accumulators
-                                current_chunk_text = []
-                                current_chunk_locations = []
-
                         # Add current text to chunk
                         if "html" in child:
                             current_chunk_text.append(child["html"])
@@ -756,19 +789,16 @@ async def main_datalab(
                             current_chunk_locations.append(location)
                             secondary_idx += 1
 
-                # Process any remaining text at the end of each page
+                # Process remaining text at end of page
                 if current_chunk_text and current_chunk_locations:
                     entry, chunk_idx = await _process_title_chunk(
                         current_chunk_text,
                         current_chunk_locations,
                         current_ingestion,
                         chunk_idx,
+                        force_create=True
                     )
-                    if entry:
-                        all_entries.append(entry)
-                        all_text[entry.min_primary_index] = entry.string
-
-                    # Reset accumulators
+                    all_entries.extend(entry)
                     current_chunk_text = []
                     current_chunk_locations = []
 
@@ -799,10 +829,12 @@ async def main_datalab(
         if write:
             await write(
                 current_ingestion.extracted_document_file_path,
-                json.dumps(all_text, indent=4)
+                json.dumps(all_text, indent=4),
             )
         else:
-            with open(current_ingestion.extracted_document_file_path, "w", encoding="utf-8") as f:
+            with open(
+                current_ingestion.extracted_document_file_path, "w", encoding="utf-8"
+            ) as f:
                 f.write(json.dumps(all_text, indent=4))
 
         idx += 1
@@ -815,28 +847,28 @@ if __name__ == "__main__":
     import json
 
     test_ingestions = [
-        Ingestion(
-            scope=Scope.INTERNAL,  # Required
-            creator_name="Test User",  # Required
-            ingestion_method=IngestionMethod.LOCAL_FILE,  # Required
-            file_type=FileType.PDF,
-            ingestion_date="2024-03-20T12:00:00Z",  # Required
-            file_path="/Users/pranaviyer/Downloads/TR0722-315a Appendix A.pdf",
-        ),
         # Ingestion(
-        #     scope=Scope.INTERNAL,
-        #     creator_name="Test User",
-        #     ingestion_method=IngestionMethod.LOCAL_FILE,
-        #     ingestion_date="2024-03-20T12:00:00Z",
+        #     scope=Scope.INTERNAL,  # Required
+        #     creator_name="Test User",  # Required
+        #     ingestion_method=IngestionMethod.LOCAL_FILE,  # Required
         #     file_type=FileType.PDF,
-        #     file_path="/Users/pranaviyer/Desktop/AstralisData/E5_Paper.pdf",
-        # )
+        #     ingestion_date="2024-03-20T12:00:00Z",  # Required
+        #     file_path="/Users/pranaviyer/Downloads/TR0722-315a Appendix A.pdf",
+        # ),
+        Ingestion(
+            scope=Scope.INTERNAL,
+            creator_name="Test User",
+            ingestion_method=IngestionMethod.LOCAL_FILE,
+            ingestion_date="2024-03-20T12:00:00Z",
+            file_type=FileType.PDF,
+            file_path="/Users/pranaviyer/Desktop/AstralisData/E5_Paper.pdf",
+        )
     ]
-    output = asyncio.run(main_datalab(test_ingestions, mode="by_page", visualize=True))
-    with open("datalab_output.json", "w") as f:
-        for entry in output:
-            f.write(json.dumps(entry.model_dump(), indent=4))
-            f.write("\n")
+    # output = asyncio.run(main_datalab(test_ingestions, mode="by_page", visualize=True))
+    # with open("datalab_output.json", "w") as f:
+    #     for entry in output:
+    #         f.write(json.dumps(entry.model_dump(), indent=4))
+    #         f.write("\n")
 
     title_output = asyncio.run(
         main_datalab(test_ingestions, mode="by_title", visualize=True)

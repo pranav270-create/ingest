@@ -26,18 +26,31 @@ from src.utils.extraction_utils import convert_to_pdf
 from src.utils.visualize_utils import visualize_page_results, group_entries_by_page
 
 
-def _map_mineru_type(block_type: str) -> ExtractedFeatureType:
-    """Maps MinerU BlockType to our common ExtractedFeatureType enum"""
+def _map_mineru_type(
+    block_type: str, parent_type: str = None
+) -> tuple[ExtractedFeatureType, str]:
+    """Maps MinerU BlockType to our common ExtractedFeatureType enum and tracks parent relationships
+
+    Args:
+        block_type: The MinerU block type
+        parent_type: The parent block type if any
+
+    Returns:
+        Tuple of (ExtractedFeatureType, parent_relationship)
+    """
     # BlockType mapping to our ExtractedFeatureType
     mineru_to_common = {
+        # Figure-related types
         "image": ExtractedFeatureType.figure,
         "image_body": ExtractedFeatureType.figure,
         "image_caption": ExtractedFeatureType.caption,
         "image_footnote": ExtractedFeatureType.footnote,
+        # Table-related types
         "table": ExtractedFeatureType.table,
         "table_body": ExtractedFeatureType.table,
         "table_caption": ExtractedFeatureType.caption,
         "table_footnote": ExtractedFeatureType.footnote,
+        # Other types
         "text": ExtractedFeatureType.text,
         "title": ExtractedFeatureType.section_header,
         "interline_equation": ExtractedFeatureType.equation,
@@ -46,10 +59,19 @@ def _map_mineru_type(block_type: str) -> ExtractedFeatureType:
         "list": ExtractedFeatureType.list,
         "index": ExtractedFeatureType.other,
     }
-    output = mineru_to_common.get(block_type, ExtractedFeatureType.other)
-    if output == ExtractedFeatureType.other:
+
+    # Determine parent relationship
+    parent_relationship = None
+    if block_type in ["image_caption", "image_footnote"] or parent_type == "image":
+        parent_relationship = "figure"
+    elif block_type in ["table_caption", "table_footnote"] or parent_type == "table":
+        parent_relationship = "table"
+
+    feature_type = mineru_to_common.get(block_type, ExtractedFeatureType.other)
+    if feature_type == ExtractedFeatureType.other:
         print(f"Unknown block_type: {block_type}")
-    return output
+
+    return feature_type, parent_relationship
 
 
 def _convert_bbox(bbox: list[float], page_width: float, page_height: float) -> dict:
@@ -103,7 +125,9 @@ async def _extract_region(
 
     # Ensure valid box dimensions
     if right <= left or bottom <= top:
-        print(f"Warning: Invalid box dimensions for {feature_type} on page {page_num + 1}")
+        print(
+            f"Warning: Invalid box dimensions for {feature_type} on page {page_num + 1}"
+        )
         img.close()
         return None
 
@@ -112,7 +136,9 @@ async def _extract_region(
         region = img.crop((left, top, right, bottom))
 
         # Save extracted region
-        extracted_path = f"{extracts_dir}/{feature_type.value}_{page_num + 1}_{secondary_index}.jpg"
+        extracted_path = (
+            f"{extracts_dir}/{feature_type.value}_{page_num + 1}_{secondary_index}.jpg"
+        )
         img_byte_arr = io.BytesIO()
         region.save(img_byte_arr, format="JPEG")
         img_byte_arr = img_byte_arr.getvalue()
@@ -158,8 +184,9 @@ async def _process_para_blocks(
     }
 
     for block in blocks:
-        print(f"Processing block type: {block['type']}")
-        feature_type = _map_mineru_type(block["type"])
+        parent_type = block.get("parent_type")  # Get parent type if available
+        feature_type, parent_relationship = _map_mineru_type(block["type"], parent_type)
+
         content = ""
         extracted_path = None
 
@@ -209,7 +236,7 @@ async def _process_para_blocks(
                     max_primary_index=page_num + 1,
                     figure_number=figure_number,
                 )
-            else:  # Table
+            elif feature_type == ExtractedFeatureType.table:
                 counters["table_count"] += 1
                 table_number = counters["table_count"]
                 parent_elements[ExtractedFeatureType.table] = element_uuid
@@ -230,24 +257,35 @@ async def _process_para_blocks(
             current_chunk_text.append(block.get("html", ""))
             current_chunk_locations.append(location)
 
-        # Handle captions
-        elif feature_type == ExtractedFeatureType.caption:
-            # Determine parent element type based on context
-            parent_type = None
+        # Handle captions and footnotes
+        elif feature_type in [
+            ExtractedFeatureType.caption,
+            ExtractedFeatureType.footnote,
+        ]:
             parent_uuid = None
-            if block.get("parent_type") == "figure":
-                parent_type = RelationshipType.FIGURE_CAPTION
-                parent_uuid = parent_elements.get(ExtractedFeatureType.figure)
-            elif block.get("parent_type") == "table":
-                parent_type = RelationshipType.TABLE_CAPTION
-                parent_uuid = parent_elements.get(ExtractedFeatureType.table)
+            relationship_type = None
 
-            if parent_uuid and parent_type:
-                caption_uuid = str(uuid.uuid4())
+            if parent_relationship == "figure":
+                parent_uuid = parent_elements.get(ExtractedFeatureType.figure)
+                relationship_type = (
+                    RelationshipType.FIGURE_CAPTION
+                    if feature_type == ExtractedFeatureType.caption
+                    else RelationshipType.FIGURE_FOOTNOTE
+                )
+            elif parent_relationship == "table":
+                parent_uuid = parent_elements.get(ExtractedFeatureType.table)
+                relationship_type = (
+                    RelationshipType.TABLE_CAPTION
+                    if feature_type == ExtractedFeatureType.caption
+                    else RelationshipType.TABLE_FOOTNOTE
+                )
+
+            if parent_uuid and relationship_type:
+                child_uuid = str(uuid.uuid4())
                 citation = Citation(
-                    relationship_type=parent_type,
+                    relationship_type=relationship_type,
                     target_uuid=parent_uuid,
-                    source_uuid=caption_uuid,
+                    source_uuid=child_uuid,
                 )
 
                 location = ChunkLocation(
@@ -262,8 +300,8 @@ async def _process_para_blocks(
                     ),
                 )
 
-                caption_entry = Entry(
-                    uuid=caption_uuid,
+                child_entry = Entry(
+                    uuid=child_uuid,
                     ingestion=ingestion,
                     string=block.get("text", ""),
                     consolidated_feature_type=feature_type,
@@ -273,10 +311,8 @@ async def _process_para_blocks(
                     max_primary_index=page_num + 1,
                     citations=[citation],
                 )
-                entries.append(caption_entry)
+                entries.append(child_entry)
                 chunk_idx += 1
-                current_chunk_text.append(block.get("text", ""))
-                current_chunk_locations.append(location)
 
         # Handle text content
         else:
@@ -284,16 +320,10 @@ async def _process_para_blocks(
             if "lines" in block:
                 for line in block["lines"]:
                     for span in line.get("spans", []):
-                        if span["type"] == "text":
-                            content += f"{span['content']} "
-                        elif span["type"] == "inline_equation":
-                            content += f"{span.get('latex', '')} "
+                        content += f"{span['content']} "
             elif "spans" in block:
                 for span in block["spans"]:
-                    if span["type"] == "text":
-                        content += f"{span['content']} "
-                    elif span["type"] == "inline_equation":
-                        content += f"{span.get('latex', '')} "
+                    content += f"{span['content']} "
 
             content = content.strip()
             if content:
@@ -356,6 +386,22 @@ async def _process_para_blocks(
             current_chunk_text.extend(nested_text)
             current_chunk_locations.extend(nested_locations)
 
+    # After processing all blocks, create an entry for accumulated text if any exists
+    if current_chunk_text and current_chunk_locations:
+        combined_text = " ".join(current_chunk_text)
+        text_entry = Entry(
+            uuid=str(uuid.uuid4()),
+            ingestion=ingestion,
+            string=combined_text,
+            consolidated_feature_type=ExtractedFeatureType.combined_text,
+            chunk_locations=current_chunk_locations.copy(),
+            chunk_index=chunk_idx + 1,
+            min_primary_index=page_num + 1,
+            max_primary_index=page_num + 1,
+        )
+        entries.append(text_entry)
+        chunk_idx += 1
+
     return entries, chunk_idx, current_chunk_text, current_chunk_locations
 
 
@@ -395,8 +441,14 @@ async def main_mineru(
             base_path = os.path.splitext(ingestion.file_path)[0]
             ingestion.extracted_document_file_path = f"{base_path}_mineru.json"
 
-        file_content = await read(ingestion.file_path) if read else open(ingestion.file_path, "rb").read()
-        pdf_content = convert_to_pdf(file_content, Path(ingestion.file_path).suffix.lower())
+        file_content = (
+            await read(ingestion.file_path)
+            if read
+            else open(ingestion.file_path, "rb").read()
+        )
+        pdf_content = convert_to_pdf(
+            file_content, Path(ingestion.file_path).suffix.lower()
+        )
         file_bytes.append(pdf_content)
         ingestion_map[idx] = ingestion
 
@@ -445,17 +497,19 @@ async def main_mineru(
             page_file_path = f"{pages_dir}/page_{page_num + 1}.jpg"
 
             # Process para_blocks
-            entries, chunk_idx, current_chunk_text, current_chunk_locations = await _process_para_blocks(
-                blocks=page_result.get("para_blocks", []),
-                page_num=page_num,
-                ingestion=current_ingestion,
-                page_file_path=page_file_path,
-                chunk_idx=chunk_idx,
-                counters=counters,
-                page_width=page_width,
-                page_height=page_height,
-                extracts_dir=extracts_dir,
-                write=write,
+            entries, chunk_idx, current_chunk_text, current_chunk_locations = (
+                await _process_para_blocks(
+                    blocks=page_result.get("para_blocks", []),
+                    page_num=page_num,
+                    ingestion=current_ingestion,
+                    page_file_path=page_file_path,
+                    chunk_idx=chunk_idx,
+                    counters=counters,
+                    page_width=page_width,
+                    page_height=page_height,
+                    extracts_dir=extracts_dir,
+                    write=write,
+                )
             )
             all_entries.extend(entries)
 
@@ -484,10 +538,12 @@ async def main_mineru(
         if write:
             await write(
                 current_ingestion.extracted_document_file_path,
-                json.dumps([entry.model_dump() for entry in all_entries], indent=4)
+                json.dumps([entry.model_dump() for entry in all_entries], indent=4),
             )
         else:
-            with open(current_ingestion.extracted_document_file_path, "w", encoding="utf-8") as f:
+            with open(
+                current_ingestion.extracted_document_file_path, "w", encoding="utf-8"
+            ) as f:
                 json.dump([entry.model_dump() for entry in all_entries], f, indent=4)
 
         idx += 1
