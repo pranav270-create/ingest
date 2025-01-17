@@ -1,5 +1,7 @@
+import inspect
 import sys
 from pathlib import Path
+from typing import Union, get_args, get_origin
 
 import yaml
 
@@ -9,7 +11,7 @@ from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.pipeline.registry.schema_registry import SchemaRegistry
 from src.pipeline.storage_backend import StorageFactory
-from src.schemas.schemas import Ingestion
+from src.schemas.schemas import Entry, Ingestion
 
 
 class PipelineOrchestrator:
@@ -54,12 +56,30 @@ class PipelineOrchestrator:
     def verify_config_stage_parameters(self):
         """Verifies that all function parameters specified in config match their function signatures.
         Returns (bool, list): Success status and list of any parameter mismatches."""
-        import inspect
+
+        def should_skip_param(param):
+            """Helper to determine if parameter should be skipped from validation based on its type."""
+            annotation = param.annotation
+            if annotation == inspect.Parameter.empty:
+                return False
+
+            # Get the base type if it's a Union
+            if get_origin(annotation) is Union:
+                types = get_args(annotation)
+                # Check each type in the Union
+                return any(
+                    (get_origin(t) is list and get_args(t)[0] in (Entry, Ingestion))
+                    for t in types
+                )
+
+            # Check if it's a List[Entry] or List[Ingestion]
+            return (get_origin(annotation) is list and
+                    get_args(annotation)[0] in (Entry, Ingestion))
 
         validation_errors = []
         stages = self.config.get("stages", [])
 
-        for stage in stages:  # Only look at stages from config
+        for stage in stages:
             stage_name = stage["name"]
             for function_config in stage.get("functions", []):
                 func_name = function_config["name"]
@@ -78,6 +98,7 @@ class PipelineOrchestrator:
                     if param.default == inspect.Parameter.empty
                     and param.kind != inspect.Parameter.VAR_POSITIONAL
                     and param.kind != inspect.Parameter.VAR_KEYWORD
+                    and not should_skip_param(param)  # Skip parameters of specified types
                 }
 
                 # Get configured parameters (if any)
