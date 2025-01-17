@@ -45,6 +45,7 @@ async def create_ingestion_from_s3(
     session,
     bucket_name: str,
     s3_key: str,
+    write=None  # Added to match local.py signature, though not used
 ) -> Ingestion:
     # Get file info
     file_name = os.path.basename(s3_key)
@@ -78,7 +79,7 @@ async def create_ingestion_from_s3(
         document_hash=document_hash,
         document_title=file_name,
         scope=Scope.INTERNAL,
-        content_type=None,
+        content_type=None,  # Will be inferred later in pipeline or updated in added_metadata
         creator_name=document_metadata.get('author', DEFAULT_CREATOR),
         creation_date=parse_datetime(response['LastModified'].timestamp()),
         file_type=file_type,
@@ -88,6 +89,7 @@ async def create_ingestion_from_s3(
         ingestion_method=IngestionMethod.S3,
         ingestion_date=get_current_utc_datetime(),
         document_metadata=document_metadata,
+        # Fields that will be populated later in pipeline
         document_summary=None,
         document_keywords=None,
         extraction_method=None,
@@ -108,10 +110,12 @@ async def ingest_s3_folder(
     bucket_name: str,
     prefix: str = "",
     added_metadata: dict = {},
+    write=None,  # Added to match local.py signature
     **kwargs
 ) -> list[Ingestion]:
     session = aioboto3.Session()
     all_ingestions = []
+    
     async with session.client(
         "s3",
         aws_access_key_id=aws_access_key_id,
@@ -131,7 +135,8 @@ async def ingest_s3_folder(
                     ingestion = await create_ingestion_from_s3(
                         session,
                         bucket_name,
-                        key
+                        key,
+                        write
                     )
                     ingestion = update_ingestion_with_metadata(ingestion, added_metadata)
                     all_ingestions.append(ingestion)

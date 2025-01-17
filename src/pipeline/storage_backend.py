@@ -86,8 +86,6 @@ class S3StorageBackend(StorageBackend):
             return content.decode('utf-8')
 
 
-
-
 class StorageFactory:
     @staticmethod
     def create(storage_type: Literal["local", "s3"], **kwargs) -> StorageBackend:
