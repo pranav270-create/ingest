@@ -7,7 +7,7 @@ import os
 import asyncio
 import logging
 from typing import Dict, List
-from src.utils.s3_utils import upload_folder_async, upload_single_file_async
+from src.utils.s3_utils import upload_single_file_async
 import aioboto3
 
 # Configure logging
@@ -23,7 +23,7 @@ async def upload_omnibench_to_s3(
     max_concurrency: int = 10
 ) -> None:
     """
-    Upload OmniBench PDFs to S3 organized by document type
+    Upload OmniBench PDFs to S3 organized by document type with a global metadata file
     """
     # Load metadata
     json_path = os.path.join(base_path, "OmniDocBench.json")
@@ -32,104 +32,82 @@ async def upload_omnibench_to_s3(
         metadata = json.load(f)
     logging.info(f"Found {len(metadata)} entries in metadata file")
     
-    # Create mapping of files to document types
-    file_mapping: Dict[str, List[dict]] = {}
+    # Create mapping of files to document types and build global metadata
+    file_mapping: Dict[str, List[str]] = {}
+    global_metadata: Dict[str, dict] = {}
+    
     for entry in metadata:
         doc_type = entry['page_info']['page_attribute']['data_source']
         image_path = entry['page_info']['image_path']
-        
-        # Extract base name without extension and ensure PDF extension
         base_name = os.path.splitext(os.path.basename(image_path))[0]
         pdf_path = os.path.join(base_path, 'pdfs', f"{base_name}.pdf")
         
         if doc_type not in file_mapping:
             file_mapping[doc_type] = []
         
-        file_mapping[doc_type].append({
-            'pdf_path': pdf_path,
-            'metadata': entry
-        })
+        s3_key = f"{prefix}/{doc_type}/{base_name}.pdf"
+        file_mapping[doc_type].append(pdf_path)
+        global_metadata[s3_key] = entry
     
-    logging.info(f"Found {len(file_mapping)} document types:")
-    for doc_type, files in file_mapping.items():
-        logging.info(f"  - {doc_type}: {len(files)} files")
-
-    # Upload files by document type
+    # Upload files
     session = aioboto3.Session()
     tasks = []
     semaphore = asyncio.Semaphore(max_concurrency)
-    
-    # Track upload statistics
-    stats = {
-        'total_files': sum(len(files) for files in file_mapping.values()),
-        'uploaded_pdfs': 0,
-        'uploaded_jsons': 0,
-        'failed_uploads': 0,
-        'missing_files': 0
-    }
+    stats = {'uploaded': 0, 'failed': 0, 'missing': 0}
 
-    async def upload_file_with_metadata(pdf_path: str, doc_type: str, metadata: dict):
+    async def upload_file(pdf_path: str, doc_type: str):
         async with semaphore:
-            s3_key = f"{prefix}/{doc_type}/{os.path.basename(pdf_path)}"
-            metadata_key = f"{s3_key}.json"
+            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+            s3_key = f"{prefix}/{doc_type}/{base_name}.pdf"
             
             if os.path.exists(pdf_path):
                 try:
-                    # Upload PDF
                     await upload_single_file_async(
                         session,
                         pdf_path,
                         bucket_name,
                         s3_key
                     )
-                    stats['uploaded_pdfs'] += 1
-                    
-                    # Upload metadata JSON
-                    metadata_bytes = json.dumps(metadata).encode('utf-8')
-                    async with session.client(
-                        "s3",
-                        aws_access_key_id=os.environ.get("AWS_DATA_ACCESS_KEY"),
-                        aws_secret_access_key=os.environ.get("AWS_DATA_SECRET_ACCESS_KEY"),
-                        region_name=os.environ.get("S3_DATA_REGION", "us-west-1")
-                    ) as s3:
-                        await s3.put_object(
-                            Bucket=bucket_name,
-                            Key=metadata_key,
-                            Body=metadata_bytes,
-                            ContentType='application/json'
-                        )
-                        stats['uploaded_jsons'] += 1
-                    
-                    logging.info(f"Successfully uploaded {os.path.basename(pdf_path)} to {s3_key}")
+                    stats['uploaded'] += 1
+                    logging.info(f"Uploaded {s3_key}")
                 except Exception as e:
-                    stats['failed_uploads'] += 1
+                    stats['failed'] += 1
                     logging.error(f"Error uploading {pdf_path}: {str(e)}")
             else:
-                stats['missing_files'] += 1
+                stats['missing'] += 1
                 logging.warning(f"File not found: {pdf_path}")
 
-    # Create upload tasks for each document type
+    # Create upload tasks
     for doc_type, files in file_mapping.items():
-        for file_info in files:
-            task = asyncio.create_task(
-                upload_file_with_metadata(
-                    file_info['pdf_path'],
-                    doc_type,
-                    file_info['metadata']
-                )
-            )
+        for pdf_path in files:
+            task = asyncio.create_task(upload_file(pdf_path, doc_type))
             tasks.append(task)
     
-    # Wait for all uploads to complete
+    # Upload files
     await asyncio.gather(*tasks)
     
-    # Print final statistics
+    # Upload global metadata JSON
+    metadata_key = f"{prefix}/metadata.json"
+    metadata_bytes = json.dumps(global_metadata).encode('utf-8')
+    async with session.client(
+        "s3",
+        aws_access_key_id=os.environ.get("AWS_DATA_ACCESS_KEY"),
+        aws_secret_access_key=os.environ.get("AWS_DATA_SECRET_ACCESS_KEY"),
+        region_name=os.environ.get("S3_DATA_REGION", "us-west-1")
+    ) as s3:
+        await s3.put_object(
+            Bucket=bucket_name,
+            Key=metadata_key,
+            Body=metadata_bytes,
+            ContentType='application/json'
+        )
+    
+    # Print statistics
     logging.info("\nUpload Statistics:")
-    logging.info(f"Total files processed: {stats['total_files']}")
-    logging.info(f"PDFs uploaded: {stats['uploaded_pdfs']}")
-    logging.info(f"JSON metadata files uploaded: {stats['uploaded_jsons']}")
-    logging.info(f"Failed uploads: {stats['failed_uploads']}")
-    logging.info(f"Missing files: {stats['missing_files']}")
+    logging.info(f"PDFs uploaded: {stats['uploaded']}")
+    logging.info(f"Failed uploads: {stats['failed']}")
+    logging.info(f"Missing files: {stats['missing']}")
+    logging.info(f"Metadata file uploaded to {metadata_key}")
 
 if __name__ == "__main__":
     import argparse
