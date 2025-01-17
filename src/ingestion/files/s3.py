@@ -45,7 +45,7 @@ async def create_ingestion_from_s3(
     session,
     bucket_name: str,
     s3_key: str,
-    write=None  # Added to match local.py signature, though not used
+    write=None
 ) -> Ingestion:
     # Get file info
     file_name = os.path.basename(s3_key)
@@ -66,6 +66,10 @@ async def create_ingestion_from_s3(
         async with response['Body'] as stream:
             file_content = await stream.read()
 
+        # Handle file upload if write function provided
+        if write:
+            await write(file_name, file_content)
+
     # Calculate document hash
     document_hash = hashlib.sha256(file_content).hexdigest()
 
@@ -79,7 +83,7 @@ async def create_ingestion_from_s3(
         document_hash=document_hash,
         document_title=file_name,
         scope=Scope.INTERNAL,
-        content_type=None,  # Will be inferred later in pipeline or updated in added_metadata
+        content_type=None,
         creator_name=document_metadata.get('author', DEFAULT_CREATOR),
         creation_date=parse_datetime(response['LastModified'].timestamp()),
         file_type=file_type,
@@ -109,13 +113,14 @@ async def create_ingestion_from_s3(
 async def ingest_s3_folder(
     bucket_name: str,
     prefix: str = "",
+    ending_with: str = "",
     added_metadata: dict = {},
-    write=None,  # Added to match local.py signature
+    write=None,
     **kwargs
 ) -> list[Ingestion]:
     session = aioboto3.Session()
     all_ingestions = []
-    
+
     async with session.client(
         "s3",
         aws_access_key_id=aws_access_key_id,
@@ -130,6 +135,9 @@ async def ingest_s3_folder(
                 key = obj['Key']
                 # Skip if it's just a folder marker (empty object ending with /)
                 if key.endswith('/') and obj['Size'] == 0:
+                    continue
+                # Skip files that don't match the ending if specified
+                if ending_with and not key.lower().endswith(ending_with.lower()):
                     continue
                 try:
                     ingestion = await create_ingestion_from_s3(

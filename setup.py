@@ -55,6 +55,7 @@ setup(
         "fastembed",
         "magic-pdf[full]",
         "unstructured",
+        "unstructured-client",
         "aioboto3"
     ],
     extras_require={

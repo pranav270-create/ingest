@@ -90,7 +90,13 @@ async def create_ingestion(file_path: str, write=None) -> Ingestion:
 
 
 @FunctionRegistry.register("ingest", "local")
-async def ingest_local_files(directory_path: str, added_metadata: dict = None, write=None, **kwargs) -> list[Ingestion]: # noqa
+async def ingest_local_files(
+    directory_path: str, 
+    ending_with: str = "",  # Added parameter
+    added_metadata: dict = None, 
+    write=None, 
+    **kwargs
+) -> list[Ingestion]:
     if not os.path.isabs(directory_path):
         raise ValueError("The provided path must be an absolute path.")
 
@@ -98,6 +104,9 @@ async def ingest_local_files(directory_path: str, added_metadata: dict = None, w
     for root, _, files in os.walk(directory_path):
         for file in files:
             if file.startswith("."):
+                continue
+            # Skip files that don't match the ending if specified
+            if ending_with and not file.lower().endswith(ending_with.lower()):
                 continue
             file_path = os.path.join(root, file)
             ingestion = await create_ingestion(file_path, write)
