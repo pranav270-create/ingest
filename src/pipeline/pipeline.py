@@ -32,7 +32,7 @@ class PipelineOrchestrator:
 
         self.register_functions()
         # Run parameter verification and raise exception if there are errors
-        success, errors = self.verify_function_parameters()
+        success, errors = self.verify_config_stage_parameters()
         if not success:
             error_msg = "\nParameter Validation Errors:\n"
             error_msg += "\n".join(f"- {error}" for error in errors)
@@ -51,7 +51,7 @@ class PipelineOrchestrator:
         """Returns a dictionary of all registered functions by stage."""
         return {stage["name"]: [func["name"] for func in stage.get("functions", [])] for stage in self.config.get("stages", [])}
 
-    def verify_function_parameters(self):
+    def verify_config_stage_parameters(self):
         """Verifies that all function parameters specified in config match their function signatures.
         Returns (bool, list): Success status and list of any parameter mismatches."""
         import inspect
