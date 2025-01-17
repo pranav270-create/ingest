@@ -26,7 +26,6 @@ from src.sql_db.etl_crud import (
 )
 from src.sql_db.etl_model import ProcessingPipeline
 
-
 logger = logging.getLogger(__name__)
 
 
