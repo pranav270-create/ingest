@@ -15,9 +15,8 @@ from src.utils.datetime_utils import get_current_utc_datetime
 
 router = Router(
     model_list=chat_model_list,
-    default_max_parallel_requests=50,
-    allowed_fails=2,
-    cooldown_time=20,
+    allowed_fails=3,
+    cooldown_time=10,
     num_retries=3,
 )
 
@@ -39,7 +38,7 @@ async def featurize(
     write=None,  # noqa
     read=None,
     update_metadata=True,
-    model_params: dict[str, Any] = None,
+    model_params: dict[str, Any] = {},
 ) -> BaseModelListType:
     """
     Use LLMs to featurize the data contained in an Ingestion or Entry
@@ -55,6 +54,7 @@ async def featurize(
     if prompt.has_data_model():
         model_params["response_format"] = prompt.DataModel
 
+
     if not update_metadata:
         for base_model in basemodels:
             if base_model.schema__ == "Ingestion":
@@ -66,8 +66,10 @@ async def featurize(
     messages_list = await asyncio.gather(*(prompt.format_prompt(basemodel, read=read) for basemodel in basemodels))
 
     # Run litellm Router, add results to basemodels
-    tasks = [router.acompletion(model=model_name, messages=messages, **model_params) for messages in messages_list]
-    responses = await asyncio.gather(*tasks)
-    updated_basemodels = prompt.parse_response(basemodels, responses)
+    responses = await asyncio.gather(*(router.acompletion(model=model_name, messages=messages, **model_params) for messages in messages_list))
+    print("Done running litellm router")
 
-    return updated_basemodels
+    # create new entries
+    new_entries = [prompt.parse_response(basemodel, response) for basemodel, response in zip(basemodels, responses)]
+
+    return new_entries

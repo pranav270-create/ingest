@@ -1,0 +1,42 @@
+stages:
+  - name: ingest
+    functions:
+      - name: local
+        input: null
+        return: Ingestion
+        params:
+          directory_path: "C:/Users/marka/fun/ingest/local_files/"
+          added_metadata:
+            document_title: "docbench"
+            content_type: "other"
+            ingestion_method: "local_file"
+            file_type: "pdf"
+
+  - name: extract
+    functions:
+      - name: marker
+        input: Ingestion
+        return: Entry
+
+  - name: featurize
+    functions:
+      - name: featurize_model
+        input: Entry
+        return: Entry
+        params:
+          prompt_name: "summarize_entry"
+          model_name: "gpt-4o-mini"
+
+
+pipeline:
+  version: "1.0"
+  description: "test_pipeline_mark_featurize"
+  pipeline_id: 22
+  # resume_from_step: 2
+  # update_on_collision: true  # Add this flag
+  # fork_pipeline: true
+  # collection_name: "test_collection_pranav"
+
+storage:
+  storage_type: "local"
+  base_path: "C:/Users/marka/fun/ingest/local_files/"

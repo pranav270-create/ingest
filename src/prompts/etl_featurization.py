@@ -1,12 +1,15 @@
 import base64
+import json
 from typing import Union
+from uuid import uuid4
 
+from litellm import ModelResponse
 from pydantic import BaseModel, Field
 
 from src.llm_utils.utils import structure_image_prompt, text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.prompts.base_prompt import BasePrompt
-from src.schemas.schemas import Entry, Ingestion
+from src.schemas.schemas import Citation, EmbeddedFeatureType, Entry, ExtractedFeatureType, Ingestion, RelationshipType
 
 
 async def read_content(filepath, read) -> Union[str, bytes]:
@@ -58,8 +61,8 @@ class FilterIndexingPrompt(BasePrompt):
     )
 
     class DataModel(BaseModel):
-        rationale: str = Field(default="", description="Reason for the decision")
-        should_index: bool = Field(default=False, description="Whether the text should be indexed")
+        rationale: str = Field(description="Reason for the decision")
+        should_index: bool = Field(description="Whether the text should be indexed")
 
     @classmethod
     async def format_prompt(cls, base_model: BaseModel, read=None):
@@ -105,7 +108,7 @@ class SummarizeIngestionPrompt(BasePrompt):
     """
 
     class DataModel(BaseModel):
-        summary: str = Field(default="", description="A summary of the text")
+        summary: str = Field(description="A summary of the text")
 
     @classmethod
     async def format_prompt(cls, ingestion: Ingestion, read=None):
@@ -125,7 +128,7 @@ class SummarizeIngestionPrompt(BasePrompt):
 
 
 @PromptRegistry.register("summarize_entry")
-class SummarizeEntryPrompt(BasePrompt):
+class SummarizeEntryPrompt(BasePrompt[Entry]):
     """
     A prompt class for summarizing text entries while considering their context within the full document.
     """
@@ -158,7 +161,7 @@ class SummarizeEntryPrompt(BasePrompt):
     """
 
     class DataModel(BaseModel):
-        summary: str = Field(default="", description="A summary of the text")
+        summary: str = Field(description="A summary of the text")
 
     @classmethod
     async def format_prompt(cls, entry: Entry, read=None):
@@ -167,14 +170,37 @@ class SummarizeEntryPrompt(BasePrompt):
         else:
             with open(entry.ingestion.extracted_document_file_path) as f:
                 document = f.read()
-        return cls.system_prompt, cls.user_prompt.format(entry=entry.string, document=document)
+
+        return [{"role": "system", "content": cls.system_prompt},
+                {"role": "user", "content": cls.user_prompt.format(entry=entry.string, document=document)}]
 
     @staticmethod
-    def parse_response(entries: list[Entry], parsed_entries: dict[str, DataModel]) -> bool:
-        # add the "summary" field to the entry.string in the front
-        for i, entry in enumerate(entries):
-            entry.context_summary_string = parsed_entries.get(i).get("summary", "")
-        return entries
+    def parse_response(entry: Entry, response: ModelResponse) -> Entry:
+
+        # extract synthetic data
+        text, _ = text_cost_parser(response)
+        summary = json.loads(text).get('summary', '')
+
+        # generate a uuid
+        uuid = str(uuid4())
+
+        # create citation
+        citation = Citation(
+            relationship_type=RelationshipType.SYNTHETIC,
+            source_uuid=uuid, # current
+            target_uuid=entry.uuid, # parent
+        )
+
+        # create new Entry
+        new_entry = Entry(
+            uuid=uuid,
+            string=summary,
+            ingestion=entry.ingestion,
+            citations=[citation],
+            embedded_feature_type=EmbeddedFeatureType.SYNTHETIC_SUMMARY,
+            consolidated_feature_type=ExtractedFeatureType.text
+        )
+        return new_entry
 
 
 @PromptRegistry.register("clean_entry")
@@ -219,10 +245,8 @@ class CleanEntryPrompt(BasePrompt):
     """
 
     class DataModel(BaseModel):
-        rationale: str = Field(default="", description="The rationale for keeping the entry")
-        retain: bool = Field(
-            default=True, description="Whether to retain the entry, i.e. is it not just citations or nonsensical text"
-        )
+        rationale: str = Field(description="The rationale for keeping the entry")
+        retain: bool = Field(description="Whether to retain the entry, i.e. is it not just citations or nonsensical text")
 
     @classmethod
     async def format_prompt(cls, base_model: BaseModel, read=None):
@@ -282,7 +306,7 @@ class KeywordPrompt(BasePrompt):
     """
 
     class DataModel(BaseModel):
-        keywords: list[str] = Field(default=[], description="A list of keywords extracted from the entry")
+        keywords: list[str] = Field(description="A list of keywords extracted from the entry")
 
     @classmethod
     def format_prompt(cls, entry: str) -> str:
@@ -311,7 +335,7 @@ class ImageDescriptionPrompt(BasePrompt):
     """
 
     class DataModel(BaseModel):
-        description: str = Field(..., description="A description of the image")
+        description: str = Field(description="A description of the image")
 
     @classmethod
     def format_prompt(cls, entry: BaseModel, read=None):
@@ -350,14 +374,14 @@ class ExtractClaimsPrompt(BasePrompt):
         DataModel for extracting thorough, scientifically rigorous information from a podcast transcript
         """
 
-        claims: list[str] = Field(..., description="A list of claims from the conversation segment")
+        claims: list[str] = Field(description="A list of claims from the conversation segment")
 
     @classmethod
     def format_prompt(cls, text):
         return {"system": cls.system, "user": cls.user.format(chunk=text)}
 
     @staticmethod
-    def parse_response(response: DataModel, model: str) -> tuple[list[str], list[str], float]:
+    def parse_response(response: DataModel) -> tuple[list[str], list[str], float]:
         text, cost = text_cost_parser(response)
         return text.claims, cost
 
@@ -378,11 +402,10 @@ class LabelClustersPrompt(BasePrompt):
 
     class DataModel(BaseModel):
         description: str = Field(
-            ...,
             description="A summary describing the subtopic reflected in the theme of the claims in relation to the Topic.",
         )
         subtopic: str = Field(
-            ..., description="A title for the group of claims that represents a meaningful subtopic of the Topic."
+            description="A title for the group of claims that represents a meaningful subtopic of the Topic."
         )
 
     @classmethod

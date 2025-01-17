@@ -4,9 +4,10 @@
 
 The pipeline is built around a flexible, modular architecture that ingests documents, transforms the data, and upserts vectors into a vector database, all while saving important metadata. This makes adding new data and experimenting with new retrieval techniques easy.
 
-Make any data retrievable in just two steps:
+### Make any data retrievable in just two steps:
 
 1) Create a new YAML config file `src/config/[file_name].yaml`
+
 2) Run the pipeline with `python -m src.pipeline.run_pipeline --config [file_name]`
 
 
@@ -47,7 +48,7 @@ The pipeline is configured [through YAML files](configuration.md) that specify:
 
 There are many types of pipeline stages. Each stage is just a function in the `FunctionRegistry`.
 
-**Ingestion** (`/ingestion`)
+**[Ingestion](ingestion.md)** (`/ingestion`)
 
    - Handles document input from various sources
    - Creates initial document metadata
