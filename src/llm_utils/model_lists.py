@@ -7,8 +7,8 @@ chat_model_list = [
         "litellm_params": {
             "model": "openai/gpt-4o-mini",  # actual model name
             "api_key": os.getenv("OPENAI_API_KEY"),
-            "rpm": 5000,
-            "tpm": 600000,
+            "rpm": 10000,
+            "tpm": 10000000,
         },
     }
 ]
