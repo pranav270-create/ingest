@@ -67,6 +67,38 @@ async def upload_folder_async(
     await asyncio.gather(*tasks)
 
 
+async def get_object_metadata(bucket_name: str, s3_key: str) -> dict:
+    """
+    Get metadata for a specific S3 object
+
+    Args:
+        bucket_name: S3 bucket name
+        s3_key: Full S3 key (path) to the object
+
+    Returns:
+        dict: Object metadata
+    """
+    session = aioboto3.Session()
+    async with session.client(
+        "s3",
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        region_name=region_name,
+    ) as s3:
+        try:
+            response = await s3.head_object(Bucket=bucket_name, Key=s3_key)
+            return {
+                'ContentLength': response.get('ContentLength'),
+                'LastModified': response.get('LastModified'),
+                'ContentType': response.get('ContentType'),
+                'Metadata': response.get('Metadata', {}),
+                'ETag': response.get('ETag'),
+            }
+        except Exception as e:
+            print(f"Error getting metadata: {str(e)}")
+            return {}
+
+
 # Example usage:
 if __name__ == "__main__":
     asyncio.run(upload_folder_async(
@@ -75,3 +107,11 @@ if __name__ == "__main__":
         prefix="unstructured",
         max_concurrency=10
     ))
+
+    result = asyncio.run(get_object_metadata(
+        bucket_name="astralis-data-4170a4f6",
+        s3_key="omnibench/newspaper/newspaper_019d4d5296ba8f1c21277d72fb0cf0db_1.pdf.json"
+    ))
+    print("File metadata:")
+    for key, value in result.items():
+        print(f"{key}: {value}")

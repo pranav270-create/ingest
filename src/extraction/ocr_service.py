@@ -6,6 +6,7 @@ import io
 from PIL import Image
 import os
 import uuid
+import json
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -84,7 +85,7 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
             image_to_doc_mapping.append((ing_idx, page_num))
 
     # Process all images in one batch
-    document_texts = {ing_idx: [] for ing_idx in range(len(ingestions))}
+    document_texts = {ing_idx: {} for ing_idx in range(len(ingestions))}  # Changed to nested dict for page mapping
     idx = 0
     async for ret in obj.ocr_document.map.aio(all_image_bytes, return_exceptions=True):
         ing_idx, page_num = image_to_doc_mapping[idx]
@@ -109,18 +110,17 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
             chunk_index=idx + 1,
         )
         all_entries.append(entry)
-        document_texts[ing_idx].append(ret)
+        document_texts[ing_idx][str(page_num + 1)] = ret  # Store with page number as key
         idx += 1
 
     # Save files and return
     for ing_idx, ingestion in enumerate(ingestions):
         if document_texts[ing_idx]:  # Only save if we have processed text
-            combined_text = "\n\n=== PAGE BREAK ===\n\n".join(document_texts[ing_idx])
             if write:
-                await write(ingestion.extracted_document_file_path, combined_text)
+                await write(ingestion.extracted_document_file_path, json.dumps(document_texts[ing_idx], indent=4))
             else:
                 with open(ingestion.extracted_document_file_path, "w", encoding='utf-8') as f:
-                    f.write(combined_text)
+                    json.dumps(document_texts[ing_idx], indent=4)
     return all_entries
 
 

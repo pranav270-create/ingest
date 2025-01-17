@@ -1,0 +1,222 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 750px;
+                 background-color: #ffffff;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+             #loadingBar {
+                 position:absolute;
+                 top:0px;
+                 left:0px;
+                 width: 100%;
+                 height: 750px;
+                 background-color:rgba(200,200,200,0.8);
+                 -webkit-transition: all 0.5s ease;
+                 -moz-transition: all 0.5s ease;
+                 -ms-transition: all 0.5s ease;
+                 -o-transition: all 0.5s ease;
+                 transition: all 0.5s ease;
+                 opacity:1;
+             }
+
+             #bar {
+                 position:absolute;
+                 top:0px;
+                 left:0px;
+                 width:20px;
+                 height:20px;
+                 margin:auto auto auto auto;
+                 border-radius:11px;
+                 border:2px solid rgba(30,30,30,0.05);
+                 background: rgb(0, 173, 246); /* Old browsers */
+                 box-shadow: 2px 0px 4px rgba(0,0,0,0.4);
+             }
+
+             #border {
+                 position:absolute;
+                 top:10px;
+                 left:10px;
+                 width:500px;
+                 height:23px;
+                 margin:auto auto auto auto;
+                 box-shadow: 0px 0px 4px rgba(0,0,0,0.2);
+                 border-radius:10px;
+             }
+
+             #text {
+                 position:absolute;
+                 top:8px;
+                 left:530px;
+                 width:30px;
+                 height:50px;
+                 margin:auto auto auto auto;
+                 font-size:22px;
+                 color: #000000;
+             }
+
+             div.outerBorder {
+                 position:relative;
+                 top:400px;
+                 width:600px;
+                 height:44px;
+                 margin:auto auto auto auto;
+                 border:8px solid rgba(0,0,0,0.1);
+                 background: rgb(252,252,252); /* Old browsers */
+                 background: -moz-linear-gradient(top,  rgba(252,252,252,1) 0%, rgba(237,237,237,1) 100%); /* FF3.6+ */
+                 background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(252,252,252,1)), color-stop(100%,rgba(237,237,237,1))); /* Chrome,Safari4+ */
+                 background: -webkit-linear-gradient(top,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* Chrome10+,Safari5.1+ */
+                 background: -o-linear-gradient(top,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* Opera 11.10+ */
+                 background: -ms-linear-gradient(top,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* IE10+ */
+                 background: linear-gradient(to bottom,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* W3C */
+                 filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#fcfcfc', endColorstr='#ededed',GradientType=0 ); /* IE6-9 */
+                 border-radius:72px;
+                 box-shadow: 0px 0px 10px rgba(0,0,0,0.2);
+             }
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+            <div id="loadingBar">
+              <div class="outerBorder">
+                <div id="text">0%</div>
+                <div id="border">
+                  <div id="bar"></div>
+                </div>
+              </div>
+            </div>
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#97c2fc", "font": {"color": "black"}, "id": 1, "label": "Entry 1", "shape": "box", "title": "Entry 1\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 2, "label": "Entry 2", "shape": "box", "title": "Entry 2\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 3, "label": "Entry 3", "shape": "box", "title": "Entry 3\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 4, "label": "Entry 4", "shape": "box", "title": "Entry 4\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 5, "label": "Entry 5", "shape": "box", "title": "Entry 5\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 6, "label": "Entry 6", "shape": "box", "title": "Entry 6\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 7, "label": "Entry 7", "shape": "box", "title": "Entry 7\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 8, "label": "Entry 8", "shape": "box", "title": "Entry 8\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 77, "label": "Entry 77", "shape": "box", "title": "Entry 77\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 9, "label": "Entry 9", "shape": "box", "title": "Entry 9\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 10, "label": "Entry 10", "shape": "box", "title": "Entry 10\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 11, "label": "Entry 11", "shape": "box", "title": "Entry 11\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 12, "label": "Entry 12", "shape": "box", "title": "Entry 12\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 13, "label": "Entry 13", "shape": "box", "title": "Entry 13\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 14, "label": "Entry 14", "shape": "box", "title": "Entry 14\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 15, "label": "Entry 15", "shape": "box", "title": "Entry 15\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 16, "label": "Entry 16", "shape": "box", "title": "Entry 16\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 17, "label": "Entry 17", "shape": "box", "title": "Entry 17\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 18, "label": "Entry 18", "shape": "box", "title": "Entry 18\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 19, "label": "Entry 19", "shape": "box", "title": "Entry 19\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 20, "label": "Entry 20", "shape": "box", "title": "Entry 20\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 21, "label": "Entry 21", "shape": "box", "title": "Entry 21\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 22, "label": "Entry 22", "shape": "box", "title": "Entry 22\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 23, "label": "Entry 23", "shape": "box", "title": "Entry 23\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 24, "label": "Entry 24", "shape": "box", "title": "Entry 24\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 25, "label": "Entry 25", "shape": "box", "title": "Entry 25\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 26, "label": "Entry 26", "shape": "box", "title": "Entry 26\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 27, "label": "Entry 27", "shape": "box", "title": "Entry 27\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 28, "label": "Entry 28", "shape": "box", "title": "Entry 28\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 29, "label": "Entry 29", "shape": "box", "title": "Entry 29\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 30, "label": "Entry 30", "shape": "box", "title": "Entry 30\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 31, "label": "Entry 31", "shape": "box", "title": "Entry 31\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 32, "label": "Entry 32", "shape": "box", "title": "Entry 32\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 33, "label": "Entry 33", "shape": "box", "title": "Entry 33\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 34, "label": "Entry 34", "shape": "box", "title": "Entry 34\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 35, "label": "Entry 35", "shape": "box", "title": "Entry 35\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 36, "label": "Entry 36", "shape": "box", "title": "Entry 36\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 37, "label": "Entry 37", "shape": "box", "title": "Entry 37\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 38, "label": "Entry 38", "shape": "box", "title": "Entry 38\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 39, "label": "Entry 39", "shape": "box", "title": "Entry 39\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 40, "label": "Entry 40", "shape": "box", "title": "Entry 40\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 41, "label": "Entry 41", "shape": "box", "title": "Entry 41\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 42, "label": "Entry 42", "shape": "box", "title": "Entry 42\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 43, "label": "Entry 43", "shape": "box", "title": "Entry 43\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 44, "label": "Entry 44", "shape": "box", "title": "Entry 44\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 45, "label": "Entry 45", "shape": "box", "title": "Entry 45\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 46, "label": "Entry 46", "shape": "box", "title": "Entry 46\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 86, "label": "Entry 86", "shape": "box", "title": "Entry 86\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 47, "label": "Entry 47", "shape": "box", "title": "Entry 47\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 48, "label": "Entry 48", "shape": "box", "title": "Entry 48\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 49, "label": "Entry 49", "shape": "box", "title": "Entry 49\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 50, "label": "Entry 50", "shape": "box", "title": "Entry 50\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 51, "label": "Entry 51", "shape": "box", "title": "Entry 51\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 52, "label": "Entry 52", "shape": "box", "title": "Entry 52\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 53, "label": "Entry 53", "shape": "box", "title": "Entry 53\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 54, "label": "Entry 54", "shape": "box", "title": "Entry 54\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 55, "label": "Entry 55", "shape": "box", "title": "Entry 55\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 56, "label": "Entry 56", "shape": "box", "title": "Entry 56\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 57, "label": "Entry 57", "shape": "box", "title": "Entry 57\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 58, "label": "Entry 58", "shape": "box", "title": "Entry 58\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 59, "label": "Entry 59", "shape": "box", "title": "Entry 59\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 60, "label": "Entry 60", "shape": "box", "title": "Entry 60\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 61, "label": "Entry 61", "shape": "box", "title": "Entry 61\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 62, "label": "Entry 62", "shape": "box", "title": "Entry 62\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 63, "label": "Entry 63", "shape": "box", "title": "Entry 63\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 64, "label": "Entry 64", "shape": "box", "title": "Entry 64\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 65, "label": "Entry 65", "shape": "box", "title": "Entry 65\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 66, "label": "Entry 66", "shape": "box", "title": "Entry 66\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 67, "label": "Entry 67", "shape": "box", "title": "Entry 67\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 68, "label": "Entry 68", "shape": "box", "title": "Entry 68\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 69, "label": "Entry 69", "shape": "box", "title": "Entry 69\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 70, "label": "Entry 70", "shape": "box", "title": "Entry 70\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 71, "label": "Entry 71", "shape": "box", "title": "Entry 71\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 72, "label": "Entry 72", "shape": "box", "title": "Entry 72\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 73, "label": "Entry 73", "shape": "box", "title": "Entry 73\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 74, "label": "Entry 74", "shape": "box", "title": "Entry 74\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 75, "label": "Entry 75", "shape": "box", "title": "Entry 75\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 76, "label": "Entry 76", "shape": "box", "title": "Entry 76\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 78, "label": "Entry 78", "shape": "box", "title": "Entry 78\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 79, "label": "Entry 79", "shape": "box", "title": "Entry 79\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 80, "label": "Entry 80", "shape": "box", "title": "Entry 80\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 81, "label": "Entry 81", "shape": "box", "title": "Entry 81\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 82, "label": "Entry 82", "shape": "box", "title": "Entry 82\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 83, "label": "Entry 83", "shape": "box", "title": "Entry 83\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 84, "label": "Entry 84", "shape": "box", "title": "Entry 84\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 85, "label": "Entry 85", "shape": "box", "title": "Entry 85\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 87, "label": "Entry 87", "shape": "box", "title": "Entry 87\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 88, "label": "Entry 88", "shape": "box", "title": "Entry 88\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 89, "label": "Entry 89", "shape": "box", "title": "Entry 89\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 90, "label": "Entry 90", "shape": "box", "title": "Entry 90\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 91, "label": "Entry 91", "shape": "box", "title": "Entry 91\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 92, "label": "Entry 92", "shape": "box", "title": "Entry 92\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 93, "label": "Entry 93", "shape": "box", "title": "Entry 93\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 94, "label": "Entry 94", "shape": "box", "title": "Entry 94\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 206, "label": "Entry 206", "shape": "box", "title": "Entry 206\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 207, "label": "Entry 207", "shape": "box", "title": "Entry 207\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 208, "label": "Entry 208", "shape": "box", "title": "Entry 208\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 209, "label": "Entry 209", "shape": "box", "title": "Entry 209\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 210, "label": "Entry 210", "shape": "box", "title": "Entry 210\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 211, "label": "Entry 211", "shape": "box", "title": "Entry 211\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 212, "label": "Entry 212", "shape": "box", "title": "Entry 212\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 213, "label": "Entry 213", "shape": "box", "title": "Entry 213\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 282, "label": "Entry 282", "shape": "box", "title": "Entry 282\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 214, "label": "Entry 214", "shape": "box", "title": "Entry 214\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 215, "label": "Entry 215", "shape": "box", "title": "Entry 215\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 216, "label": "Entry 216", "shape": "box", "title": "Entry 216\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 217, "label": "Entry 217", "shape": "box", "title": "Entry 217\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 218, "label": "Entry 218", "shape": "box", "title": "Entry 218\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 219, "label": "Entry 219", "shape": "box", "title": "Entry 219\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 220, "label": "Entry 220", "shape": "box", "title": "Entry 220\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 221, "label": "Entry 221", "shape": "box", "title": "Entry 221\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 222, "label": "Entry 222", "shape": "box", "title": "Entry 222\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 223, "label": "Entry 223", "shape": "box", "title": "Entry 223\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 224, "label": "Entry 224", "shape": "box", "title": "Entry 224\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 225, "label": "Entry 225", "shape": "box", "title": "Entry 225\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 226, "label": "Entry 226", "shape": "box", "title": "Entry 226\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 227, "label": "Entry 227", "shape": "box", "title": "Entry 227\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 228, "label": "Entry 228", "shape": "box", "title": "Entry 228\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 229, "label": "Entry 229", "shape": "box", "title": "Entry 229\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 230, "label": "Entry 230", "shape": "box", "title": "Entry 230\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 231, "label": "Entry 231", "shape": "box", "title": "Entry 231\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 232, "label": "Entry 232", "shape": "box", "title": "Entry 232\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 233, "label": "Entry 233", "shape": "box", "title": "Entry 233\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 234, "label": "Entry 234", "shape": "box", "title": "Entry 234\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 235, "label": "Entry 235", "shape": "box", "title": "Entry 235\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 236, "label": "Entry 236", "shape": "box", "title": "Entry 236\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 237, "label": "Entry 237", "shape": "box", "title": "Entry 237\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 238, "label": "Entry 238", "shape": "box", "title": "Entry 238\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 239, "label": "Entry 239", "shape": "box", "title": "Entry 239\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 240, "label": "Entry 240", "shape": "box", "title": "Entry 240\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 241, "label": "Entry 241", "shape": "box", "title": "Entry 241\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 242, "label": "Entry 242", "shape": "box", "title": "Entry 242\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 243, "label": "Entry 243", "shape": "box", "title": "Entry 243\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 244, "label": "Entry 244", "shape": "box", "title": "Entry 244\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 245, "label": "Entry 245", "shape": "box", "title": "Entry 245\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 246, "label": "Entry 246", "shape": "box", "title": "Entry 246\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 247, "label": "Entry 247", "shape": "box", "title": "Entry 247\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 248, "label": "Entry 248", "shape": "box", "title": "Entry 248\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 249, "label": "Entry 249", "shape": "box", "title": "Entry 249\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 250, "label": "Entry 250", "shape": "box", "title": "Entry 250\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 251, "label": "Entry 251", "shape": "box", "title": "Entry 251\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 291, "label": "Entry 291", "shape": "box", "title": "Entry 291\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 252, "label": "Entry 252", "shape": "box", "title": "Entry 252\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 253, "label": "Entry 253", "shape": "box", "title": "Entry 253\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 254, "label": "Entry 254", "shape": "box", "title": "Entry 254\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 255, "label": "Entry 255", "shape": "box", "title": "Entry 255\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 256, "label": "Entry 256", "shape": "box", "title": "Entry 256\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 257, "label": "Entry 257", "shape": "box", "title": "Entry 257\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 258, "label": "Entry 258", "shape": "box", "title": "Entry 258\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 259, "label": "Entry 259", "shape": "box", "title": "Entry 259\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 260, "label": "Entry 260", "shape": "box", "title": "Entry 260\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 261, "label": "Entry 261", "shape": "box", "title": "Entry 261\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 262, "label": "Entry 262", "shape": "box", "title": "Entry 262\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 263, "label": "Entry 263", "shape": "box", "title": "Entry 263\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 264, "label": "Entry 264", "shape": "box", "title": "Entry 264\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 265, "label": "Entry 265", "shape": "box", "title": "Entry 265\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 266, "label": "Entry 266", "shape": "box", "title": "Entry 266\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 267, "label": "Entry 267", "shape": "box", "title": "Entry 267\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 268, "label": "Entry 268", "shape": "box", "title": "Entry 268\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 269, "label": "Entry 269", "shape": "box", "title": "Entry 269\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 270, "label": "Entry 270", "shape": "box", "title": "Entry 270\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 271, "label": "Entry 271", "shape": "box", "title": "Entry 271\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 272, "label": "Entry 272", "shape": "box", "title": "Entry 272\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 273, "label": "Entry 273", "shape": "box", "title": "Entry 273\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 274, "label": "Entry 274", "shape": "box", "title": "Entry 274\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 275, "label": "Entry 275", "shape": "box", "title": "Entry 275\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 276, "label": "Entry 276", "shape": "box", "title": "Entry 276\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 277, "label": "Entry 277", "shape": "box", "title": "Entry 277\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 278, "label": "Entry 278", "shape": "box", "title": "Entry 278\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 279, "label": "Entry 279", "shape": "box", "title": "Entry 279\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 280, "label": "Entry 280", "shape": "box", "title": "Entry 280\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 281, "label": "Entry 281", "shape": "box", "title": "Entry 281\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 283, "label": "Entry 283", "shape": "box", "title": "Entry 283\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 284, "label": "Entry 284", "shape": "box", "title": "Entry 284\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 285, "label": "Entry 285", "shape": "box", "title": "Entry 285\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 286, "label": "Entry 286", "shape": "box", "title": "Entry 286\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 287, "label": "Entry 287", "shape": "box", "title": "Entry 287\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 288, "label": "Entry 288", "shape": "box", "title": "Entry 288\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 289, "label": "Entry 289", "shape": "box", "title": "Entry 289\nType: figure"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 290, "label": "Entry 290", "shape": "box", "title": "Entry 290\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 292, "label": "Entry 292", "shape": "box", "title": "Entry 292\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 293, "label": "Entry 293", "shape": "box", "title": "Entry 293\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 294, "label": "Entry 294", "shape": "box", "title": "Entry 294\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 295, "label": "Entry 295", "shape": "box", "title": "Entry 295\nType: caption"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 296, "label": "Entry 296", "shape": "box", "title": "Entry 296\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 297, "label": "Entry 297", "shape": "box", "title": "Entry 297\nType: combined_text"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 298, "label": "Entry 298", "shape": "box", "title": "Entry 298\nType: table"}, {"color": "#97c2fc", "font": {"color": "black"}, "id": 299, "label": "Entry 299", "shape": "box", "title": "Entry 299\nType: combined_text"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "from": 209, "label": "figure_caption\n209\u2192208", "physics": true, "title": "Source: 209\nTarget: 208\nType: figure_caption", "to": 208}, {"arrows": "to", "from": 210, "label": "figure_caption\n210\u2192208", "physics": true, "title": "Source: 210\nTarget: 208\nType: figure_caption", "to": 208}, {"arrows": "to", "from": 215, "label": "table_caption\n215\u2192214", "physics": true, "title": "Source: 215\nTarget: 214\nType: table_caption", "to": 214}, {"arrows": "to", "from": 217, "label": "table_caption\n217\u2192216", "physics": true, "title": "Source: 217\nTarget: 216\nType: table_caption", "to": 216}, {"arrows": "to", "from": 220, "label": "table_caption\n220\u2192219", "physics": true, "title": "Source: 220\nTarget: 219\nType: table_caption", "to": 219}, {"arrows": "to", "from": 224, "label": "table_caption\n224\u2192223", "physics": true, "title": "Source: 224\nTarget: 223\nType: table_caption", "to": 223}, {"arrows": "to", "from": 225, "label": "table_caption\n225\u2192223", "physics": true, "title": "Source: 225\nTarget: 223\nType: table_caption", "to": 223}, {"arrows": "to", "from": 227, "label": "table_caption\n227\u2192226", "physics": true, "title": "Source: 227\nTarget: 226\nType: table_caption", "to": 226}, {"arrows": "to", "from": 229, "label": "table_caption\n229\u2192228", "physics": true, "title": "Source: 229\nTarget: 228\nType: table_caption", "to": 228}, {"arrows": "to", "from": 232, "label": "table_caption\n232\u2192231", "physics": true, "title": "Source: 232\nTarget: 231\nType: table_caption", "to": 231}, {"arrows": "to", "from": 240, "label": "table_caption\n240\u2192239", "physics": true, "title": "Source: 240\nTarget: 239\nType: table_caption", "to": 239}, {"arrows": "to", "from": 247, "label": "table_caption\n247\u2192246", "physics": true, "title": "Source: 247\nTarget: 246\nType: table_caption", "to": 246}, {"arrows": "to", "from": 250, "label": "table_caption\n250\u2192249", "physics": true, "title": "Source: 250\nTarget: 249\nType: table_caption", "to": 249}, {"arrows": "to", "from": 291, "label": "figure_caption\n291\u2192289", "physics": true, "title": "Source: 291\nTarget: 289\nType: figure_caption", "to": 289}, {"arrows": "to", "from": 255, "label": "figure_caption\n255\u2192254", "physics": true, "title": "Source: 255\nTarget: 254\nType: figure_caption", "to": 254}, {"arrows": "to", "from": 256, "label": "figure_caption\n256\u2192254", "physics": true, "title": "Source: 256\nTarget: 254\nType: figure_caption", "to": 254}, {"arrows": "to", "from": 261, "label": "table_caption\n261\u2192260", "physics": true, "title": "Source: 261\nTarget: 260\nType: table_caption", "to": 260}, {"arrows": "to", "from": 274, "label": "figure_caption\n274\u2192273", "physics": true, "title": "Source: 274\nTarget: 273\nType: figure_caption", "to": 273}, {"arrows": "to", "from": 275, "label": "figure_caption\n275\u2192273", "physics": true, "title": "Source: 275\nTarget: 273\nType: figure_caption", "to": 273}, {"arrows": "to", "from": 279, "label": "figure_caption\n279\u2192278", "physics": true, "title": "Source: 279\nTarget: 278\nType: figure_caption", "to": 278}, {"arrows": "to", "from": 280, "label": "figure_caption\n280\u2192278", "physics": true, "title": "Source: 280\nTarget: 278\nType: figure_caption", "to": 278}, {"arrows": "to", "from": 283, "label": "figure_caption\n283\u2192282", "physics": true, "title": "Source: 283\nTarget: 282\nType: figure_caption", "to": 282}, {"arrows": "to", "from": 284, "label": "figure_caption\n284\u2192282", "physics": true, "title": "Source: 284\nTarget: 282\nType: figure_caption", "to": 282}, {"arrows": "to", "from": 286, "label": "figure_caption\n286\u2192285", "physics": true, "title": "Source: 286\nTarget: 285\nType: figure_caption", "to": 285}, {"arrows": "to", "from": 287, "label": "figure_caption\n287\u2192285", "physics": true, "title": "Source: 287\nTarget: 285\nType: figure_caption", "to": 285}, {"arrows": "to", "from": 290, "label": "figure_caption\n290\u2192289", "physics": true, "title": "Source: 290\nTarget: 289\nType: figure_caption", "to": 289}, {"arrows": "to", "from": 293, "label": "table_caption\n293\u2192292", "physics": true, "title": "Source: 293\nTarget: 292\nType: table_caption", "to": 292}, {"arrows": "to", "from": 295, "label": "table_caption\n295\u2192294", "physics": true, "title": "Source: 295\nTarget: 294\nType: table_caption", "to": 294}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {"physics": {"forceAtlas2Based": {"gravitationalConstant": -100, "springLength": 200, "springConstant": 0.8}, "minVelocity": 0.75, "solver": "forceAtlas2Based"}, "edges": {"smooth": {"type": "curvedCW", "roundness": 0.2}, "font": {"size": 12, "align": "middle"}}, "nodes": {"font": {"size": 14, "face": "arial"}}};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+                      network.on("stabilizationProgress", function(params) {
+                          document.getElementById('loadingBar').removeAttribute("style");
+                          var maxWidth = 496;
+                          var minWidth = 20;
+                          var widthFactor = params.iterations/params.total;
+                          var width = Math.max(minWidth,maxWidth * widthFactor);
+                          document.getElementById('bar').style.width = width + 'px';
+                          document.getElementById('text').innerHTML = Math.round(widthFactor*100) + '%';
+                      });
+                      network.once("stabilizationIterationsDone", function() {
+                          document.getElementById('text').innerHTML = '100%';
+                          document.getElementById('bar').style.width = '496px';
+                          document.getElementById('loadingBar').style.opacity = 0;
+                          // really clean the dom element
+                          setTimeout(function () {document.getElementById('loadingBar').style.display = 'none';}, 500);
+                      });
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>
