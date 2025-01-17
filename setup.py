@@ -53,7 +53,13 @@ setup(
         "rapidfuzz",
         "google-labs-html-chunker",
         "fastembed",
-        "magic-pdf[full]"
+        "magic-pdf[full]",
+        "unstructured",
+        "unstructured-client",
+        "aioboto3",
+        "networkx",
+        "pyvis",
+        "alembic"
     ],
     extras_require={
         "dev": [

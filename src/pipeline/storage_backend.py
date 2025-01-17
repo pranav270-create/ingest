@@ -34,12 +34,19 @@ class LocalStorageBackend(StorageBackend):
         """Read file content, returning bytes for binary files and str for text files"""
         full_path = os.path.join(self.base_path, file_path)
         # Check if file is likely binary based on extension
-        is_binary = any(file_path.lower().endswith(ext) for ext in ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx'])
+        binary_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx']
+        text_extensions = ['.json', '.jsonl', '.txt', '.csv']
+        
+        is_binary = (
+            any(file_path.lower().endswith(ext) for ext in binary_extensions) and
+            not any(file_path.lower().endswith(ext) for ext in text_extensions)
+        )
+        
         if is_binary:
             async with aiofiles.open(full_path, 'rb') as f:
                 return await f.read()
         else:
-            # For text files (json, txt, etc)
+            # For text files (json, jsonl, txt, etc)
             async with aiofiles.open(full_path, 'r', encoding='utf-8') as f:
                 return await f.read()
 
@@ -71,21 +78,26 @@ class S3StorageBackend(StorageBackend):
 
     async def read(self, file_path: str) -> Union[str, bytes]:
         """Read file content, returning bytes for binary files and str for text files"""
+        # Check if file is likely binary based on extension BEFORE reading
+        binary_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx']
+        text_extensions = ['.json', '.jsonl', '.txt', '.csv']
+        
+        is_binary = (
+            any(file_path.lower().endswith(ext) for ext in binary_extensions) and
+            not any(file_path.lower().endswith(ext) for ext in text_extensions)
+        )
+        
         response = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: self.s3.get_object(Bucket=self.bucket_name, Key=file_path)
         )
         content = await asyncio.get_event_loop().run_in_executor(None, response['Body'].read)
-
-        # Check if file is likely binary based on extension
-        is_binary = any(file_path.lower().endswith(ext) for ext in ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx'])
         if is_binary:
             return content
         else:
-            # For text files (json, txt, etc)
+            print(f"Decoding {file_path} as utf-8")
+            # For text files (json, jsonl, txt, etc)
             return content.decode('utf-8')
-
-
 
 
 class StorageFactory:

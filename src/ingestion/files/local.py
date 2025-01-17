@@ -4,6 +4,7 @@ import mimetypes
 import os
 import sys
 from pathlib import Path
+from typing import Union
 
 import fitz  # PyMuPDF
 
@@ -28,11 +29,20 @@ def get_file_type(file_path: str) -> FileType:
         elif main_type == "application":
             if sub_type == "pdf":
                 return FileType.PDF
-            elif sub_type in ["msword", "vnd.openxmlformats-officedocument.wordprocessingml.document"]:
+            elif sub_type in [
+                "msword",
+                "vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ]:
                 return FileType.DOCX
-            elif sub_type in ["vnd.ms-powerpoint", "vnd.openxmlformats-officedocument.presentationml.presentation"]:
+            elif sub_type in [
+                "vnd.ms-powerpoint",
+                "vnd.openxmlformats-officedocument.presentationml.presentation",
+            ]:
                 return FileType.PPTX
-            elif sub_type in ["vnd.ms-excel", "vnd.openxmlformats-officedocument.spreadsheetml.sheet"]:
+            elif sub_type in [
+                "vnd.ms-excel",
+                "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ]:
                 return FileType.XLSX
     return FileType.TXT  # Default to TXT if unable to determine
 
@@ -43,7 +53,7 @@ async def create_ingestion(file_path: str, write=None) -> Ingestion:
     file_size = os.path.getsize(file_path)
 
     # Calculate document hash
-    with open(file_path, 'rb') as f:
+    with open(file_path, "rb") as f:
         file_content = f.read()
         document_hash = hashlib.sha256(file_content).hexdigest()
 
@@ -64,7 +74,7 @@ async def create_ingestion(file_path: str, write=None) -> Ingestion:
         document_title=file_name,
         scope=Scope.INTERNAL,
         content_type=None,  # Will be inferred later in pipeline or updated in added_metadata
-        creator_name=document_metadata.get('author', DEFAULT_CREATOR),
+        creator_name=document_metadata.get("author", DEFAULT_CREATOR),
         creation_date=parse_datetime(os.path.getctime(file_path)),
         file_type=file_type,
         file_path=file_name,
@@ -85,30 +95,46 @@ async def create_ingestion(file_path: str, write=None) -> Ingestion:
         feature_models=None,
         feature_dates=None,
         feature_types=None,
-        unprocessed_citations=None
+        unprocessed_citations=None,
     )
 
 
 @FunctionRegistry.register("ingest", "local")
-async def ingest_local_files(directory_path: str, added_metadata: dict = None, write=None, **kwargs) -> list[Ingestion]: # noqa
-    if not os.path.isabs(directory_path):
-        raise ValueError("The provided path must be an absolute path.")
-
+async def ingest_local_files(
+    directory_path: Union[str, list[str]],
+    ending_with: str = "",
+    added_metadata: dict = None,
+    write=None,
+    **kwargs,
+) -> list[Ingestion]:
     all_ingestions = []
-    for root, _, files in os.walk(directory_path):
-        for file in files:
-            if file.startswith("."):
-                continue
-            file_path = os.path.join(root, file)
-            ingestion = await create_ingestion(file_path, write)
-            ingestion = update_ingestion_with_metadata(ingestion, added_metadata)
-            all_ingestions.append(ingestion)
+    # Convert single string to list for consistent handling
+    paths = directory_path if isinstance(directory_path, list) else [directory_path]
+
+    for current_path in paths:
+        if not os.path.isabs(current_path):
+            raise ValueError(
+                f"The provided path must be an absolute path: {current_path}"
+            )
+
+        for root, _, files in os.walk(current_path):
+            for file in files:
+                if file.startswith("."):
+                    continue
+                # Skip files that don't match the ending if specified
+                if ending_with and not file.lower().endswith(ending_with.lower()):
+                    continue
+                file_path = os.path.join(root, file)
+                ingestion = await create_ingestion(file_path, write)
+                ingestion = update_ingestion_with_metadata(ingestion, added_metadata)
+                all_ingestions.append(ingestion)
     return all_ingestions
 
 
 if __name__ == "__main__":
     import asyncio
     import sys
+
     if len(sys.argv) > 1:
         directory_path = sys.argv[1]
         asyncio.run(ingest_local_files(directory_path))

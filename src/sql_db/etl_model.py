@@ -52,7 +52,7 @@ class Ingest(AsyncAttrs, AbstractBase):
     document_title: Mapped[str] = mapped_column(Text, nullable=False, comment="Title of the document")
     scope: Mapped[str] = mapped_column(String(50), nullable=False, comment="Scope of the data")
     content_type: Mapped[str] = mapped_column(String(50), nullable=True, comment="Type of content")
-    creator_name: Mapped[str] = mapped_column(String(100), nullable=True, comment="Name of the creator of the data")
+    creator_name: Mapped[str] = mapped_column(Text, nullable=True, comment="Name of the creator of the data")
     creation_date: Mapped[datetime] = mapped_column(DateTime, nullable=True, comment="Date the data was created")
     file_type: Mapped[str] = mapped_column(String(100), nullable=True, comment="Type of file")
     file_path: Mapped[str] = mapped_column(Text, nullable=True, index=True, comment="Cloud bucket path")
@@ -392,6 +392,7 @@ if __name__ == '__main__':
     from src.sql_db.database_simple import get_engine
 
     engine = get_engine()
+
     async def main():
         await recreate_tables(engine)
         print("Tables have been recreated successfully")

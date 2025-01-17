@@ -1,12 +1,15 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
-
+from typing import Dict, List, Tuple
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+import sys
+from pathlib import Path
 
-from sql_db.etl_model import Entry
-from sql_db.database_simple import get_async_db_session
+sys.path.append(str(Path(__file__).parents[2]))
+
+from src.schemas.schemas import Entry
+from src.sql_db.database_simple import get_async_db_session
 
 
 @dataclass

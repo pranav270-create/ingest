@@ -209,7 +209,9 @@ class ChunkingMethod(str, Enum):
 
 class EmbeddedFeatureType(str, Enum):
     TEXT = "text"  # these words are either spoken or written (tables included)
-    IMAGE = "image"  # this is for directly embedded images or ColPali (joint latent space)
+    IMAGE = (
+        "image"  # this is for directly embedded images or ColPali (joint latent space)
+    )
     # these are synthetic features and are all text
     SYNTHETIC_FEATURE_DESCRIPTION = "synthetic_feature_description"  # this is for extracted images (traditional pipeline)
     SYNTHETIC_SUMMARY = "synthetic_summary"
@@ -251,8 +253,12 @@ class Index(BaseModel):
     """
 
     primary: Annotated[int, Field(gt=0)]  # Ensure primary is greater than 0
-    secondary: Optional[Annotated[int, Field(gt=0)]] = None  # Ensure secondary is greater than 0 if provided
-    tertiary: Optional[Annotated[int, Field(gt=0)]] = None  # Ensure tertiary is greater than 0 if provided
+    secondary: Optional[Annotated[int, Field(gt=0)]] = (
+        None  # Ensure secondary is greater than 0 if provided
+    )
+    tertiary: Optional[Annotated[int, Field(gt=0)]] = (
+        None  # Ensure tertiary is greater than 0 if provided
+    )
 
     def __str__(self):
         return f"{self.primary}.{self.secondary}.{self.tertiary}"
@@ -288,7 +294,11 @@ class Index(BaseModel):
     def __eq__(self, other):
         if not isinstance(other, Index):
             return NotImplemented
-        return self.primary == other.primary and self.secondary == other.secondary and self.tertiary == other.tertiary
+        return (
+            self.primary == other.primary
+            and self.secondary == other.secondary
+            and self.tertiary == other.tertiary
+        )
 
     def __hash__(self):
         return hash((self.primary, self.secondary, self.tertiary))
@@ -332,9 +342,14 @@ class ChunkLocation(BaseModel):
 
     index: Index  # basically page number
     bounding_box: Optional[BoundingBox] = None  # Physical location on the page
-    extracted_feature_type: Optional[ExtractedFeatureType] = None  # Type of content at this location
+    extracted_feature_type: Optional[ExtractedFeatureType] = (
+        None  # Type of content at this location
+    )
     page_file_path: Optional[str] = None  # This is the file path to the page screenshot
-    extracted_file_path: Optional[str] = None  # This is the file path to the extracted screenshot
+    extracted_file_path: Optional[str] = (
+        None  # This is the file path to the extracted screenshot
+    )
+
 
 
 # ------------------------------ CORE MODELS ------------------------------ #
@@ -351,24 +366,38 @@ class Ingestion(BaseModel):
     document_title: Optional[str] = None  # We may want a LLM to title the document
     scope: Scope  # You must know the scope of the document before you can ingest it.
     content_type: Optional[ContentType] = None  # We may eventually want to infer this
-    creator_name: str  # This is the name of the entity who created the document (if known)
+    creator_name: (
+        str  # This is the name of the entity who created the document (if known)
+    )
     creation_date: Optional[str] = None
-    file_type: Optional[FileType] = None  # This is the file type of the document (pdf, docx, pptx, etc.)
+    file_type: Optional[FileType] = (
+        None  # This is the file type of the document (pdf, docx, pptx, etc.)
+    )
     file_path: Optional[str] = None  # Cloud bucket path
     file_size: Optional[int] = None  # In bytes
-    public_url: Optional[str] = None  # This is the public URL for the document (website, image, youtube, etc.)
+    public_url: Optional[str] = (
+        None  # This is the public URL for the document (website, image, youtube, etc.)
+    )
     # Ingestion fields
-    ingestion_method: IngestionMethod  # Source of ingestion (e.g., 'slack', 'youtube', 'wix', etc.)
+    ingestion_method: (
+        IngestionMethod  # Source of ingestion (e.g., 'slack', 'youtube', 'wix', etc.)
+    )
     ingestion_date: Optional[str] = None
     # Added fields
     document_summary: Optional[str] = None  # This is a summary of the document
-    document_keywords: Optional[list[str]] = None  # This is a list of keywords that we have extracted
-    document_metadata: Optional[dict[str, Any]] = None  # This is for any metadata that we have not captured in other fields yet
+    document_keywords: Optional[list[str]] = (
+        None  # This is a list of keywords that we have extracted
+    )
+    document_metadata: Optional[dict[str, Any]] = (
+        None  # This is for any metadata that we have not captured in other fields yet
+    )
     # Extraction fields
     extraction_method: Optional[ExtractionMethod] = None
     extraction_date: Optional[str] = None
     # NOTE: The CONTENT is default of type .json with page_number and content?
-    extracted_document_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
+    extracted_document_file_path: Optional[str] = (
+        None  # This is the path to the extracted file which we can use for more context
+    )
     # Chunking fields
     chunking_method: Optional[ChunkingMethod] = None
     chunking_metadata: Optional[dict[str, Any]] = None
@@ -378,7 +407,9 @@ class Ingestion(BaseModel):
     feature_dates: Optional[list[str]] = None  # feature_types = name of prompt from PromptRegistry
     feature_types: Optional[list[str]] = None  # feature_dates = date of prompt from PromptRegistry
     # Unprocessed citations
-    unprocessed_citations: Optional[dict[str, Any]] = None  # This is for citations that have not been processed yet
+    unprocessed_citations: Optional[dict[str, Any]] = (
+        None  # This is for citations that have not been processed yet
+    )
 
     @field_validator("extracted_document_file_path")
     def validate_extracted_document_file_path(cls, v):
@@ -394,19 +425,31 @@ class Entry(BaseModel):
     uuid: str
 
     # Core fields
-    ingestion: Optional[Ingestion] = None  # null for cross document only, citations must be there
-    string: Optional[str] = None  # If we embed a document or image, we don't need the original text
+    ingestion: Optional[Ingestion] = (
+        None  # null for cross document only, citations must be there
+    )
+    string: Optional[str] = (
+        None  # If we embed a document or image, we don't need the original text
+    )
 
     # Featurization fields
     entry_title: Optional[str] = None  # Title of a figure, table, or other content
-    keywords: Optional[list[str]] = None  # This is for any keywords that we have not captured in other fields yet
+    keywords: Optional[list[str]] = (
+        None  # This is for any keywords that we have not captured in other fields yet
+    )
 
     # Chunk location fields. Used for reconstruction.
-    consolidated_feature_type: Optional[ExtractedFeatureType] = None  # This is the type of feature that is being embedded
-    chunk_locations: Optional[list[ChunkLocation]] = None  # Combined location information
+    consolidated_feature_type: Optional[ExtractedFeatureType] = (
+        None  # This is the type of feature that is being embedded
+    )
+    chunk_locations: Optional[list[ChunkLocation]] = (
+        None  # Combined location information
+    )
     min_primary_index: Optional[int] = None  # Cached for quick access
     max_primary_index: Optional[int] = None  # Cached for quick access
-    chunk_index: Optional[Annotated[int, Field(gt=0)]] = None  # Ensure chunk index is greater than 0
+    chunk_index: Optional[Annotated[int, Field(gt=0)]] = (
+        None  # Ensure chunk index is greater than 0
+    )
     table_number: Optional[int] = None  # This is for a table specifically
     figure_number: Optional[int] = None  # This is for a figure specifically
 
@@ -417,7 +460,9 @@ class Entry(BaseModel):
     embedding_dimensions: Optional[int] = None  # embedding_dimensions = dimensions of embedding
 
     # Random
-    added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
+    added_featurization: Optional[dict[str, Any]] = (
+        None  # This is for any additional features that we have added
+    )
 
     # Graph DB
     citations: Optional[list[Citation]] = None
@@ -474,7 +519,8 @@ class Embedding(Entry):
 @SchemaRegistry.register("Upsert")
 class Upsert(BaseModel):
     schema__: str = Field(default="Upsert", alias="schema__")
-    # From Upsert
+
+    # Core identification fields
     uuid: str
     # From Entry
     keywords: Optional[list[str]] = None
@@ -489,36 +535,73 @@ class Upsert(BaseModel):
     dense_vector: Union[list[float], float]  # This is the actual embedding
     # From Ingestion, Also what is up in the VDB as Payload
     document_hash: str
-    ingestion_id: Optional[int] = None  # Needed for SQL mode
-    pipeline_id: Optional[int] = None  # Needed for SQL mode
-    document_title: Optional[str] = None  # We may want a LLM to title the document
-    scope: Scope  # You must know the scope of the document before you can ingest it.
-    content_type: Optional[ContentType] = None  # We may eventually want to infer this
-    file_type: Optional[FileType] = None  # For alerts
-    public_url: Optional[str] = None  # This is the public URL for the document (website, image, youtube, etc.)
-    creator_name: str  # This is the name of the entity who created the document (if known)
-    creation_date: Optional[str] = None
-    file_path: Optional[str] = None  # Cloud bucket path, so just grab the ending
-    file_size: Optional[int] = None  # In bytes
-    # Ingestion fields
-    ingestion_method: IngestionMethod  # Source of ingestion (e.g., 'slack', 'youtube', 'wix', etc.)
-    ingestion_date: str
-    # Extraction fields
-    extraction_method: Optional[ExtractionMethod] = None
-    extraction_date: Optional[str] = None
-    extracted_document_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
-    # Chunking fields
-    chunking_method: Optional[ChunkingMethod] = None
-    chunking_date: Optional[str] = None
-    # Featurization fields
-    feature_models: Optional[list[str]] = None
-    feature_dates: Optional[list[str]] = None
-    feature_types: Optional[list[str]] = None
-    # From Entry
-    embedded_feature_type: Optional[EmbeddedFeatureType] = None  # This is the type of feature that is being embedded
+
+    # Core content fields
+    string: Optional[str] = None  # From Entry - original text content
+    entry_title: Optional[str] = (
+        None  # From Entry - title of figure, table, or other content
+    )
+    keywords: Optional[list[str]] = None  # From Entry
+
+    # Chunk location fields from Entry
+    consolidated_feature_type: Optional[ExtractedFeatureType] = None
+    chunk_locations: Optional[list[ChunkLocation]] = None
+    min_primary_index: Optional[int] = None
+    max_primary_index: Optional[int] = None
+    chunk_index: Optional[Annotated[int, Field(gt=0)]] = None
+    table_number: Optional[int] = None
+    figure_number: Optional[int] = None
+
+    # Embedding specific fields
+    sparse_vector: dict[str, Union[list[float], list[int]]]
+    dense_vector: Union[list[float], float]
+    embedded_feature_type: Optional[EmbeddedFeatureType] = None
     embedding_date: Optional[str] = None
     embedding_model: Optional[str] = None
     embedding_dimensions: Optional[int] = None
+
+    # Processing fields from Ingestion
+    ingestion_id: Optional[int] = None
+    pipeline_id: Optional[int] = None
+
+    # Document fields from Ingestion
+    document_title: Optional[str] = None
+    scope: Scope
+    content_type: Optional[ContentType] = None
+    creator_name: str
+    creation_date: Optional[str] = None
+    file_type: Optional[FileType] = None
+    file_path: Optional[str] = None
+    file_size: Optional[int] = None
+    public_url: Optional[str] = None
+
+    # Ingestion fields from Ingestion
+    ingestion_method: IngestionMethod
+    ingestion_date: str
+
+    # Document analysis fields from Ingestion
+    document_summary: Optional[str] = None
+    document_keywords: Optional[list[str]] = None
+    document_metadata: Optional[dict[str, Any]] = None
+
+    # Extraction fields from Ingestion
+    extraction_method: Optional[ExtractionMethod] = None
+    extraction_date: Optional[str] = None
+    extracted_document_file_path: Optional[str] = None
+
+    # Chunking fields from Ingestion
+    chunking_method: Optional[ChunkingMethod] = None
+    chunking_metadata: Optional[dict[str, Any]] = None
+    chunking_date: Optional[str] = None
+
+    # Featurization fields from Ingestion
+    feature_models: Optional[list[str]] = None
+    feature_dates: Optional[list[str]] = None
+    feature_types: Optional[list[str]] = None
+
+    # Additional fields from Entry
+    added_featurization: Optional[dict[str, Any]] = None
+    citations: Optional[list[Citation]] = None
 
 
 class FormattedScoredPoints(BaseModel):

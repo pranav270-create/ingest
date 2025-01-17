@@ -1,32 +1,36 @@
 stages:
   - name: ingest
     functions:
-      - name: local
+      - name: s3
         input: null
         return: Ingestion
         params:
-          directory_path: "/Users/pranaviyer/Desktop/AstralisData/"
+          bucket_name: "astralis-data-4170a4f6"
+          prefix:
+            - "docbench/news/179"
+            - "docbench/news/180"
+          ending_with: ".pdf"
           added_metadata:
             document_title: "docbench"
             content_type: "other"
-            ingestion_method: "local_file"
+            ingestion_method: "s3"
             file_type: "pdf"
 
   - name: extract
     functions:
-      - name: ocr2_0
+      - name: simple
         input: Ingestion
         return: Entry
 
 pipeline:
   version: "1.0"
-  description: "test_pipeline_pranav_ocr2_0"
-  # pipeline_id: 2
+  description: "test_pipeline_pranav_ingest_s3"
+  # pipeline_id: 1
   # resume_from_step: 2
   # update_on_collision: true  # Add this flag
   # fork_pipeline: true
   # collection_name: "test_collection_pranav"
 
 storage:
-  storage_type: "local"
-  base_path: "/Users/pranaviyer/Desktop/local_files/"
+  storage_type: "s3"
+  bucket_name: "astralis-data-4170a4f6"

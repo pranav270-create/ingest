@@ -1,42 +1,35 @@
-import os
 from logging.config import fileConfig
+import os
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-# this is the Alembic Config object
-config = context.config
-
-# Update the URL with environment variables
-section = config.config_ini_section
-config.set_section_option(section, "DB_USER", os.getenv("DB_USER", ""))
-config.set_section_option(section, "DB_PASS", os.getenv("DB_PASS", ""))
-config.set_section_option(section, "DB_HOST", os.getenv("DB_HOST", ""))
-config.set_section_option(section, "DB_PORT", os.getenv("DB_PORT", "3306"))
-config.set_section_option(section, "DB_NAME", os.getenv("ETL_DB_NAME", ""))
-
-# Import your models
 import sys
 from pathlib import Path
+
 sys.path.append(str(Path(__file__).resolve().parents[3]))
 
 from src.sql_db.etl_model import Base
 
-# Set target metadata
-target_metadata = Base.metadata
+# this is the Alembic Config object, which provides
+# access to the values within the .ini file in use.
+config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# add your model's MetaData object here
+target_metadata = Base.metadata
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = (
+        f"postgresql://"  # Changed to sync driver
+        f"{os.environ.get('AWS_DB_USER')}:{os.environ.get('AWS_DB_PASS')}@"
+        f"{os.environ.get('AWS_DB_HOST')}:{os.environ.get('AWS_DB_PORT')}/{os.environ.get('AWS_DB_NAME')}"
+    )
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -47,10 +40,17 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
+    url = (
+        f"postgresql://"  # Changed to sync driver
+        f"{os.environ.get('AWS_DB_USER')}:{os.environ.get('AWS_DB_PASS')}@"
+        f"{os.environ.get('AWS_DB_HOST')}:{os.environ.get('AWS_DB_PORT')}/{os.environ.get('AWS_DB_NAME')}"
+    )
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        {"sqlalchemy.url": url},
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

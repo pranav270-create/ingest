@@ -132,6 +132,7 @@ async def pipeline_step(
         await session.commit()
 
         # Run the function
+        print(f"Running function {function_name} with params {params}")
         func = FunctionRegistry.get(stage, function_name)
         if stage == "ingest":
             results = await func(**params, simple_mode=False)
