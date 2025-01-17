@@ -35,7 +35,7 @@ class BasePrompt(ABC, Generic[T]):
     @abstractmethod
     def parse_response(entry: T, response: ModelResponse) -> T:
         """
-        Parses the response from the LLM and returns a list of entries
+        Parses the response from the LLM and returns a new Entry
         """
         pass
 

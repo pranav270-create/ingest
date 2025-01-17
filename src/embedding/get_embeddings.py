@@ -2,7 +2,7 @@ import base64
 import os
 import sys
 from pathlib import Path
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 import httpx
 from litellm import Router
@@ -65,16 +65,15 @@ async def get_jina_embeddings(
 
 @FunctionRegistry.register("embed", "embed")
 async def get_embeddings(
-    basemodels: Union[list[Entry]],
+    basemodels: list[Entry],
     model_name: str,
-    embed_model_params: dict[str, Any] = None,
+    dimensions: int,
     write=None,  # noqa
     read=None,  # noqa
 ) -> list[Embedding]:
-    dimensions = embed_model_params.get("dimensions")
-    if dimensions is None:
-        raise ValueError("Dimensions must not be None")
-
+    """
+    Get embeddings for a list of entries
+    """
     inputs = []
     flat_entries = []
     using_image_embedding = False

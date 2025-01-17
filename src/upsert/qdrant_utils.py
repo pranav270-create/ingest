@@ -17,7 +17,7 @@ from qdrant_client.http.models import UpdateStatus
 sys.path.append(str(Path(__file__).parents[2]))
 
 from src.llm_utils.utils import model_mapping
-from src.schemas.schemas import Upsert
+from src.schemas.schemas import Embedding, Upsert
 
 
 # Clients
@@ -49,7 +49,13 @@ async def async_get_qdrant_client(timeout: int = 10) -> QdrantClient:
 
 # collection is a set of points (vector + payload) that you can search over
 # they recommed just using 1 collection
-def create_collection(client: QdrantClient, collection_name: str, vector_size: int = 1024, distance: models.Distance = models.Distance.COSINE, datatype: models.Datatype = models.Datatype.FLOAT16):
+def create_collection(
+    client: QdrantClient,
+    collection_name: str,
+    vector_size: int = 1024,
+    distance: models.Distance = models.Distance.COSINE,
+    datatype: models.Datatype = models.Datatype.FLOAT16,
+):
     """
     Creates a new collection in Qdrant with the specified name and vector configuration.
 
@@ -315,7 +321,7 @@ async def async_upsert_embed_response_files(
         await async_change_index_threshold(client, collection, 2000)
 
 
-def process_embedding(embedding: dict, dense_model_name: str, sparse_model_name: Optional[str]) -> Optional[dict]:
+def process_embedding(embedding: Embedding, dense_model_name: str, sparse_model_name: Optional[str]) -> Optional[dict]:
     """
     Generate a Qdrant compatible vector from an embedding dictionary.
 
@@ -323,38 +329,21 @@ def process_embedding(embedding: dict, dense_model_name: str, sparse_model_name:
     Returns a dictionary with vector data or None if an error occurs.
     """
     # build the dense and sparse vector
-    vector = {dense_model_name: embedding["embedding"]}
+    vector = {dense_model_name: embedding.embedding}
 
     if sparse_model_name:
         bm25_embedding_model = get_bm25_model(sparse_model_name)
-        sparse_embedding = bm25_embedding_model.passage_embed(embedding["string"])
+        sparse_embedding = bm25_embedding_model.passage_embed(embedding.string)
         vector[sparse_model_name] = list(sparse_embedding)[0].as_object()
 
-    # build the payload based on the Upsert schema
+    upsert = embedding.to_upsert(dense_model_name, sparse_model_name, vector)
+
     vdb_payload = {
-        key: value for key, value in embedding["ingestion"].items() if value is not None and key in Upsert.model_fields.keys()
-    }
-    vdb_payload.pop("schema__", None)  # Use None to avoid KeyError if "schema__" is not present
-    upsert_payload = vdb_payload.copy()
-    upsert_payload.update(
-        {
-            "string": embedding["string"],
-            "context_summary_string": embedding.get("context_summary_string", None),
-            "added_featurization": embedding.get("added_featurization", None),
-            "keywords": embedding.get("keywords", None),
-            "index_numbers": embedding.get("index_numbers", None),
-            "uuid": str(uuid.uuid4()),
-            "sparse_vector": {
-                "values": vector[sparse_model_name]["values"].tolist(),
-                "indices": vector[sparse_model_name]["indices"].tolist(),
-            },
-            "dense_vector": vector[dense_model_name].tolist()
-            if isinstance(vector[dense_model_name], np.ndarray)
-            else vector[dense_model_name],
-            "schema__": "Upsert",
-        }
-    )
-    upsert = Upsert(**upsert_payload)
+        key: value
+        for key, value in embedding.ingestion.model_dump().items()
+        if value is not None and key in Upsert.model_fields
+    } if embedding.ingestion else {}
+
     return {
         "upsert": upsert,
         "vdb_payload": vdb_payload,
@@ -394,7 +383,7 @@ async def async_upsert_embed(
 
         # iterate over files in folder
         for embedding in embeddings:
-            processed = process_embedding(embedding.model_dump(), dense_model_name, sparse_model_name)
+            processed = process_embedding(embedding, dense_model_name, sparse_model_name)
             if processed:
                 upsert = processed["upsert"]
                 # make point

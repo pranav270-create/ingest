@@ -26,6 +26,26 @@ stages:
         params:
           prompt_name: "summarize_entry"
           model_name: "gpt-4o-mini"
+    
+  - name: embed
+    functions:
+      - name: embed
+        input: Entry
+        return: Embedding
+        params:
+          model_name: "openai"
+          dimensions: 512
+
+  - name: upsert
+    functions:
+      - name: upsert_embeddings
+        input: Embedding
+        return: Upsert
+        params:
+          collection_name: "test_collection_mark"
+          dense_model_name: "text-embedding-3-large"
+          sparse_model_name: "bm25"
+          dimensions: 512
 
 
 pipeline:

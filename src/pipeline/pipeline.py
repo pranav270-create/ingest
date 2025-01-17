@@ -22,7 +22,7 @@ class PipelineOrchestrator:
         FunctionRegistry.autodiscover("src.chunking")
         FunctionRegistry.autodiscover("src.featurization")
         FunctionRegistry.autodiscover("src.embedding")
-        FunctionRegistry.autodiscover("src.vector_db")
+        FunctionRegistry.autodiscover("src.upsert")
 
         PromptRegistry.autodiscover("src.prompts")
         SchemaRegistry.autodiscover("src.schemas")

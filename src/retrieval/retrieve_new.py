@@ -19,7 +19,7 @@ from src.retrieval.embed_text import async_embed_text
 from src.schemas.schemas import EmbeddedFeatureType, FormattedScoredPoints, Ingestion
 from src.sql_db.database_simple import get_async_session
 from src.sql_db.etl_model import Entry
-from src.vector_db.qdrant_utils import get_bm25_model
+from src.upsert.qdrant_utils import get_bm25_model
 
 
 def assign_citation_numbers(formatted_context: list[list[FormattedScoredPoints]]) -> dict[str, int]:
@@ -226,7 +226,7 @@ async def test(questions: list[str]):
 
     from openai import AsyncOpenAI
 
-    from src.vector_db.qdrant_utils import async_get_qdrant_client
+    from src.upsert.qdrant_utils import async_get_qdrant_client
 
     qdrant_client = await async_get_qdrant_client(timeout=1000)
     embed_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))

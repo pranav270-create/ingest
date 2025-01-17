@@ -3,6 +3,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional, TypeVar, Union
 
+import numpy as np
 from pydantic import BaseModel, Field, field_validator
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -148,53 +149,53 @@ class ExtractionMethod(str, Enum):
 
 class ExtractedFeatureType(str, Enum):
     # Common content types (shared across extractors)
-    text = "text"                    # Basic text content (from Marker.Text and Textract.LAYOUT_TEXT)
-    word = "word"                    # Word-level text (from Textract extraction)
-    line = "line"                    # Line-level text (from Marker.Line and Textract extraction)
-    image = "image"                   # Basic image content
-    table = "table"                   # Tables (from Marker.Table and Textract.LAYOUT_TABLE)
-    figure = "figure"                  # Figures (from Marker.Figure and Textract.LAYOUT_FIGURE)
-    code = "code"                    # Code blocks (from Marker.Code)
-    equation = "equation"                # Mathematical equations (from Marker.Equation)
-    form = "form"                    # Form elements (from Marker.Form)
-    header = "header"                  # Headers (from Marker.PageHeader and Textract.LAYOUT_HEADER)
-    footer = "footer"                  # Footers (from Marker.PageFooter and Textract.LAYOUT_FOOTER)
-    section_header = "section_header"          # Section headers (from Marker.SectionHeader and Textract.LAYOUT_SECTION_HEADER)
-    list = "list"                    # List structures (from Marker.ListItem/ListGroup and Textract.LAYOUT_LIST)
-    page_number = "page_number"             # Page numbers (from Textract.LAYOUT_PAGE_NUMBER)
+    text = "text"  # Basic text content (from Marker.Text and Textract.LAYOUT_TEXT)
+    word = "word"  # Word-level text (from Textract extraction)
+    line = "line"  # Line-level text (from Marker.Line and Textract extraction)
+    image = "image"  # Basic image content
+    table = "table"  # Tables (from Marker.Table and Textract.LAYOUT_TABLE)
+    figure = "figure"  # Figures (from Marker.Figure and Textract.LAYOUT_FIGURE)
+    code = "code"  # Code blocks (from Marker.Code)
+    equation = "equation"  # Mathematical equations (from Marker.Equation)
+    form = "form"  # Form elements (from Marker.Form)
+    header = "header"  # Headers (from Marker.PageHeader and Textract.LAYOUT_HEADER)
+    footer = "footer"  # Footers (from Marker.PageFooter and Textract.LAYOUT_FOOTER)
+    section_header = "section_header"  # Section headers (from Marker.SectionHeader and Textract.LAYOUT_SECTION_HEADER)
+    list = "list"  # List structures (from Marker.ListItem/ListGroup and Textract.LAYOUT_LIST)
+    page_number = "page_number"  # Page numbers (from Textract.LAYOUT_PAGE_NUMBER)
 
     # Marker-specific types (original: PascalCase -> lowercase)
-    span = "span"                    # From Marker.Span
-    figuregroup = "figuregroup"             # From Marker.FigureGroup
-    tablegroup = "tablegroup"              # From Marker.TableGroup
-    listgroup = "listgroup"               # From Marker.ListGroup
-    picturegroup = "picturegroup"            # From Marker.PictureGroup
-    picture = "picture"                 # From Marker.Picture
-    page = "page"                    # From Marker.Page
-    caption = "caption"                 # From Marker.Caption
-    footnote = "footnote"                # From Marker.Footnote
-    handwriting = "handwriting"             # From Marker.Handwriting
-    textinlinemath = "textinlinemath"          # From Marker.TextInlineMath
-    tableofcontents = "tableofcontents"         # From Marker.TableOfContents
-    document = "document"                # From Marker.Document
-    complexregion = "complexregion"           # From Marker.ComplexRegion
+    span = "span"  # From Marker.Span
+    figuregroup = "figuregroup"  # From Marker.FigureGroup
+    tablegroup = "tablegroup"  # From Marker.TableGroup
+    listgroup = "listgroup"  # From Marker.ListGroup
+    picturegroup = "picturegroup"  # From Marker.PictureGroup
+    picture = "picture"  # From Marker.Picture
+    page = "page"  # From Marker.Page
+    caption = "caption"  # From Marker.Caption
+    footnote = "footnote"  # From Marker.Footnote
+    handwriting = "handwriting"  # From Marker.Handwriting
+    textinlinemath = "textinlinemath"  # From Marker.TextInlineMath
+    tableofcontents = "tableofcontents"  # From Marker.TableOfContents
+    document = "document"  # From Marker.Document
+    complexregion = "complexregion"  # From Marker.ComplexRegion
 
     # MinerU-specific types
-    table_body = "table_body"                 # From MinerU.LAYOUT_TABLE_BODY
-    table_caption = "table_caption"           # From MinerU.LAYOUT_TABLE_CAPTION
-    table_footnote = "table_footnote"           # From MinerU.LAYOUT_TABLE_FOOTNOTE
-    image_body = "image_body"                 # From MinerU.LAYOUT_IMAGE_BODY
-    image_caption = "image_caption"           # From MinerU.LAYOUT_IMAGE_CAPTION
-    image_footnote = "image_footnote"           # From MinerU.LAYOUT_IMAGE_FOOTNOTE
-    index = "index"                             # From MinerU.LAYOUT_INDEX
+    table_body = "table_body"  # From MinerU.LAYOUT_TABLE_BODY
+    table_caption = "table_caption"  # From MinerU.LAYOUT_TABLE_CAPTION
+    table_footnote = "table_footnote"  # From MinerU.LAYOUT_TABLE_FOOTNOTE
+    image_body = "image_body"  # From MinerU.LAYOUT_IMAGE_BODY
+    image_caption = "image_caption"  # From MinerU.LAYOUT_IMAGE_CAPTION
+    image_footnote = "image_footnote"  # From MinerU.LAYOUT_IMAGE_FOOTNOTE
+    index = "index"  # From MinerU.LAYOUT_INDEX
 
     # Textract-specific types (original: LAYOUT_* -> lowercase)
-    key_value = "key_value"               # From Textract.LAYOUT_KEY_VALUE
+    key_value = "key_value"  # From Textract.LAYOUT_KEY_VALUE
 
     # Catch-all types
-    combined_text = "combined_text"           # Our aggregation type
-    section_text = "section_text"           # Our aggregation type
-    other = "other"                   # Fallback type
+    combined_text = "combined_text"  # Our aggregation type
+    section_text = "section_text"  # Our aggregation type
+    other = "other"  # Fallback type
 
 
 class ChunkingMethod(str, Enum):
@@ -298,6 +299,7 @@ class BoundingBox(BaseModel):
     This is the bounding box of the extracted data. This will be in the pixel space of a page image.
     0, 0 is the top left corner of the page.
     """
+
     left: float
     top: float
     width: float
@@ -312,7 +314,7 @@ class BoundingBox(BaseModel):
             "left": self.left / self.page_width,
             "top": self.top / self.page_height,
             "width": self.width / self.page_width,
-            "height": self.height / self.page_height
+            "height": self.height / self.page_height,
         }
 
 
@@ -327,11 +329,13 @@ class ChunkLocation(BaseModel):
     Represents the location of a chunk within a document, combining index information
     with physical location details and the type of content extracted at that location.
     """
+
     index: Index  # basically page number
     bounding_box: Optional[BoundingBox] = None  # Physical location on the page
     extracted_feature_type: Optional[ExtractedFeatureType] = None  # Type of content at this location
     page_file_path: Optional[str] = None  # This is the file path to the page screenshot
     extracted_file_path: Optional[str] = None  # This is the file path to the extracted screenshot
+
 
 # ------------------------------ CORE MODELS ------------------------------ #
 
@@ -370,16 +374,16 @@ class Ingestion(BaseModel):
     chunking_metadata: Optional[dict[str, Any]] = None
     chunking_date: Optional[str] = None
     # Featurization fields
-    feature_models: Optional[list[str]] = None # feature_models = name of model used
-    feature_dates: Optional[list[str]] = None # feature_types = name of prompt from PromptRegistry
-    feature_types: Optional[list[str]] = None # feature_dates = date of prompt from PromptRegistry
+    feature_models: Optional[list[str]] = None  # feature_models = name of model used
+    feature_dates: Optional[list[str]] = None  # feature_types = name of prompt from PromptRegistry
+    feature_types: Optional[list[str]] = None  # feature_dates = date of prompt from PromptRegistry
     # Unprocessed citations
     unprocessed_citations: Optional[dict[str, Any]] = None  # This is for citations that have not been processed yet
 
-    @field_validator('extracted_document_file_path')
+    @field_validator("extracted_document_file_path")
     def validate_extracted_document_file_path(cls, v):
-        if v and not v.endswith('.json'):
-            raise ValueError('extracted_document_file_path must end with .json')
+        if v and not v.endswith(".json"):
+            raise ValueError("extracted_document_file_path must end with .json")
         return v
 
 
@@ -408,9 +412,9 @@ class Entry(BaseModel):
 
     # Embedding fields
     embedded_feature_type: Optional[EmbeddedFeatureType] = None  # embedded_feature_type = type of feature being embedded
-    embedding_date: Optional[str] = None # embedding_date = date of embedding
-    embedding_model: Optional[str] = None # embedding_model = name of model used
-    embedding_dimensions: Optional[int] = None # embedding_dimensions = dimensions of embedding
+    embedding_date: Optional[str] = None  # embedding_date = date of embedding
+    embedding_model: Optional[str] = None  # embedding_model = name of model used
+    embedding_dimensions: Optional[int] = None  # embedding_dimensions = dimensions of embedding
 
     # Random
     added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
@@ -422,8 +426,49 @@ class Entry(BaseModel):
 @SchemaRegistry.register("Embedding")
 class Embedding(Entry):
     schema__: str = Field(default="Embedding", alias="schema__")
-    embedding: Union[list[float], float]  # This is the actual embedding
-    tokens: Optional[int] = None  # This is the number of tokens in the embedding
+    embedding: Union[list[float], float]
+    tokens: Optional[int] = None
+
+    def to_upsert(self, dense_model_name: str, sparse_model_name: str, vector: dict) -> "Upsert":
+        """Convert Embedding to Upsert with vector information"""
+        # Get all ingestion fields that exist in Upsert schema
+        ingestion_fields = (
+            {key: value for key, value in self.ingestion.model_dump().items() if value is not None and key in Upsert.model_fields}
+            if self.ingestion
+            else {}
+        )
+
+        # Prepare vector data
+        sparse_vector = {
+            "values": vector[sparse_model_name]["values"].tolist(),
+            "indices": vector[sparse_model_name]["indices"].tolist(),
+        }
+        dense_vector = vector[dense_model_name].tolist() if isinstance(vector[dense_model_name], np.ndarray) else vector[dense_model_name]
+
+        # Combine all fields
+        upsert_data = {
+            **ingestion_fields,
+            "uuid": self.uuid,
+            "string": self.string,
+            "keywords": self.keywords,
+            "added_featurization": self.added_featurization,
+            "embedded_feature_type": self.embedded_feature_type,
+            "embedding_date": self.embedding_date,
+            "embedding_model": self.embedding_model,
+            "embedding_dimensions": self.embedding_dimensions,
+            "consolidated_feature_type": self.consolidated_feature_type,
+            "chunk_locations": self.chunk_locations,
+            "min_primary_index": self.min_primary_index,
+            "max_primary_index": self.max_primary_index,
+            "chunk_index": self.chunk_index,
+            "table_number": self.table_number,
+            "figure_number": self.figure_number,
+            "sparse_vector": sparse_vector,
+            "dense_vector": dense_vector,
+            "schema__": "Upsert",
+        }
+
+        return Upsert(**upsert_data)
 
 
 @SchemaRegistry.register("Upsert")
@@ -433,7 +478,9 @@ class Upsert(BaseModel):
     uuid: str
     # From Entry
     keywords: Optional[list[str]] = None
-    index_numbers: Optional[list[Index]] = None  # Null if we embed whole document or cross-doc summary. Represents range for continous time items; int for discrete. # noqa
+    index_numbers: Optional[list[Index]] = (
+        None  # Null if we embed whole document or cross-doc summary. Represents range for continous time items; int for discrete. # noqa
+    )
     string: Optional[str] = None
     context_summary_string: Optional[str] = None  # This is only if we are generating a summary of the entry wrt the broader document # noqa
     added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
@@ -485,8 +532,8 @@ class FormattedScoredPoints(BaseModel):
     rerank_score: Optional[float] = 0.0
 
 
-BaseModelListType = TypeVar('BaseModelListType', list[Entry], list[Ingestion])
+BaseModelListType = TypeVar("BaseModelListType", list[Entry], list[Ingestion])
 """Type variable for list of database models (list[Entry] or list[Ingestion])"""
 
-RegisteredSchemaListType = TypeVar('RegisteredSchemaListType', list[Ingestion], list[Entry], list[Embedding], list[Upsert])
+RegisteredSchemaListType = TypeVar("RegisteredSchemaListType", list[Ingestion], list[Entry], list[Embedding], list[Upsert])
 """Type variable for list of registered schemas (list[Ingestion], list[Entry], list[Embedding], list[Upsert])"""
