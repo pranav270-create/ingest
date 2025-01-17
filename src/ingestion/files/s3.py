@@ -5,6 +5,7 @@ from pathlib import Path
 import io
 import fitz  # PyMuPDF
 import hashlib
+import asyncio
 import aioboto3
 from botocore.exceptions import ClientError
 from typing import Union
@@ -128,17 +129,27 @@ async def ingest_s3_folder(
 ) -> list[Ingestion]:
     all_ingestions = []
     prefixes = prefix if isinstance(prefix, list) else [prefix]
+    
+    print(f"Starting ingestion with bucket: {bucket_name}")
+    print(f"Prefixes to process: {prefixes}")
+    print(f"File ending filter: {ending_with}")
 
-    async def process_batch(s3_client, batch_keys):
+    async def process_batch(session, batch_keys):
         tasks = []
+        # Create a new client for each task instead of trying to reuse the session
         for key in batch_keys:
-            tasks.append(create_ingestion_from_s3(s3_client, bucket_name, key, write))
+            tasks.append(create_ingestion_from_s3(session, bucket_name, key, write))
+        print(f"Processing keys: {batch_keys}")
         batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-        return [
-            update_ingestion_with_metadata(result, added_metadata)
-            for result in batch_results
-            if not isinstance(result, Exception)
-        ]
+
+        processed_results = []
+        for result in batch_results:
+            if isinstance(result, Exception):
+                print(f"Error processing file: {str(result)}")
+            else:
+                processed_results.append(update_ingestion_with_metadata(result, added_metadata))
+
+        return processed_results
 
     session = aioboto3.Session()
     async with session.client(
@@ -148,42 +159,58 @@ async def ingest_s3_folder(
         region_name=region_name,
     ) as s3:
         for current_prefix in prefixes:
+            print(f"\nProcessing prefix: {current_prefix}")
             current_batch = []
             paginator = s3.get_paginator("list_objects_v2")
 
-            async for page in paginator.paginate(
-                Bucket=bucket_name, Prefix=current_prefix
-            ):
-                if "Contents" not in page:
-                    continue
-
-                for obj in page["Contents"]:
-                    key = obj["Key"]
-                    # Skip if it's just a folder marker or doesn't match ending
-                    if (key.endswith("/") and obj["Size"] == 0) or (
-                        ending_with and not key.lower().endswith(ending_with.lower())
-                    ):
+            try:
+                async for page in paginator.paginate(
+                    Bucket=bucket_name, Prefix=current_prefix
+                ):
+                    if "Contents" not in page:
+                        print(f"No contents found for prefix: {current_prefix}")
                         continue
 
-                    current_batch.append(key)
+                    print(f"Found {len(page['Contents'])} objects in current page")
+                    
+                    for obj in page["Contents"]:
+                        key = obj["Key"]
+                        # Skip if it's just a folder marker or doesn't match ending
+                        if (key.endswith("/") and obj["Size"] == 0) or (
+                            ending_with and not key.lower().endswith(ending_with.lower())
+                        ):
+                            print(f"Skipping {key} - folder or doesn't match ending")
+                            continue
 
-                    # Process batch when it reaches batch_size
-                    if len(current_batch) >= batch_size:
-                        try:
-                            batch_results = await process_batch(s3, current_batch)
-                            all_ingestions.extend(batch_results)
-                        except Exception as e:
-                            print(f"Error processing batch: {str(e)}")
-                        current_batch = []
+                        print(f"Adding to batch: {key}")
+                        current_batch.append(key)
 
-            # Process remaining items in the last batch
-            if current_batch:
-                try:
-                    batch_results = await process_batch(s3, current_batch)
-                    all_ingestions.extend(batch_results)
-                except Exception as e:
-                    print(f"Error processing final batch: {str(e)}")
+                        # Process batch when it reaches batch_size
+                        if len(current_batch) >= batch_size:
+                            try:
+                                print(f"Processing batch of {len(current_batch)} files")
+                                batch_results = await process_batch(session, current_batch)
+                                print(f"Batch processed, got {len(batch_results)} results")
+                                all_ingestions.extend(batch_results)
+                            except Exception as e:
+                                print(f"Error processing batch: {str(e)}")
+                            current_batch = []
 
+                # Process remaining items in the last batch
+                if current_batch:
+                    try:
+                        print(f"Processing final batch of {len(current_batch)} files")
+                        batch_results = await process_batch(session, current_batch)
+                        print(f"Final batch processed, got {len(batch_results)} results")
+                        all_ingestions.extend(batch_results)
+                    except Exception as e:
+                        import traceback
+                        traceback.print_exc()
+                        print(f"Error processing final batch: {str(e)}")
+            except Exception as e:
+                print(f"Error during pagination: {str(e)}")
+
+    print(f"Total ingestions processed: {len(all_ingestions)}")
     return all_ingestions
 
 
