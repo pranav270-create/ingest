@@ -196,7 +196,7 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
             # process all functions in the stage
             stage_results = []
             for function in stage_config["functions"]:
-
+                params = function.get("params", {})
                 step_results = await pipeline_step(
                     session,
                     pipeline,
@@ -205,7 +205,7 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
                     step_order,
                     function["name"],
                     input_results=current_results if step_order > 0 else None,
-                    **function.get("params", {}),
+                    **params,
                 )
                 stage_results.extend(step_results)
 

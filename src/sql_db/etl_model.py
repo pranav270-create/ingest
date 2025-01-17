@@ -124,20 +124,46 @@ class Ingest(AsyncAttrs, AbstractBase):
 
     @validates('extraction_method')
     def validate_extraction_method(self, key, value):  # noqa
-        if isinstance(value, ExtractionMethod):
-            return value.value
+        if value is None or isinstance(value, ExtractionMethod):
+            return value.value if value is not None else None
         if value not in ExtractionMethod._value2member_map_:
             raise ValueError(f"Invalid extraction method: {value}")
         return value
 
     @validates('chunking_method')
     def validate_chunking_method(self, key, value):  # noqa
-        if isinstance(value, ChunkingMethod):
-            return value.value
+        if value is None or isinstance(value, ChunkingMethod):
+            return value.value if value is not None else None
         if value not in ChunkingMethod._value2member_map_:
             raise ValueError(f"Invalid chunking method: {value}")
         return value
 
+    @staticmethod
+    def _convert_to_datetime(value):
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            # Try common date formats
+            formats = [
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d",
+                "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%S.%fZ",
+            ]
+            for fmt in formats:
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    continue
+            raise ValueError(f"Could not parse date string: {value}")
+        raise ValueError(f"Cannot convert {type(value)} to datetime")
+
+    @validates('creation_date', 'ingestion_date', 'extraction_date', 'chunking_date')
+    def validate_dates(self, key, value):  # noqa
+        return self._convert_to_datetime(value)
 
 class ProcessingPipeline(AsyncAttrs, AbstractBase):
     __tablename__ = 'processing_pipelines'
