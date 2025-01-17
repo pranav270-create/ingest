@@ -5,11 +5,22 @@ import modal
 import io
 from PIL import Image
 import os
+import uuid
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry.function_registry import FunctionRegistry
-from src.schemas.schemas import Entry, Index, Ingestion, ExtractedFeatureType, ExtractionMethod, Scope, IngestionMethod, FileType
+from src.schemas.schemas import (
+    Entry,
+    Index,
+    Ingestion,
+    ExtractionMethod,
+    Scope,
+    IngestionMethod,
+    FileType,
+    ChunkLocation,
+    ExtractedFeatureType
+)
 from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 
 
@@ -84,9 +95,14 @@ async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs
 
         # Create entry and add to correct document
         entry = Entry(
+            uuid=str(uuid.uuid4()),
             ingestion=ingestions[ing_idx],
             string=ret,
-            index_numbers=[Index(primary=page_num)]
+            consolidated_feature_type=ExtractedFeatureType.TEXT,
+            chunk_locations=[ChunkLocation(index=Index(primary=page_num), page_file_path=ingestions[ing_idx].file_path, extracted_feature_type=ExtractedFeatureType.TEXT)],
+            min_primary_index=page_num,
+            max_primary_index=page_num,
+            chunk_index=idx + 1,
         )
         all_entries.append(entry)
         document_texts[ing_idx].append(ret)

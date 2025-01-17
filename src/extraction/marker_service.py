@@ -489,10 +489,15 @@ async def main_datalab(
     Returns:
         List of Entry objects
     """
+    all_entries = []
     file_bytes = []
+    ingestion_map = {}  # Map to track file_bytes index to ingestion
+    
     cls = modal.Cls.lookup("marker-modal", "Model")
     obj = cls()
-    for ingestion in ingestions:
+    
+    # First collect all file bytes
+    for idx, ingestion in enumerate(ingestions):
         ingestion.extraction_method = ExtractionMethod.MARKER
         ingestion.extraction_date = get_current_utc_datetime()
 
@@ -500,27 +505,24 @@ async def main_datalab(
             base_path = os.path.splitext(ingestion.file_path)[0]
             ingestion.extracted_document_file_path = f"{base_path}_marker.json"
 
-        # Update file reading to handle async
-        file_content = (
-            await read(ingestion.file_path)
-            if read
-            else open(ingestion.file_path, "rb").read()
-        )
-
-        # Convert to PDF if necessary
+        file_content = await read(ingestion.file_path) if read else open(ingestion.file_path, "rb").read()
         file_extension = Path(ingestion.file_path).suffix.lower()
         pdf_content = convert_to_pdf(file_content, file_extension)
         file_bytes.append(pdf_content)
+        ingestion_map[idx] = ingestion
 
-    all_entries = []
+    # Process each document
+    idx = 0
     async for ret in obj.parse_document.map.aio(file_bytes, return_exceptions=True):
         if isinstance(ret, Exception):
             print(f"Error processing document: {ret}")
             continue
 
+        current_ingestion = ingestion_map[idx]
         parsed_data = json.loads(ret)
-        # Create output directories (these should be virtual paths for cloud storage)
-        base_dir = os.path.dirname(ingestion.extracted_document_file_path)
+
+        # Create output directories
+        base_dir = os.path.dirname(current_ingestion.extracted_document_file_path)
         base_dir = os.path.dirname(Path(__file__).resolve())  # current file directory
         pages_dir = os.path.join(base_dir, "pages")
         extracts_dir = os.path.join(base_dir, "extracts")
@@ -586,7 +588,7 @@ async def main_datalab(
                                 parent_feature_type=feature_type,
                                 page_num=page_num,
                                 secondary_idx=secondary_idx,
-                                ingestion=ingestion,
+                                ingestion=current_ingestion,
                                 page_image_paths=page_image_paths,
                                 page_dimensions=(page_width, page_height),
                                 extracts_dir=extracts_dir,
@@ -645,7 +647,7 @@ async def main_datalab(
                     page_entry_uuid = str(uuid.uuid4())
                     page_entry = Entry(
                         uuid=page_entry_uuid,
-                        ingestion=ingestion,
+                        ingestion=current_ingestion,
                         string=combined_page_text,
                         consolidated_feature_type=ExtractedFeatureType.combined_text,
                         chunk_locations=all_chunk_locations,
@@ -705,7 +707,7 @@ async def main_datalab(
                                 parent_feature_type=feature_type,
                                 page_num=page_num,
                                 secondary_idx=secondary_idx,
-                                ingestion=ingestion,
+                                ingestion=current_ingestion,
                                 page_image_paths=page_image_paths,
                                 page_dimensions=(page_width, page_height),
                                 extracts_dir=extracts_dir,
@@ -728,7 +730,7 @@ async def main_datalab(
                                 entry, chunk_idx = await _process_title_chunk(
                                     current_chunk_text,
                                     current_chunk_locations,
-                                    ingestion,
+                                    current_ingestion,
                                     chunk_idx,
                                 )
                                 if entry:
@@ -761,7 +763,7 @@ async def main_datalab(
                     entry, chunk_idx = await _process_title_chunk(
                         current_chunk_text,
                         current_chunk_locations,
-                        ingestion,
+                        current_ingestion,
                         chunk_idx,
                     )
                     if entry:
@@ -795,16 +797,18 @@ async def main_datalab(
                     with open(output_path, "wb") as f:
                         f.write(annotated_image)
 
-        # write the combined text to the file
+        # Write the combined text for this specific ingestion
         if write:
             await write(
-                json.dumps(all_text, indent=4), ingestion.extracted_document_file_path
+                current_ingestion.extracted_document_file_path,
+                json.dumps(all_text, indent=4)
             )
         else:
-            with open(
-                ingestion.extracted_document_file_path, "w", encoding="utf-8"
-            ) as f:
+            with open(current_ingestion.extracted_document_file_path, "w", encoding="utf-8") as f:
                 f.write(json.dumps(all_text, indent=4))
+
+        idx += 1
+
     return all_entries
 
 

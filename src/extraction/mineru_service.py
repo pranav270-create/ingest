@@ -85,32 +85,51 @@ async def _extract_region(
     else:
         img = Image.open(page_file_path)
 
-    # Convert relative coordinates to absolute
-    left = bbox[0] * page_width
-    top = bbox[1] * page_height
-    right = bbox[2] * page_width
-    bottom = bbox[3] * page_height
-
-    # Crop the region
-    region = img.crop((left, top, right, bottom))
-
-    # Save extracted region
-    extracted_path = (
-        f"{extracts_dir}/{feature_type.value}_{page_num + 1}_{secondary_index}.jpg"
-    )
-    img_byte_arr = io.BytesIO()
-    region.save(img_byte_arr, format="JPEG")
-    img_byte_arr = img_byte_arr.getvalue()
-
-    if write:
-        await write(extracted_path, img_byte_arr)
+    # Check if coordinates are already absolute (>1)
+    if any(coord > 1 for coord in bbox):
+        left, top, right, bottom = bbox
     else:
-        os.makedirs(os.path.dirname(extracted_path), exist_ok=True)
-        with open(extracted_path, "wb") as f:
-            f.write(img_byte_arr)
+        # Convert relative coordinates to absolute
+        left = bbox[0] * page_width
+        top = bbox[1] * page_height
+        right = bbox[2] * page_width
+        bottom = bbox[3] * page_height
 
-    img.close()
-    return extracted_path
+    # Ensure coordinates are within image bounds
+    left = max(0, min(left, page_width))
+    top = max(0, min(top, page_height))
+    right = max(0, min(right, page_width))
+    bottom = max(0, min(bottom, page_height))
+
+    # Ensure valid box dimensions
+    if right <= left or bottom <= top:
+        print(f"Warning: Invalid box dimensions for {feature_type} on page {page_num + 1}")
+        img.close()
+        return None
+
+    try:
+        # Crop the region
+        region = img.crop((left, top, right, bottom))
+
+        # Save extracted region
+        extracted_path = f"{extracts_dir}/{feature_type.value}_{page_num + 1}_{secondary_index}.jpg"
+        img_byte_arr = io.BytesIO()
+        region.save(img_byte_arr, format="JPEG")
+        img_byte_arr = img_byte_arr.getvalue()
+
+        if write:
+            await write(extracted_path, img_byte_arr)
+        else:
+            os.makedirs(os.path.dirname(extracted_path), exist_ok=True)
+            with open(extracted_path, "wb") as f:
+                f.write(img_byte_arr)
+
+        return extracted_path
+    except Exception as e:
+        print(f"Error extracting region: {e}")
+        return None
+    finally:
+        img.close()
 
 
 async def _process_para_blocks(
@@ -139,6 +158,7 @@ async def _process_para_blocks(
     }
 
     for block in blocks:
+        print(f"Processing block type: {block['type']}")
         feature_type = _map_mineru_type(block["type"])
         content = ""
         extracted_path = None
@@ -339,112 +359,6 @@ async def _process_para_blocks(
     return entries, chunk_idx, current_chunk_text, current_chunk_locations
 
 
-async def __process_para_blocks(
-    blocks: list,
-    page_num: int,
-    ingestion: Ingestion,
-    page_file_path: str,
-    chunk_idx: int,
-    counters: dict,
-    page_width: float,
-    page_height: float,
-    extracts_dir: str,
-    write=None,
-) -> tuple[list[Entry], int]:
-    """Recursively process para_blocks to extract entries."""
-    entries = []
-
-    for block in blocks:
-        feature_type = _map_mineru_type(block["type"])
-
-        # Initialize content
-        content = ""
-        extracted_path = None
-
-        # Recursively process nested lines or spans
-        if "lines" in block:
-            for line in block["lines"]:
-                for span in line.get("spans", []):
-                    if span["type"] == "text":
-                        content += f"{span['content']} "
-                    elif span["type"] == "inline_equation":
-                        content += f"{span.get('latex', '')} "
-                    elif span["type"] == "table":
-                        # Handle table content
-                        content += f"{span.get('html', '')} "
-                        counters["table_count"] += 1
-                        # Optionally extract table image if available
-                        if "image_path" in span:
-                            extracted_path = (
-                                f"{extracts_dir}/table_{counters['table_count']}.jpg"
-                            )
-                    elif span["type"] == "figure":
-                        # Handle figure content
-                        counters["figure_count"] += 1
-                        extracted_path = (
-                            f"{extracts_dir}/figure_{counters['figure_count']}.jpg"
-                        )
-                    else:
-                        # Other types can be added here
-                        continue
-
-        elif "spans" in block:
-            for span in block["spans"]:
-                if span["type"] == "text":
-                    content += f"{span['content']} "
-                elif span["type"] == "inline_equation":
-                    content += f"{span.get('latex', '')} "
-                # Add other span types if necessary
-
-        # Clean up content
-        content = content.strip()
-
-        if content:
-            location = ChunkLocation(
-                index=Index(
-                    primary=page_num + 1,
-                    secondary=chunk_idx + 1,
-                ),
-                extracted_feature_type=feature_type,
-                extracted_file_path=extracted_path,
-                page_file_path=page_file_path,
-                bounding_box=_convert_bbox(
-                    block.get("bbox", []), page_width, page_height
-                ),
-            )
-
-            entry = Entry(
-                uuid=str(uuid.uuid4()),
-                ingestion=ingestion,
-                string=content,
-                consolidated_feature_type=feature_type,
-                chunk_locations=[location],
-                min_primary_index=page_num + 1,
-                max_primary_index=page_num + 1,
-                chunk_index=chunk_idx + 1,
-            )
-            entries.append(entry)
-            chunk_idx += 1
-
-        # Recursively process nested blocks if any
-        if "blocks" in block:
-            nested_entries, chunk_idx = await __process_para_blocks(
-                block["blocks"],
-                page_num,
-                ingestion,
-                page_file_path,
-                chunk_idx,
-                counters,
-                page_width,
-                page_height,
-                extracts_dir,
-                write,
-            )
-            entries.extend(nested_entries)
-
-    return entries, chunk_idx
-
-
 @FunctionRegistry.register("parse", "mineru")
 async def main_mineru(
     ingestions: list[Ingestion],
@@ -467,11 +381,13 @@ async def main_mineru(
         List of Entry objects
     """
     file_bytes = []
+    ingestion_map = {}  # Map to track file_bytes index to ingestion
+
     cls = modal.Cls.lookup("mineru-modal", "MinerU")
     obj = cls()
 
     # First pass: collect all file bytes
-    for ingestion in ingestions:
+    for idx, ingestion in enumerate(ingestions):
         ingestion.extraction_method = ExtractionMethod.MINERU
         ingestion.extraction_date = get_current_utc_datetime()
 
@@ -479,36 +395,24 @@ async def main_mineru(
             base_path = os.path.splitext(ingestion.file_path)[0]
             ingestion.extracted_document_file_path = f"{base_path}_mineru.json"
 
-        # Read and process file
-        file_content = (
-            await read(ingestion.file_path)
-            if read
-            else open(ingestion.file_path, "rb").read()
-        )
-
-        # Convert to PDF if necessary
-        file_extension = Path(ingestion.file_path).suffix.lower()
-        pdf_content = convert_to_pdf(file_content, file_extension)
+        file_content = await read(ingestion.file_path) if read else open(ingestion.file_path, "rb").read()
+        pdf_content = convert_to_pdf(file_content, Path(ingestion.file_path).suffix.lower())
         file_bytes.append(pdf_content)
+        ingestion_map[idx] = ingestion
 
     all_entries = []
-    # # Process files in parallel using async map
-    # async for result in obj.process_pdf.map.aio(file_bytes, return_exceptions=True):
-    #     if isinstance(result, Exception):
-    #         print(f"Error processing document: {result}")
-    #         continue
+    # Process files in parallel using async map
+    idx = 0
+    async for result in obj.process_pdf.map.aio(file_bytes, return_exceptions=True):
+        if isinstance(result, Exception):
+            print(f"Error processing document: {result}")
+            continue
 
-    for ingestion in ingestions:
-        # Read the JSON content from the file
-        with open("mineru_result.json", "r", encoding="utf-8") as f:
-            result = json.load(f)
-
-        # with open("mineru_result.json", "w") as f:
-        #     json.dump(result, f, indent=4)
+        current_ingestion = ingestion_map[idx]
 
         # Create output directories
-        base_dir = os.path.dirname(ingestion.extracted_document_file_path)
-        # base_dir = os.path.dirname(Path(__file__).resolve())  # current file directory
+        base_dir = os.path.dirname(current_ingestion.extracted_document_file_path)
+        base_dir = os.path.dirname(Path(__file__).resolve())  # current file directory
         pages_dir = os.path.join(base_dir, "pages")
         extracts_dir = os.path.join(base_dir, "extracts")
 
@@ -541,10 +445,10 @@ async def main_mineru(
             page_file_path = f"{pages_dir}/page_{page_num + 1}.jpg"
 
             # Process para_blocks
-            entries, chunk_idx = await _process_para_blocks(
+            entries, chunk_idx, current_chunk_text, current_chunk_locations = await _process_para_blocks(
                 blocks=page_result.get("para_blocks", []),
                 page_num=page_num,
-                ingestion=ingestion,
+                ingestion=current_ingestion,
                 page_file_path=page_file_path,
                 chunk_idx=chunk_idx,
                 counters=counters,
@@ -576,18 +480,17 @@ async def main_mineru(
                         with open(output_path, "wb") as f:
                             f.write(annotated_image)
 
-        # Write combined entries to file
+        # Write combined entries to file for this specific ingestion
         if write:
             await write(
-                json.dumps([entry.model_dump() for entry in all_entries], indent=4),
-                ingestion.extracted_document_file_path,
+                current_ingestion.extracted_document_file_path,
+                json.dumps([entry.model_dump() for entry in all_entries], indent=4)
             )
         else:
-            with open(
-                ingestion.extracted_document_file_path, "w", encoding="utf-8"
-            ) as f:
+            with open(current_ingestion.extracted_document_file_path, "w", encoding="utf-8") as f:
                 json.dump([entry.model_dump() for entry in all_entries], f, indent=4)
 
+        idx += 1
     return all_entries
 
 
@@ -596,22 +499,22 @@ if __name__ == "__main__":
     import asyncio
 
     test_ingestions = [
-        Ingestion(
-            scope=Scope.INTERNAL,  # Required
-            creator_name="Test User",  # Required
-            ingestion_method=IngestionMethod.LOCAL_FILE,  # Required
-            file_type=FileType.PDF,
-            ingestion_date="2024-03-20T12:00:00Z",  # Required
-            file_path="/Users/pranaviyer/Downloads/TR0722-315a Appendix A.pdf",
-        ),
         # Ingestion(
-        #     scope=Scope.INTERNAL,
-        #     creator_name="Test User",
-        #     ingestion_method=IngestionMethod.LOCAL_FILE,
-        #     ingestion_date="2024-03-20T12:00:00Z",
+        #     scope=Scope.INTERNAL,  # Required
+        #     creator_name="Test User",  # Required
+        #     ingestion_method=IngestionMethod.LOCAL_FILE,  # Required
         #     file_type=FileType.PDF,
-        #     file_path="/Users/pranaviyer/Desktop/AstralisData/E5_Paper.pdf",
-        # )
+        #     ingestion_date="2024-03-20T12:00:00Z",  # Required
+        #     file_path="/Users/pranaviyer/Downloads/TR0722-315a Appendix A.pdf",
+        # ),
+        Ingestion(
+            scope=Scope.INTERNAL,
+            creator_name="Test User",
+            ingestion_method=IngestionMethod.LOCAL_FILE,
+            ingestion_date="2024-03-20T12:00:00Z",
+            file_type=FileType.PDF,
+            file_path="/Users/pranaviyer/Desktop/AstralisData/E5_Paper.pdf",
+        )
     ]
     output = asyncio.run(main_mineru(test_ingestions, mode="by_page", visualize=True))
     with open("mineru_output.json", "w") as f:
