@@ -418,7 +418,7 @@ async def async_upsert_embed(
         return all_upserts
     except Exception as e:
         print(e)
-        raise Exception("Upsert failed")
+        raise Exception("Upsert failed") from None
     finally:
         await async_change_index_threshold(client, collection, 2000)
 
