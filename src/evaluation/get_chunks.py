@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from sql_db.etl_model import Entry
 from sql_db.database_simple import get_async_db_session
@@ -19,16 +20,21 @@ class ChunkComparison:
 async def get_pipeline_entries(pipeline_id: str) -> List[Entry]:
     """Fetch all entries associated with a pipeline ID."""
     async for session in get_async_db_session():
-        stmt = select(Entry).where(Entry.pipeline_id == pipeline_id)
+        stmt = (
+            select(Entry)
+            .options(selectinload(Entry.ingest))
+            .where(Entry.pipeline_id == pipeline_id)
+        )
         result = await session.execute(stmt)
         return result.scalars().all()
 
 
 def group_entries_by_document(entries: List[Entry]) -> Dict[str, List[Entry]]:
-    """Group entries by their content hash."""
+    """Group entries by their document hash (from associated Ingest record)."""
     grouped = defaultdict(list)
     for entry in entries:
-        grouped[entry.content_hash].append(entry)
+        if entry.ingest:  # Check if there's an associated ingest record
+            grouped[entry.ingest.hash].append(entry)
     return grouped
 
 
@@ -88,6 +94,9 @@ async def compare_pipeline_chunks(
     docs_a = group_entries_by_document(entries_a)
     docs_b = group_entries_by_document(entries_b)
 
+    print(f"Pipeline {pipeline_id_a} has {len(docs_a)} documents")
+    print(f"Pipeline {pipeline_id_b} has {len(docs_b)} documents")
+
     # Compare chunks for each document that appears in both pipelines
     comparisons = {}
     for content_hash in set(docs_a.keys()) & set(docs_b.keys()):
@@ -101,7 +110,7 @@ async def compare_pipeline_chunks(
 async def main():
     # Example pipeline IDs
     pipeline_a = 2
-    pipeline_b = 3
+    pipeline_b = 1
 
     comparisons = await compare_pipeline_chunks(pipeline_a, pipeline_b)
 

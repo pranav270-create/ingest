@@ -225,9 +225,16 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
 
         logger.info("Creating Entries. No more processing steps to run")
         if current_results and current_results[0].schema__ == "Entry":
-            result = await create_entries(session, current_results, pipeline_config.get("collection_name"))
+            result = await create_entries(
+                session,
+                current_results,
+                pipeline_config.get("collection_name"),
+                pipeline_config.get("version"),
+                update_on_collision=pipeline_config.get("update_on_collision", False)
+            )
             print(f"Processed {result.total_processed} entries:")
             print(f"- {result.new_entries} new entries created")
+            print(f"- {result.updated_entries} existing entries updated")
             print(f"- {result.skipped_duplicates} duplicates skipped")
             print(f"- {result.failed_entries} entries failed")
             if result.error_messages:

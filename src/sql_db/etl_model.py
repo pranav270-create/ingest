@@ -285,6 +285,8 @@ class Entry(AsyncAttrs, AbstractBase):
 
     @validates('embedded_feature_type')
     def validate_embedded_feature_type(self, key, value):  # noqa
+        if value is None:
+            return value
         if isinstance(value, EmbeddedFeatureType):
             return value.value
         if value not in EmbeddedFeatureType._value2member_map_:
