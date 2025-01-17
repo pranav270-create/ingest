@@ -109,6 +109,7 @@ async def pipeline_step(
         stage: str,
         order: int,
         function_name: str,
+        input_results=None,
         **params
 ):
     """
@@ -162,7 +163,8 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
     config = orchestrator.config
     pipeline_config = config["pipeline"]
 
-    async with get_async_db_session() as session:
+    session_gen = get_async_db_session()
+    async for session in session_gen:
         await validate_collection_name(config["stages"], pipeline_config["collection_name"])
 
         # Create or load existing processing pipeline
@@ -171,20 +173,21 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
         resume_from_step = pipeline_config.get("resume_from_step", None)
         fork_pipeline = pipeline_config.get("fork_pipeline", None)
 
-        if not resume_from_step:
-            # start from last successful step
+        if resume_from_step:
+            # 1. resume from specific step
+            current_results = await get_step_results(session, pipeline.id, resume_from_step, orchestrator.storage)
+            step_order = resume_from_step
+            assert current_results, "No results found from specified step"
+
+            if fork_pipeline:
+                # Optional: Create new pipeline branch
+                pipeline = await clone_pipeline(session, pipeline, step_order, new_description=pipeline_config.get("description"))  # noqa
+                current_results = await update_pipeline_ids(current_results, pipeline.id)
+        else:
+            # start from last successful step or start from first step
             step_order, current_results = await get_last_step_results(session, pipeline.id, orchestrator.storage)
 
-        # resume from specific step or start from the first step
-        current_results = await get_step_results(session, pipeline.id, resume_from_step, orchestrator.storage)
-        step_order = resume_from_step if current_results else 0
-
-        if fork_pipeline:
-            # Create new pipeline branch
-            pipeline = await clone_pipeline(session, pipeline, resume_from_step, new_description=pipeline_config.get("description"))  # noqa
-            current_results = await update_pipeline_ids(current_results, pipeline.id)
-
-        logger.info(f"Resuming from step {step_order} with Pipeline ID: {pipeline.id}")
+        print(f"Resuming from step {step_order} with Pipeline ID: {pipeline.id}")
 
         # process all stages
         for stage_config in config["stages"][step_order:]:
@@ -201,7 +204,7 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
                     stage,
                     step_order,
                     function["name"],
-                    current_results if step_order > 0 else None,
+                    input_results=current_results if step_order > 0 else None,
                     **function.get("params", {}),
                 )
                 stage_results.extend(step_results)
@@ -225,7 +228,6 @@ if __name__ == "__main__":
     # Initialize the orchestrator to register functions
     config_path = Path(__file__).resolve().parent.parent / "config" / config
     orchestrator = PipelineOrchestrator(str(config_path))
-
     # Set storage backend
     storage = orchestrator.storage
     FunctionRegistry.set_storage_backend(storage)

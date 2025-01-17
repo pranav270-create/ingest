@@ -18,7 +18,7 @@ class StepType(str, Enum):
 class FunctionRegistry(RegistryBase):
     _registry: dict[str, dict[str, Callable]] = {
         "ingest": {},
-        "parse": {},
+        "extract": {},
         "chunk": {},
         "featurize": {},
         "embed": {},
@@ -39,11 +39,11 @@ class FunctionRegistry(RegistryBase):
                     if cls._storage_backend is None:
                         raise ValueError("Storage backend not set")
 
-                    async def write(file_path: str, content: str, mode: str = "w") -> None:
-                        await cls._storage_backend.write(file_path, content, mode)
+                    async def write(file_path: str, content: str) -> None:
+                        await cls._storage_backend.write(file_path, content)
 
-                    async def read(file_path: str, mode: str = "r") -> Union[str, None]:
-                        return await cls._storage_backend.read(file_path, mode)
+                    async def read(file_path: str) -> Union[str, None]:
+                        return await cls._storage_backend.read(file_path)
 
                     kwargs["write"] = write
                     kwargs["read"] = read
