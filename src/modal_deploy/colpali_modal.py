@@ -3,7 +3,8 @@ from modal import App, build, enter, method
 import subprocess
 import requests
 import time
-
+import os
+import json
 app = App("colpali-modal")
 MINUTES = 60  # seconds
 HOURS = 60 * MINUTES
