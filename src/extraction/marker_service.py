@@ -555,13 +555,24 @@ async def main_datalab(
             base_path = os.path.splitext(ingestion.file_path)[0]
             ingestion.extracted_document_file_path = f"{base_path}_marker.json"
 
-        file_content = (
-            await read(ingestion.file_path)
-            if read
-            else open(ingestion.file_path, "rb").read()
-        )
-        file_extension = Path(ingestion.file_path).suffix.lower()
-        pdf_content = convert_to_pdf(file_content, file_extension)
+        try:
+            file_content = await read(ingestion.file_path)
+            # Ensure we have bytes for PDF processing
+            if not isinstance(file_content, bytes):
+                print(f"Warning: File content is not bytes, converting from {type(file_content)}")
+                file_content = file_content.encode('utf-8') if isinstance(file_content, str) else bytes(file_content)
+            file_extension = Path(ingestion.file_path).suffix.lower()
+            pdf_content = convert_to_pdf(file_content, file_extension)
+            # Add debug logging
+            print(f"PDF content type: {type(pdf_content)}, size: {len(pdf_content)} bytes")
+            # Try opening the PDF to verify it's valid
+            doc = fitz.open(stream=io.BytesIO(pdf_content), filetype="pdf")
+            print(f"Successfully opened PDF with {len(doc)} pages")
+            doc.close()
+        except Exception as e:
+            print(f"Error processing file {ingestion.file_path}: {str(e)}")
+            raise
+
         file_bytes.append(pdf_content)
         ingestion_map[idx] = ingestion
 

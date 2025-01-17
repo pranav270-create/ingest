@@ -5,7 +5,7 @@ stages:
         input: null
         return: Ingestion
         params:
-          directory_path: "C:/Users/marka/fun/ingest/local_files"
+          directory_path: "/Users/pranaviyer/Desktop/AstralisData/"
           added_metadata:
             document_title: "docbench"
             content_type: "other"
@@ -20,10 +20,10 @@ stages:
 
 pipeline:
   version: "1.0"
-  description: "test_pipeline_mark"
-  collection_name: "test_collection_mark"
-  pipeline_id: 1
+  description: "test_pipeline_pranav"
+  # collection_name: "test_collection_pranav"
+  # pipeline_id: 1
 
 storage:
   storage_type: "local"
-  base_path: "C:/Users/marka/fun/ingest/local_files"
+  base_path: "/Users/pranaviyer/Desktop/local_files/"

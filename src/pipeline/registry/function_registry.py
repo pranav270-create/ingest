@@ -57,4 +57,3 @@ class FunctionRegistry(RegistryBase):
     @classmethod
     def get(cls, stage: str, name: str) -> Callable:
         return cls._registry[stage].get(name)
-

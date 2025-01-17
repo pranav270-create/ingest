@@ -31,15 +31,12 @@ async def create_or_update_ingest(session: AsyncSession, data: dict, pipeline=No
     # Filter the input data to only include relevant fields
     ingest_data = {k: v for k, v in data.items() if k in ingest_fields}
 
-    # Create a hash of the important fields
-    hash_fields = ['public_url', 'document_title', 'creator_name']
-    hash_items = {k: v for k, v in ingest_data.items() if k in hash_fields}
-    hash_string = json.dumps(hash_items, sort_keys=True)
-    hash_value = hashlib.sha256(hash_string.encode()).hexdigest()
+    # Use the existing document_hash
+    hash_value = data['document_hash']
 
     # Check if an Ingest with this hash already exists
     stmt = select(Ingest).where(Ingest.hash == hash_value)
-    result = session.execute(stmt)
+    result = await session.execute(stmt)
     existing_ingest = result.scalar_one_or_none()
 
     if existing_ingest:
@@ -48,12 +45,12 @@ async def create_or_update_ingest(session: AsyncSession, data: dict, pipeline=No
             setattr(existing_ingest, key, value)
         if pipeline:
             # Load the processing_pipelines relationship
-            session.refresh(existing_ingest, ['processing_pipelines'])
+            await session.refresh(existing_ingest, ['processing_pipelines'])
             # Check if the pipeline is already associated
             pipeline_ids = [p.id for p in existing_ingest.processing_pipelines]
             if pipeline.id not in pipeline_ids:
                 existing_ingest.processing_pipelines.append(pipeline)
-        session.commit()
+        await session.commit()
         return existing_ingest
     else:
         # Create a new Ingest
@@ -61,25 +58,20 @@ async def create_or_update_ingest(session: AsyncSession, data: dict, pipeline=No
         if pipeline:
             new_ingest.processing_pipelines.append(pipeline)
         session.add(new_ingest)
-        session.commit()
+        await session.commit()
         return new_ingest
+
 
 async def create_or_update_ingest_batch(session: AsyncSession, items: list[dict], pipeline=None) -> dict[str, Ingest]:
     # Get all column names of the Ingest model
     ingest_fields = [c.key for c in inspect(Ingest).columns if c.key != 'id']
-    hash_fields = ['public_url', 'document_title', 'creator_name']
 
-    # Process all items to create hashes and prepare data
+    # Process all items to prepare data
     hash_to_data = {}
     for data in items:
         # Filter and prepare the data
         ingest_data = {k: v for k, v in data.items() if k in ingest_fields}
-
-        # Create hash
-        hash_items = {k: v for k, v in ingest_data.items() if k in hash_fields}
-        hash_string = json.dumps(hash_items, sort_keys=True)
-        hash_value = hashlib.sha256(hash_string.encode()).hexdigest()
-
+        hash_value = data['document_hash']  # Use the existing hash
         hash_to_data[hash_value] = ingest_data
 
     try:

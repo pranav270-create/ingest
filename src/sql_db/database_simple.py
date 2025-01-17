@@ -60,8 +60,10 @@ class DatabaseSessionManager:
         finally:
             await session.close()
 
+
 # Session dependency generators with explicit cleanup
-session_manager = DatabaseSessionManager(os.environ.get("ENERGY_DB_NAME"))
+session_manager = DatabaseSessionManager("energy_data")
+
 async def get_async_db_session() -> AsyncGenerator[AsyncSession, None]:
     async with session_manager.session() as session:
         try:
@@ -72,6 +74,6 @@ async def get_async_db_session() -> AsyncGenerator[AsyncSession, None]:
         finally:
             await session.close()
 
-def get_engine() -> Engine:
-    return DatabaseSessionManager(os.environ.get("ENERGY_DB_NAME"))._engine
 
+def get_engine() -> Engine:
+    return DatabaseSessionManager("energy_data")._engine

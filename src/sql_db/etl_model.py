@@ -68,12 +68,12 @@ class Ingest(AsyncAttrs, AbstractBase):
     document_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the data")
     # Extraction fields
     extraction_method: Mapped[str] = mapped_column(String(50), nullable=True, comment="Method used to extract the data")
-    extraction_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Date the data was extracted")
+    extraction_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=True, comment="Date the data was extracted")
     extracted_document_file_path: Mapped[str] = mapped_column(String(255), nullable=True, comment="Path to the processed file")
     # Chunking fields
     chunking_method: Mapped[str] = mapped_column(String(50), nullable=True, comment="Method used to chunk the data")
     chunking_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Additional metadata for the chunking")
-    chunking_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Date the data was chunked")
+    chunking_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=True, comment="Date the data was chunked")
     # Featurization fields
     feature_models: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Models used to featurize the data")
     feature_types: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Types of features used")
@@ -165,6 +165,7 @@ class Ingest(AsyncAttrs, AbstractBase):
     def validate_dates(self, key, value):  # noqa
         return self._convert_to_datetime(value)
 
+
 class ProcessingPipeline(AsyncAttrs, AbstractBase):
     __tablename__ = 'processing_pipelines'
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -227,7 +228,7 @@ class Entry(AsyncAttrs, AbstractBase):
 
     uuid: Mapped[str] = mapped_column(String(255), unique=True, primary_key=True, nullable=False, comment="Unique identifier for the entry (e.g., URL, UUID)")  # noqa
     # Core fields
-    string: Mapped[str] = mapped_column(Text, nullable=False, comment="The text of the entry")
+    string: Mapped[str] = mapped_column(Text, nullable=True, comment="The text of the entry")
     # Featurization fields
     entry_title: Mapped[str] = mapped_column(Text, nullable=True, comment="The title of the entry")
     keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the entry")
@@ -244,7 +245,7 @@ class Entry(AsyncAttrs, AbstractBase):
     figure_number: Mapped[int] = mapped_column(Integer, nullable=True, comment="The number of the figure in the entry")
     # Embedding Fields
     embedded_feature_type: Mapped[str] = mapped_column(String(100), nullable=True, comment="The type of the feature being embedded")
-    embedding_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Date the embedding was created")
+    embedding_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=True, comment="Date the embedding was created")
     embedding_model: Mapped[str] = mapped_column(String(100), nullable=True, comment="The model used to embed the feature")
     embedding_dimensions: Mapped[int] = mapped_column(Integer, nullable=True, comment="The dimensions of the embedding")
 
@@ -378,7 +379,6 @@ if __name__ == '__main__':
 
     asyncio.run(main())
     exit()
-
 
     Session = sessionmaker(bind=engine)
     session = Session()

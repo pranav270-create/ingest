@@ -10,6 +10,7 @@ setup(
         "litellm~=1.57.5",
         "sqlalchemy~=2.0.36",
         "psycopg2-binary",
+        "asyncpg",
         "qdrant-client",
         "anthropic~=0.42.0",
         "google-generativeai>=0.7.0",
@@ -52,6 +53,7 @@ setup(
         "rapidfuzz",
         "google-labs-html-chunker",
         "fastembed",
+        "magic-pdf[full]"
     ],
     extras_require={
         "dev": [

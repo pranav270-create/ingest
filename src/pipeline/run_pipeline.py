@@ -27,7 +27,9 @@ from src.sql_db.etl_crud import (
 )
 from src.sql_db.etl_model import ProcessingPipeline
 
+
 logger = logging.getLogger(__name__)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run ETL pipeline")
@@ -35,9 +37,10 @@ def parse_args():
     return parser.parse_args()
 
 
-async def validate_collection_name(stages: list[dict], collection_name: str):
+async def validate_collection_name(stages: list[dict], collection_name: str | None):
     """
     Ensure Qdrant collection name in Upsert stage is same as in Pipeline Config
+    Only validates if both upsert stage and collection_name are present
     """
     for stage_config in stages:
         if stage_config["name"] == "upsert":
@@ -88,7 +91,7 @@ async def batched_ingestion(session: AsyncSession, items: list[Ingestion], pipel
     processed_results: list[Ingestion] = []
     for batch_start in range(0, len(items), batch_size):
         # get batch of data
-        batch = items[batch_start : batch_start + batch_size]
+        batch = items[batch_start: batch_start + batch_size]
         batch_data = [item.model_dump() for item in batch]
 
         # Process batch
@@ -131,7 +134,12 @@ async def pipeline_step(
 
         # Run the function
         func = FunctionRegistry.get(stage, function_name)
-        results = await func(**params, simple_mode=False)
+        if stage == "ingest":
+            results = await func(**params, simple_mode=False)
+        else:
+            if input_results is None:
+                raise ValueError(f"Stage '{stage}' requires input results from previous stage")
+            results = await func(ingestions=input_results, **params, simple_mode=False)
         logger.info(f"Function {function_name} \033[92mComplete\033[0m")
 
         # If this is the first step, run batched ingestion
@@ -165,7 +173,9 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
 
     session_gen = get_async_db_session()
     async for session in session_gen:
-        await validate_collection_name(config["stages"], pipeline_config["collection_name"])
+        # Only validate if collection_name exists in pipeline config
+        collection_name = pipeline_config.get("collection_name")
+        await validate_collection_name(config["stages"], collection_name)
 
         # Create or load existing processing pipeline
         pipeline = await create_or_get_processing_pipeline(session, pipeline_config, config["storage"])
