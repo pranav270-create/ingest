@@ -47,7 +47,7 @@ class AbstractBase(Base):
 class Ingest(AsyncAttrs, AbstractBase):
     __tablename__ = 'ingest'
 
-    id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True, unique=True)
     # document fields
     document_title: Mapped[str] = mapped_column(Text, nullable=False, comment="Title of the document")
     scope: Mapped[str] = mapped_column(String(50), nullable=False, comment="Scope of the data")
@@ -311,17 +311,49 @@ ingest_pipeline = Table(
     Column('pipeline_id', ForeignKey('processing_pipelines.id'), primary_key=True)
 )
 
+async def recreate_tables(engine):
+    """Drops all existing tables and recreates them from scratch."""
+    # Drop all tables with CASCADE
+    async with engine.begin() as conn:
+        # Drop any remaining tables with CASCADE in correct order
+        await conn.execute(text("DROP TABLE IF EXISTS document_relationships CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS ingest_pipeline CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS entry_relationships CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS ingest_relationships CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS entries CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS processing_steps CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS processing_pipelines CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS ingest CASCADE"))
+
+    # Recreate all tables
+    async with engine.begin() as conn:
+        # Create tables in correct order
+        await conn.run_sync(lambda conn: Base.metadata.tables['ingest'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['processing_pipelines'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['processing_steps'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['entries'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['entry_relationships'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['ingest_relationships'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['ingest_pipeline'].create(conn))
+
 
 if __name__ == '__main__':
     import asyncio
 
-    from sqlalchemy import text
-    from sqlalchemy.future import select
+    from sqlalchemy import select, text
     from sqlalchemy.orm import sessionmaker
 
     from src.sql_db.database_simple import get_engine
 
-    engine = get_engine("energy_data")
+    engine = get_engine()
+    async def main():
+        await recreate_tables(engine)
+        print("Tables have been recreated successfully")
+
+    asyncio.run(main())
+    exit()
+
+
     Session = sessionmaker(bind=engine)
     session = Session()
 

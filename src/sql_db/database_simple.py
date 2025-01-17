@@ -2,6 +2,7 @@ import os
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -70,3 +71,7 @@ async def get_async_db_session() -> AsyncGenerator[AsyncSession, None]:
             raise e
         finally:
             await session.close()
+
+def get_engine() -> Engine:
+    return DatabaseSessionManager(os.environ.get("ENERGY_DB_NAME"))._engine
+
