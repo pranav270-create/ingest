@@ -4,6 +4,7 @@ from enum import Enum
 import numpy as np
 from scipy.spatial import ConvexHull
 from sentence_transformers import SentenceTransformer
+import umap
 
 from src.extraction.textract import textract_parse
 from src.extraction.ocr_service import main_ocr
@@ -66,6 +67,21 @@ def calculate_chunk_metrics(chunks: list[Entry]) -> dict[str, float]:
     embeddings = model.encode(texts)
 
     metrics = {}
+
+    # For large datasets, reduce dimensionality with UMAP first
+    if len(embeddings) > 100:  # Threshold for using UMAP
+        try:
+            # Configure UMAP for dimensionality reduction
+            reducer = umap.UMAP(
+                n_neighbors=min(int((len(embeddings) - 1) ** 0.5), 50),
+                n_components=min(20, len(embeddings) - 1),
+                min_dist=0,
+                metric="cosine",
+                random_state=42
+            )
+            embeddings = reducer.fit_transform(embeddings)
+        except Exception as e:
+            print(f"Warning: UMAP reduction failed with error: {str(e)}. Using original embeddings.")
 
     # Calculate convex hull volume as diversity metric
     if len(embeddings) > 3:  # Need at least 4 points for 3D hull
