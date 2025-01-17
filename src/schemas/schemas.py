@@ -557,6 +557,16 @@ class Upsert(BaseModel):
     citations: Optional[list[Citation]] = None
 
 
+@SchemaRegistry.register("vlm_evaluation")
+class VLMEvaluation(BaseModel):
+    schema__: str = Field(default="VLMEvaluation", alias="schema__")
+    chunks_a: list[Entry]
+    chunks_b: list[Entry]
+    winner: str
+    score: float
+
+
+@SchemaRegistry.register("formatted_scored_points")
 class FormattedScoredPoints(BaseModel):
     id: str
     ingestion: Optional[Ingestion] = None
