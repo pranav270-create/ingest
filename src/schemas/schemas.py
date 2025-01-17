@@ -2,6 +2,7 @@ import sys
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional, TypeVar, Union
+
 from pydantic import BaseModel, Field, field_validator
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
