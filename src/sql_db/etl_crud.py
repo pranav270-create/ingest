@@ -385,7 +385,7 @@ async def create_entries(
                 "entry_title": data.get("entry_title"),
                 "keywords": data.get("keywords"),
                 "consolidated_feature_type": data.get("consolidated_feature_type"),
-                "added_featurization": json.dumps(data.get("added_featurization", {})),
+                # "added_featurization": json.dumps(data.get("added_featurization", {})),  # this is because we want the overwrite to update the existing featurization, if there is one
                 "citations": data.get("citations", []),
                 "version": version
             }

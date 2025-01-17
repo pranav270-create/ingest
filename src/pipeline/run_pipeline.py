@@ -4,7 +4,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
