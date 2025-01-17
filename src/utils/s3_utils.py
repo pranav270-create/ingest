@@ -8,6 +8,7 @@ aws_access_key_id = os.environ.get("AWS_DATA_ACCESS_KEY")
 aws_secret_access_key = os.environ.get("AWS_DATA_SECRET_ACCESS_KEY")
 region_name = os.environ.get("S3_DATA_REGION", "us-west-1")
 
+
 async def upload_single_file_async(
     session,
     file_path: str,

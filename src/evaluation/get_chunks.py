@@ -113,13 +113,22 @@ async def main():
     for content_hash, chunk_comparisons in comparisons.items():
         print(f"\nDocument hash: {content_hash}")
         print(f"Document title: {chunk_comparisons[0].document_title}")
+        print(f"Document path: {chunk_comparisons[0].pipeline_a_chunks[0].ingest.file_path}")
+
         for comp in chunk_comparisons:
             print(f"\nPage range: {comp.page_range}")
+
+            # Count text or combined_text chunks for Pipeline A
+            combined_text_a = sum(1 for chunk in comp.pipeline_a_chunks if chunk.consolidated_feature_type in ['combined_text', 'text'])
             print(f"Pipeline A chunks: {len(comp.pipeline_a_chunks)} entries")
+            print(f"\033[94mCombined text A: {combined_text_a} entries\033[0m")  # Print in blue
             if comp.pipeline_a_chunks:
                 print("Feature types A:", [chunk.consolidated_feature_type for chunk in comp.pipeline_a_chunks])
 
+            # Count text or combined_text chunks for Pipeline B
+            combined_text_b = sum(1 for chunk in comp.pipeline_b_chunks if chunk.consolidated_feature_type in ['combined_text', 'text'])
             print(f"Pipeline B chunks: {len(comp.pipeline_b_chunks)} entries")
+            print(f"\033[94mCombined text B: {combined_text_b} entries\033[0m")  # Print in blue
             if comp.pipeline_b_chunks:
                 print("Feature types B:", [chunk.consolidated_feature_type for chunk in comp.pipeline_b_chunks])
             print("---")
