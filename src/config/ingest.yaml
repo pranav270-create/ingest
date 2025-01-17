@@ -1,0 +1,29 @@
+stages:
+  - name: ingest
+    functions:
+      - name: local
+        input: null
+        return: Ingestion
+        params:
+          directory_path: "C:/Users/marka/fun/ingest/local_files"
+          added_metadata:
+            document_title: "docbench"
+            content_type: "other"
+            ingestion_method: "local_file"
+            file_type: "pdf"
+
+  - name: extract
+    functions:
+      - name: datalab
+        input: Ingestion
+        return: Entry
+
+pipeline:
+  version: "1.0"
+  description: "test_pipeline_mark"
+  collection_name: "test_collection_mark"
+  pipeline_id: 1
+
+storage:
+  storage_type: "local"
+  base_path: "C:/Users/marka/fun/ingest/local_files"

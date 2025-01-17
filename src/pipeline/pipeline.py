@@ -51,7 +51,8 @@ from src.pipeline.storage_backend import StorageFactory
 class PipelineOrchestrator:
     def __init__(self, config_path: str):
 
-        FunctionRegistry.autodiscover('src.ingestion')
+        FunctionRegistry.autodiscover('src.ingestion.files')
+        FunctionRegistry.autodiscover('src.ingestion.web')
         FunctionRegistry.autodiscover('src.extraction')
         FunctionRegistry.autodiscover('src.chunking')
         FunctionRegistry.autodiscover('src.featurization')
@@ -78,3 +79,31 @@ class PipelineOrchestrator:
             for function in stage.get('functions', []):
                 FunctionRegistry.register(stage['name'], function['name'])
 
+    def get_registered_functions(self):
+        """Returns a dictionary of all registered functions by stage."""
+        return {
+            stage['name']: [
+                func['name'] for func in stage.get('functions', [])
+            ]
+            for stage in self.config.get('stages', [])
+        }
+
+    def verify_registration(self):
+        """Verifies that all functions specified in config are properly registered.
+        Returns (bool, list): Success status and list of any missing functions."""
+        configured_functions = self.get_registered_functions()
+        missing_functions = []
+
+        print("\nDebug Registration Info:")
+        print("------------------------")
+        print(f"Configured functions: {configured_functions}")
+        print(f"Registry contents: {FunctionRegistry._registry}")
+
+        for stage, functions in configured_functions.items():
+            for func_name in functions:
+                registered_func = FunctionRegistry.get(stage, func_name)
+                print(f"Checking {stage}.{func_name}: {'Found' if registered_func else 'Not found'}")
+                if not registered_func:
+                    missing_functions.append(f"{stage}.{func_name}")
+
+        return len(missing_functions) == 0, missing_functions

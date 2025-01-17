@@ -1,10 +1,10 @@
-import modal
 import json
 import xml.etree.ElementTree as ET
-from typing import Dict
+
+import modal
 
 
-def parse_tei_xml(tei_content: str) -> Dict:
+def parse_tei_xml(tei_content: str) -> dict:
     # Define the namespaces
     namespaces = {
         "tei": "http://www.tei-c.org/ns/1.0",

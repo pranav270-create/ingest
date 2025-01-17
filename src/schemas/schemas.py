@@ -467,3 +467,6 @@ class FormattedScoredPoints(BaseModel):
 
 BaseModelListType = TypeVar('BaseModelListType', list[Entry], list[Ingestion])
 """Type variable for list of database models (list[Entry] or list[Ingestion])"""
+
+RegisteredSchemaListType = TypeVar('RegisteredSchemaListType', list[Ingestion], list[Entry], list[Embedding], list[Upsert])
+"""Type variable for list of registered schemas (list[Ingestion], list[Entry], list[Embedding], list[Upsert])"""

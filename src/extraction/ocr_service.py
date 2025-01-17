@@ -35,7 +35,7 @@ def pdf_to_images(pdf_content):
     return images
 
 
-@FunctionRegistry.register("parse", "ocr2_0")
+@FunctionRegistry.register("extract", "ocr2_0")
 async def batch_ocr(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Entry]:
     cls = modal.Cls.lookup("ocr-modal", "Model")
     obj = cls()

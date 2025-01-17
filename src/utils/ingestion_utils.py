@@ -11,13 +11,6 @@ def update_ingestion_with_metadata(ingestion: Ingestion, added_metadata: Optiona
     """
     Update an Ingestion object with additional metadata, handling both direct field updates and metadata dictionary entries.
 
-    Args:
-        ingestion: The Ingestion object to update
-        added_metadata: Dictionary containing new metadata key-value pairs to add
-
-    Returns:
-        The updated Ingestion object
-
     For each key-value pair in added_metadata:
     - If the key matches an existing Ingestion field (that isn't itself a BaseModel),
       updates that field directly

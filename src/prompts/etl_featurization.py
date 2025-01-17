@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from src.llm_utils.utils import structure_image_prompt, text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.prompts.base_prompt import BasePrompt
-from src.schemas.schemas import Document, Entry, Ingestion
+from src.schemas.schemas import Entry, Ingestion
 
 
 async def read_content(filepath, read) -> Union[str, bytes]:
@@ -19,10 +19,6 @@ async def read_content(filepath, read) -> Union[str, bytes]:
 async def base_model_to_encoded_image(base_model: BaseModel, read=None):
     if isinstance(base_model, Ingestion):
         content = await read_content(base_model.file_path, read)
-
-    elif isinstance(base_model, Document):
-        filepath = base_model.entries[0].ingestion.extracted_document_file_path
-        content = await read_content(filepath, read)
 
     elif isinstance(base_model, Entry):
         content = base_model.string
@@ -69,9 +65,6 @@ class FilterIndexingPrompt(BasePrompt):
     async def format_prompt(cls, base_model: BaseModel, read=None):
         if isinstance(base_model, Ingestion):
             document = await read_content(base_model.file_path, read)  # Call the class method using cls
-        elif isinstance(base_model, Document):
-            filepath = base_model.entries[0].ingestion.extracted_document_file_path
-            document = await read_content(filepath, read)  # Call the class method using cls
         elif isinstance(base_model, Entry):
             document = base_model.string
         return cls.system_prompt, cls.user_prompt.format(entry=document)
@@ -88,10 +81,6 @@ class FilterIndexingPrompt(BasePrompt):
                 if isinstance(basemodel, Ingestion):
                     basemodel.metadata["should_index"] = True
                     basemodel.metadata["rationale"] = rationale
-                elif isinstance(basemodel, Document):
-                    for entry in basemodel.entries:
-                        entry.ingestion.document_metadata["should_index"] = True
-                        entry.ingestion.document_metadata["rationale"] = rationale
                 elif isinstance(basemodel, Entry):
                     basemodel.ingestion.document_metadata["should_index"] = True
                     basemodel.ingestion.document_metadata["rationale"] = rationale
@@ -239,9 +228,6 @@ class CleanEntryPrompt(BasePrompt):
     async def format_prompt(cls, base_model: BaseModel, read=None):
         if isinstance(base_model, Ingestion):
             document = await read_content(base_model.file_path, read)  # Call the class method using cls
-        elif isinstance(base_model, Document):
-            filepath = base_model.entries[0].ingestion.extracted_document_file_path
-            document = await read_content(filepath, read)  # Call the class method using cls
         elif isinstance(base_model, Entry):
             document = base_model.string
         return cls.system_prompt, cls.user_prompt.format(entry=document)
@@ -258,10 +244,6 @@ class CleanEntryPrompt(BasePrompt):
                 if isinstance(basemodel, Ingestion):
                     basemodel.metadata["retain"] = True
                     basemodel.metadata["rationale"] = rationale
-                elif isinstance(basemodel, Document):
-                    for entry in basemodel.entries:
-                        entry.ingestion.document_metadata["retain"] = True
-                        entry.ingestion.document_metadata["rationale"] = rationale
                 elif isinstance(basemodel, Entry):
                     basemodel.ingestion.document_metadata["retain"] = True
                     basemodel.ingestion.document_metadata["rationale"] = rationale

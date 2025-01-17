@@ -38,7 +38,7 @@ def process_pdf(file_content: bytes, ingestion: Ingestion) -> tuple[list[Entry],
     return all_entries, all_text
 
 
-@FunctionRegistry.register("parse", "simple")
+@FunctionRegistry.register("extract", "simple")
 async def main_simple(ingestions: list[Ingestion], write=None, read=None, **kwargs) -> list[Entry]:
     all_entries = []
     for ingestion in ingestions:

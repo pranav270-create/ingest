@@ -47,7 +47,7 @@ class AbstractBase(Base):
 class Ingest(AsyncAttrs, AbstractBase):
     __tablename__ = 'ingest'
 
-    id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True, unique=True)
     # document fields
     document_title: Mapped[str] = mapped_column(Text, nullable=False, comment="Title of the document")
     scope: Mapped[str] = mapped_column(String(50), nullable=False, comment="Scope of the data")
@@ -82,7 +82,7 @@ class Ingest(AsyncAttrs, AbstractBase):
     unprocessed_citations: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Unprocessed citations")
 
     hash: Mapped[str] = mapped_column(String(64), primary_key=True, nullable=False, index=True, unique=True, comment="SHA256 hash of the data")
-    __table_args__ = (UniqueConstraint('hash', name='uq_ingest_hash'))
+    __table_args__ = (UniqueConstraint('hash', name='uq_ingest_hash'),)
 
     # Relationships
     processing_pipelines: Mapped[list["ProcessingPipeline"]] = relationship("ProcessingPipeline", secondary="ingest_pipeline", back_populates="ingests")  # noqa
@@ -124,20 +124,46 @@ class Ingest(AsyncAttrs, AbstractBase):
 
     @validates('extraction_method')
     def validate_extraction_method(self, key, value):  # noqa
-        if isinstance(value, ExtractionMethod):
-            return value.value
+        if value is None or isinstance(value, ExtractionMethod):
+            return value.value if value is not None else None
         if value not in ExtractionMethod._value2member_map_:
             raise ValueError(f"Invalid extraction method: {value}")
         return value
 
     @validates('chunking_method')
     def validate_chunking_method(self, key, value):  # noqa
-        if isinstance(value, ChunkingMethod):
-            return value.value
+        if value is None or isinstance(value, ChunkingMethod):
+            return value.value if value is not None else None
         if value not in ChunkingMethod._value2member_map_:
             raise ValueError(f"Invalid chunking method: {value}")
         return value
 
+    @staticmethod
+    def _convert_to_datetime(value):
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            # Try common date formats
+            formats = [
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d",
+                "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%S.%fZ",
+            ]
+            for fmt in formats:
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    continue
+            raise ValueError(f"Could not parse date string: {value}")
+        raise ValueError(f"Cannot convert {type(value)} to datetime")
+
+    @validates('creation_date', 'ingestion_date', 'extraction_date', 'chunking_date')
+    def validate_dates(self, key, value):  # noqa
+        return self._convert_to_datetime(value)
 
 class ProcessingPipeline(AsyncAttrs, AbstractBase):
     __tablename__ = 'processing_pipelines'
@@ -149,7 +175,7 @@ class ProcessingPipeline(AsyncAttrs, AbstractBase):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="Creation date of this pipeline")
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)
 
-    __table_args__ = (Index('idx_version_description', 'version', 'description'))
+    __table_args__ = (Index('idx_version_description', 'version', 'description'),)
 
     # Relationships
     ingests: Mapped[list["Ingest"]] = relationship("Ingest", secondary="ingest_pipeline", back_populates="processing_pipelines")  # noqa
@@ -177,7 +203,7 @@ class ProcessingStep(AsyncAttrs, AbstractBase):
     previous_step: Mapped[Optional["ProcessingStep"]] = relationship("ProcessingStep", remote_side=[id], back_populates="next_steps")
     next_steps: Mapped[list["ProcessingStep"]] = relationship("ProcessingStep", back_populates="previous_step")
 
-    __table_args__ = (UniqueConstraint('pipeline_id', 'order', name='uq_pipeline_step_order'))
+    __table_args__ = (UniqueConstraint('pipeline_id', 'order', name='uq_pipeline_step_order'),)
 
     @validates('step_type')
     def validate_step_type(self, key, value): # noqa
@@ -205,6 +231,9 @@ class Entry(AsyncAttrs, AbstractBase):
     # Featurization fields
     entry_title: Mapped[str] = mapped_column(Text, nullable=True, comment="The title of the entry")
     keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the entry")
+    context_summary_string: Mapped[str] = mapped_column(Text, nullable=True, comment="The summary of the document")
+    added_featurization: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="The featurization added to the entry")
+    index_numbers: Mapped[list[int]] = mapped_column(JSON, nullable=True, comment="The index numbers of the entry")
     # Chunk location fields. Used for reconstruction
     consolidated_feature_type: Mapped[str] = mapped_column(String(100), nullable=True, comment="The type of the feature being embedded")
     chunk_locations: Mapped[list[JSON]] = mapped_column(JSON, nullable=True, comment="The locations of the chunks in the entry")
@@ -219,6 +248,7 @@ class Entry(AsyncAttrs, AbstractBase):
     embedding_model: Mapped[str] = mapped_column(String(100), nullable=True, comment="The model used to embed the feature")
     embedding_dimensions: Mapped[int] = mapped_column(Integer, nullable=True, comment="The dimensions of the embedding")
 
+    collection_name: Mapped[str] = mapped_column(String(100), nullable=True, comment="The name of the collection the entry belongs to")
     pipeline_id: Mapped[Optional[int]] = mapped_column(ForeignKey('processing_pipelines.id'), nullable=True, index=True)
     ingestion_id: Mapped[Optional[int]] = mapped_column(ForeignKey('ingest.id'), nullable=True, index=True)
     # Relationships
@@ -307,17 +337,49 @@ ingest_pipeline = Table(
     Column('pipeline_id', ForeignKey('processing_pipelines.id'), primary_key=True)
 )
 
+async def recreate_tables(engine):
+    """Drops all existing tables and recreates them from scratch."""
+    # Drop all tables with CASCADE
+    async with engine.begin() as conn:
+        # Drop any remaining tables with CASCADE in correct order
+        await conn.execute(text("DROP TABLE IF EXISTS document_relationships CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS ingest_pipeline CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS entry_relationships CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS ingest_relationships CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS entries CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS processing_steps CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS processing_pipelines CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS ingest CASCADE"))
+
+    # Recreate all tables
+    async with engine.begin() as conn:
+        # Create tables in correct order
+        await conn.run_sync(lambda conn: Base.metadata.tables['ingest'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['processing_pipelines'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['processing_steps'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['entries'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['entry_relationships'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['ingest_relationships'].create(conn))
+        await conn.run_sync(lambda conn: Base.metadata.tables['ingest_pipeline'].create(conn))
+
 
 if __name__ == '__main__':
     import asyncio
 
-    from sqlalchemy import text
-    from sqlalchemy.future import select
+    from sqlalchemy import select, text
     from sqlalchemy.orm import sessionmaker
 
     from src.sql_db.database_simple import get_engine
 
-    engine = get_engine("energy_data")
+    engine = get_engine()
+    async def main():
+        await recreate_tables(engine)
+        print("Tables have been recreated successfully")
+
+    asyncio.run(main())
+    exit()
+
+
     Session = sessionmaker(bind=engine)
     session = Session()
 

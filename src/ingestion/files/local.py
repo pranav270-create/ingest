@@ -90,9 +90,10 @@ async def create_ingestion(file_path: str, write=None) -> Ingestion:
 
 
 @FunctionRegistry.register("ingest", "local")
-async def ingest_local_files(directory_path: str, added_metadata: dict = {},  write=None, **kwargs) -> list[Ingestion]:
+async def ingest_local_files(directory_path: str, added_metadata: dict = None, write=None, **kwargs) -> list[Ingestion]:
     if not os.path.isabs(directory_path):
         raise ValueError("The provided path must be an absolute path.")
+
     all_ingestions = []
     for root, _, files in os.walk(directory_path):
         for file in files:
