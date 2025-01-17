@@ -3,6 +3,8 @@ from pathlib import Path
 import fitz
 import io
 import os
+import json
+import uuid
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -20,8 +22,12 @@ from src.schemas.schemas import (
 from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 
 
-def process_pdf(file_content: bytes, ingestion: Ingestion) -> tuple[list[Entry], str]:
+async def process_pdf(
+    file_content: bytes, ingestion: Ingestion, pages_dir: str, write=None
+) -> tuple[list[Entry], dict[str, str]]:
     all_entries = []
+    all_text = {}  # Changed to dict to store page number -> text mapping
+
     with fitz.open(stream=io.BytesIO(file_content), filetype="pdf") as pdf:
         # Set document metadata
         ingestion.document_metadata = pdf.metadata
@@ -39,19 +45,32 @@ def process_pdf(file_content: bytes, ingestion: Ingestion) -> tuple[list[Entry],
         if pdf.metadata.get("title"):
             ingestion.document_title = pdf.metadata["title"]
 
-        all_text = ""
         for i in range(pdf.page_count):
             page = pdf.load_page(i)
             page_text = page.get_text("text")
-            all_text += page_text + "\n"
+            all_text[str(i + 1)] = page_text  # Store text with page number as key
 
-            # Create proper chunk location with index
+            # Generate and save page image
+            pix = page.get_pixmap(matrix=fitz.Matrix(1, 1))
+            img_bytes = pix.tobytes("jpg")
+            page_image_path = f"{pages_dir}/page_{i + 1}.jpg"
+
+            if write:
+                await write(page_image_path, img_bytes)
+            else:
+                os.makedirs(os.path.dirname(page_image_path), exist_ok=True)
+                with open(page_image_path, "wb") as f:
+                    f.write(img_bytes)
+
+            # Create proper chunk location with index and page image path
             chunk_location = ChunkLocation(
                 index=Index(primary=i + 1),
                 extracted_feature_type=ExtractedFeatureType.text,
+                page_file_path=page_image_path,
             )
 
             entry = Entry(
+                uuid=str(uuid.uuid4()),
                 ingestion=ingestion,
                 string=page_text,
                 chunk_locations=[chunk_location],
@@ -75,28 +94,34 @@ async def main_simple(
         if ingestion.file_type != FileType.PDF:
             continue
 
+        print(f"Processing ingestion: {ingestion.file_path}")
         # Set required ingestion fields
         ingestion.extraction_method = ExtractionMethod.SIMPLE
         ingestion.extraction_date = get_current_utc_datetime()
-        ingestion.parsed_feature_type = [ExtractedFeatureType.text]
-        ingestion.extracted_document_file_path = os.path.basename(
-            ingestion.file_path
-        ).replace(".pdf", "_parsed.txt")
+
+        # Setup file paths
+        base_name = os.path.basename(ingestion.file_path).replace(".pdf", "")
+        pages_dir = f"pages/{base_name}"
+        ingestion.extracted_document_file_path = f"{base_name}_parsed.json"
 
         # Process the PDF
         file_content = (
-            await read(ingestion.file_path, mode="rb")
+            await read(ingestion.file_path)
             if read
             else open(ingestion.file_path, "rb").read()
         )
-        entries, all_text = process_pdf(file_content, ingestion)
+        entries, all_text = await process_pdf(file_content, ingestion, pages_dir, write)
 
-        # Write extracted text
+        # Write extracted text as JSON
         if write:
-            await write(ingestion.extracted_document_file_path, all_text, mode="w")
+            await write(
+                ingestion.extracted_document_file_path, json.dumps(all_text, indent=4)
+            )
         else:
-            with open(ingestion.extracted_document_file_path, "w") as f:
-                f.write(all_text)
+            with open(
+                ingestion.extracted_document_file_path, "w", encoding="utf-8"
+            ) as f:
+                f.write(json.dumps(all_text, indent=4))
 
         all_entries.extend(entries)
     return all_entries
