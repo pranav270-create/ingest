@@ -14,15 +14,16 @@ stages:
 
   - name: extract
     functions:
-      - name: marker
+      - name: ocr2_0
         input: Ingestion
         return: Entry
 
 pipeline:
   version: "1.0"
-  description: "test_pipeline_pranav_marker"
-  # pipeline_id: 3
-  # resume_from_step: 2
+  description: "test_pipeline_pranav_ocr2_0"
+  pipeline_id: 1
+  resume_from_step: 1
+  fork_pipeline: true
   # collection_name: "test_collection_pranav"
 
 storage:

@@ -344,15 +344,12 @@ async def create_entries(session: AsyncSession, data_list: list[EntrySchema], co
         error_messages=[]
     )
 
-    # Add debug logging
-    print(f"Starting to process {len(data_list)} entries for pipeline")
-
     for i in range(0, len(data_list), batch_size):
         batch = data_list[i:i+batch_size]
         values = []
         for data in batch:
             data = data.model_dump()
-            
+
             # Get pipeline_id from ingestion
             pipeline_id = data.get("ingestion", {}).get("pipeline_id")
             if not pipeline_id:
@@ -402,9 +399,6 @@ async def create_entries(session: AsyncSession, data_list: list[EntrySchema], co
             # Process each entry - check for hash collisions within same pipeline
             for entry_data in values:
                 try:
-                    # Debug logging for duplicate check
-                    print(f"Checking for duplicate: hash={entry_data['content_hash']}, pipeline_id={entry_data['pipeline_id']}")
-                    
                     stmt = select(Entry).where(
                         and_(
                             Entry.content_hash == entry_data["content_hash"],
@@ -415,11 +409,9 @@ async def create_entries(session: AsyncSession, data_list: list[EntrySchema], co
                     existing_entry = result_query.scalar_one_or_none()
 
                     if existing_entry:
-                        print(f"Found duplicate entry: hash={entry_data['content_hash']}, pipeline={entry_data['pipeline_id']}")
                         result.skipped_duplicates += 1
                         continue
                     else:
-                        print(f"Creating new entry: hash={entry_data['content_hash']}, pipeline={entry_data['pipeline_id']}")
                         new_entry = Entry(**entry_data)
                         session.add(new_entry)
                         result.new_entries += 1
@@ -427,7 +419,6 @@ async def create_entries(session: AsyncSession, data_list: list[EntrySchema], co
                 except Exception as e:
                     result.failed_entries += 1
                     result.error_messages.append(f"Error processing entry: {str(e)}")
-                    print(f"Error processing entry: {str(e)}")
 
             await session.commit()
 
