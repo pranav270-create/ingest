@@ -2,7 +2,7 @@ import base64
 import os
 import sys
 from pathlib import Path
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 import httpx
 from litellm import Router
@@ -16,7 +16,6 @@ from src.utils.datetime_utils import get_current_utc_datetime
 
 router = Router(
     model_list=embedding_model_list,
-    default_max_parallel_requests=50,
     allowed_fails=2,
     cooldown_time=20,
     num_retries=3,
@@ -65,53 +64,39 @@ async def get_jina_embeddings(
 
 @FunctionRegistry.register("embed", "embed")
 async def get_embeddings(
-    basemodels: Union[list[Entry]],
+    basemodels: list[Entry],
     model_name: str,
-    embed_model_params: dict[str, Any] = None,
+    dimensions: int,
     write=None,  # noqa
     read=None,  # noqa
 ) -> list[Embedding]:
-    dimensions = embed_model_params.get("dimensions")
-    if dimensions is None:
-        raise ValueError("Dimensions must not be None")
-
+    """
+    Get embeddings for a list of entries
+    """
     inputs = []
     flat_entries = []
     using_image_embedding = False
+    for i, entry in enumerate(basemodels):
+        if i == 0:
+            if is_base64_image(entry.string):
+                using_image_embedding = True
 
-    def iterate_over_entries(entries: list[Entry]):
-        """
-        for each entry, update the metadata and append the text to the all_prompts list
-        """
-        nonlocal using_image_embedding
+        # update metadata
+        if not entry.embedded_feature_type:
+            if using_image_embedding:
+                entry.embedded_feature_type = EmbeddedFeatureType.IMAGE
+            else:
+                entry.embedded_feature_type = EmbeddedFeatureType.TEXT
+        entry.embedding_date = get_current_utc_datetime()
+        entry.embedding_model = model_name
+        entry.embedding_dimensions = dimensions
 
-        for i, entry in enumerate(entries):
-            if i == 0:
-                if is_base64_image(entry.string):
-                    using_image_embedding = True
+        inputs.append(entry.string)
 
-            # update metadata
-            if not entry.embedded_feature_type:
-                if using_image_embedding:
-                    entry.embedded_feature_type = EmbeddedFeatureType.IMAGE
-                else:
-                    entry.embedded_feature_type = EmbeddedFeatureType.TEXT
-            entry.embedding_date = get_current_utc_datetime()
-            entry.embedding_model = model_name
-            entry.embedding_dimensions = dimensions
-
-            # get the text to embed
-            text = entry.string
-
-            text += entry.context_summary_string or ""
-            inputs.append(text)
-
-            # pop schema so we can create Embedding(Entry) later
-            metadata = entry.model_dump(exclude_none=True)
-            metadata.pop("schema__")
-            flat_entries.append(metadata)
-
-    iterate_over_entries(basemodels)
+        # pop schema so we can create Embedding(Entry) later
+        metadata = entry.model_dump(exclude_none=True)
+        metadata.pop("schema__")
+        flat_entries.append(metadata)
 
     # Check if the model supports image embedding when embedding images
     if using_image_embedding:

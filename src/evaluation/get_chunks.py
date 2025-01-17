@@ -16,7 +16,7 @@ from src.sql_db.database_simple import get_async_db_session
 class ChunkComparison:
     content_hash: str
     document_title: str
-    page_range: Tuple[int, int]
+    page_range: tuple[int, int]
     pipeline_a_chunks: list[Entry]
     pipeline_b_chunks: list[Entry]
 

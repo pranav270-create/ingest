@@ -2,6 +2,8 @@ import sys
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional, TypeVar, Union
+
+import numpy as np
 from pydantic import BaseModel, Field, field_validator
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -349,6 +351,7 @@ class ChunkLocation(BaseModel):
     )
 
 
+
 # ------------------------------ CORE MODELS ------------------------------ #
 
 
@@ -401,12 +404,8 @@ class Ingestion(BaseModel):
     chunking_date: Optional[str] = None
     # Featurization fields
     feature_models: Optional[list[str]] = None  # feature_models = name of model used
-    feature_dates: Optional[list[str]] = (
-        None  # feature_types = name of prompt from PromptRegistry
-    )
-    feature_types: Optional[list[str]] = (
-        None  # feature_dates = date of prompt from PromptRegistry
-    )
+    feature_dates: Optional[list[str]] = None  # feature_types = name of prompt from PromptRegistry
+    feature_types: Optional[list[str]] = None  # feature_dates = date of prompt from PromptRegistry
     # Unprocessed citations
     unprocessed_citations: Optional[dict[str, Any]] = (
         None  # This is for citations that have not been processed yet
@@ -415,7 +414,6 @@ class Ingestion(BaseModel):
     @field_validator("extracted_document_file_path")
     def validate_extracted_document_file_path(cls, v):
         if v and not v.endswith(".json"):
-            print(f"WARNING: extracted_document_file_path must end with .json: {v}")
             raise ValueError("extracted_document_file_path must end with .json")
         return v
 
@@ -456,14 +454,10 @@ class Entry(BaseModel):
     figure_number: Optional[int] = None  # This is for a figure specifically
 
     # Embedding fields
-    embedded_feature_type: Optional[EmbeddedFeatureType] = (
-        None  # embedded_feature_type = type of feature being embedded
-    )
+    embedded_feature_type: Optional[EmbeddedFeatureType] = None  # embedded_feature_type = type of feature being embedded
     embedding_date: Optional[str] = None  # embedding_date = date of embedding
     embedding_model: Optional[str] = None  # embedding_model = name of model used
-    embedding_dimensions: Optional[int] = (
-        None  # embedding_dimensions = dimensions of embedding
-    )
+    embedding_dimensions: Optional[int] = None  # embedding_dimensions = dimensions of embedding
 
     # Random
     added_featurization: Optional[dict[str, Any]] = (
@@ -477,8 +471,49 @@ class Entry(BaseModel):
 @SchemaRegistry.register("Embedding")
 class Embedding(Entry):
     schema__: str = Field(default="Embedding", alias="schema__")
-    embedding: Union[list[float], float]  # This is the actual embedding
-    tokens: Optional[int] = None  # This is the number of tokens in the embedding
+    embedding: Union[list[float], float]
+    tokens: Optional[int] = None
+
+    def to_upsert(self, dense_model_name: str, sparse_model_name: str, vector: dict) -> "Upsert":
+        """Convert Embedding to Upsert with vector information"""
+        # Get all ingestion fields that exist in Upsert schema
+        ingestion_fields = (
+            {key: value for key, value in self.ingestion.model_dump().items() if value is not None and key in Upsert.model_fields}
+            if self.ingestion
+            else {}
+        )
+
+        # Prepare vector data
+        sparse_vector = {
+            "values": vector[sparse_model_name]["values"].tolist(),
+            "indices": vector[sparse_model_name]["indices"].tolist(),
+        }
+        dense_vector = vector[dense_model_name].tolist() if isinstance(vector[dense_model_name], np.ndarray) else vector[dense_model_name]
+
+        # Combine all fields
+        upsert_data = {
+            **ingestion_fields,
+            "uuid": self.uuid,
+            "string": self.string,
+            "keywords": self.keywords,
+            "added_featurization": self.added_featurization,
+            "embedded_feature_type": self.embedded_feature_type,
+            "embedding_date": self.embedding_date,
+            "embedding_model": self.embedding_model,
+            "embedding_dimensions": self.embedding_dimensions,
+            "consolidated_feature_type": self.consolidated_feature_type,
+            "chunk_locations": self.chunk_locations,
+            "min_primary_index": self.min_primary_index,
+            "max_primary_index": self.max_primary_index,
+            "chunk_index": self.chunk_index,
+            "table_number": self.table_number,
+            "figure_number": self.figure_number,
+            "sparse_vector": sparse_vector,
+            "dense_vector": dense_vector,
+            "schema__": "Upsert",
+        }
+
+        return Upsert(**upsert_data)
 
 
 @SchemaRegistry.register("Upsert")
@@ -487,6 +522,18 @@ class Upsert(BaseModel):
 
     # Core identification fields
     uuid: str
+    # From Entry
+    keywords: Optional[list[str]] = None
+    index_numbers: Optional[list[Index]] = (
+        None  # Null if we embed whole document or cross-doc summary. Represents range for continous time items; int for discrete. # noqa
+    )
+    string: Optional[str] = None
+    context_summary_string: Optional[str] = None  # This is only if we are generating a summary of the entry wrt the broader document # noqa
+    added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
+    # From Embedding
+    sparse_vector: dict[str, Union[list[float], list[int]]]  # Changed this line
+    dense_vector: Union[list[float], float]  # This is the actual embedding
+    # From Ingestion, Also what is up in the VDB as Payload
     document_hash: str
 
     # Core content fields
@@ -581,11 +628,5 @@ class FormattedScoredPoints(BaseModel):
 BaseModelListType = TypeVar("BaseModelListType", list[Entry], list[Ingestion])
 """Type variable for list of database models (list[Entry] or list[Ingestion])"""
 
-RegisteredSchemaListType = TypeVar(
-    "RegisteredSchemaListType",
-    list[Ingestion],
-    list[Entry],
-    list[Embedding],
-    list[Upsert],
-)
+RegisteredSchemaListType = TypeVar("RegisteredSchemaListType", list[Ingestion], list[Entry], list[Embedding], list[Upsert])
 """Type variable for list of registered schemas (list[Ingestion], list[Entry], list[Embedding], list[Upsert])"""

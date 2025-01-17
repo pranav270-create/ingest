@@ -11,7 +11,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from src.schemas.schemas import ContentType
 from src.sql_db.database_simple import get_async_session
 from src.sql_db.etl_model import Entry, Ingest, ProcessingPipeline, ProcessingStep, ingest_pipeline
-from src.vector_db.qdrant_utils import async_get_qdrant_client, async_update_payload_by_filter, get_qdrant_client, remove_points_by_filter
+from src.upsert.qdrant_utils import async_get_qdrant_client, async_update_payload_by_filter, get_qdrant_client, remove_points_by_filter
 
 
 async def remove_pipeline_data(collection_name: str, pipeline_id: int):

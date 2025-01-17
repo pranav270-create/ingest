@@ -10,7 +10,7 @@ from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.pipeline.registry.schema_registry import SchemaRegistry
 from src.pipeline.storage_backend import StorageFactory
-from src.schemas.schemas import Entry, Ingestion
+from src.schemas.schemas import BaseModelListType, Embedding, Entry, Ingestion, RegisteredSchemaListType
 
 
 class PipelineOrchestrator:
@@ -21,7 +21,7 @@ class PipelineOrchestrator:
         FunctionRegistry.autodiscover("src.chunking")
         FunctionRegistry.autodiscover("src.featurization")
         FunctionRegistry.autodiscover("src.embedding")
-        FunctionRegistry.autodiscover("src.vector_db")
+        FunctionRegistry.autodiscover("src.upsert")
 
         PromptRegistry.autodiscover("src.prompts")
         SchemaRegistry.autodiscover("src.schemas")
@@ -43,14 +43,17 @@ class PipelineOrchestrator:
         storage_config = self.config.get("storage", {})
         return StorageFactory.create(**storage_config)
 
+
     def register_functions(self):
         for stage in self.config.get("stages", []):
             for function in stage.get("functions", []):
                 FunctionRegistry.register(stage["name"], function["name"])
 
+
     def get_registered_functions(self):
         """Returns a dictionary of all registered functions by stage."""
         return {stage["name"]: [func["name"] for func in stage.get("functions", [])] for stage in self.config.get("stages", [])}
+
 
     def verify_config_stage_parameters(self):
         """Verifies that all function parameters specified in config match their function signatures.
@@ -67,13 +70,15 @@ class PipelineOrchestrator:
                 types = get_args(annotation)
                 # Check each type in the Union
                 return any(
-                    (get_origin(t) is list and get_args(t)[0] in (Entry, Ingestion))
+                    (get_origin(t) is list and get_args(t)[0] in (Entry, Ingestion, Embedding)) or
+                    t in (BaseModelListType, RegisteredSchemaListType)
                     for t in types
                 )
 
-            # Check if it's a List[Entry] or List[Ingestion]
-            return (get_origin(annotation) is list and
-                    get_args(annotation)[0] in (Entry, Ingestion))
+            # Check if it's a List[Entry], List[Ingestion]
+            return ((get_origin(annotation) is list and
+                    get_args(annotation)[0] in (Entry, Ingestion, Embedding)) or
+                    annotation in (BaseModelListType, RegisteredSchemaListType))
 
         validation_errors = []
         stages = self.config.get("stages", [])

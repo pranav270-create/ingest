@@ -16,7 +16,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from src.llm_utils.utils import Provider
 from src.retrieval.retrieve_new import hybrid_retrieval
 from src.schemas.schemas import EmbeddedFeatureType
-from src.vector_db.qdrant_utils import async_get_qdrant_client
+from src.upsert.qdrant_utils import async_get_qdrant_client
 from src.sql_db.database_simple import get_async_session
 from src.sql_db.etl_model import Entry
 

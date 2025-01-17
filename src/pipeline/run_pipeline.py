@@ -4,6 +4,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -138,7 +139,7 @@ async def pipeline_step(
         else:
             if input_results is None:
                 raise ValueError(f"Stage '{stage}' requires input results from previous stage")
-            results = await func(ingestions=input_results, **params, simple_mode=False)
+            results = await func(input_results, **params, simple_mode=False)
         logger.info(f"Function {function_name} \033[92mComplete\033[0m")
 
         # If this is the first step, run batched ingestion
@@ -223,7 +224,7 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
             current_results = stage_results
 
         logger.info("Creating Entries. No more processing steps to run")
-        if current_results and current_results[0].schema__ == "Entry":
+        if current_results and (current_results[0].schema__ in {"Entry", "Embedding", "Upsert"}):
             result = await create_entries(
                 session,
                 current_results,

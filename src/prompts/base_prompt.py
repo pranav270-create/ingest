@@ -1,17 +1,18 @@
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
+from typing import Generic, Optional, TypeVar
 
 from litellm import ModelResponse
 from pydantic import BaseModel
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import BaseModelListType
+# from src.schemas.schemas import BaseModelListType
 
+T = TypeVar('T', bound=BaseModel)
 
-class BasePrompt(ABC):
+class BasePrompt(ABC, Generic[T]):
     system: str = ""
     user: str = ""
     DataModel: Optional[type[BaseModel]] = None
@@ -32,9 +33,9 @@ class BasePrompt(ABC):
 
     @staticmethod
     @abstractmethod
-    def parse_response(entries: BaseModelListType, responses: list[ModelResponse]) -> BaseModelListType:
+    def parse_response(entry: T, response: ModelResponse) -> T:
         """
-        Parses the response from the LLM and returns a list of entries
+        Parses the response from the LLM and returns a new Entry
         """
         pass
 
