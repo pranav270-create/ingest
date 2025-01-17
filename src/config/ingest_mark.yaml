@@ -55,7 +55,7 @@ pipeline:
   # resume_from_step: 2
   # update_on_collision: true  # Add this flag
   # fork_pipeline: true
-  # collection_name: "test_collection_pranav"
+  collection_name: "test_collection_mark"
 
 storage:
   storage_type: "local"

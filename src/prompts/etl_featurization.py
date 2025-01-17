@@ -108,3 +108,11 @@ class SummarizeEntryPrompt(BasePrompt[Entry]):
             consolidated_feature_type=ExtractedFeatureType.text
         )
         return new_entry
+
+
+class ExtractClaimsPrompt(BasePrompt[Entry]):
+    pass
+
+
+class LabelClustersPrompt(BasePrompt[Entry]):
+    pass

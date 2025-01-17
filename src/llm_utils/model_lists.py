@@ -20,7 +20,7 @@ embedding_model_list: list[dict[str, Union[str, dict[str, Union[str, int]]]]] = 
         "litellm_params": {
             "model": "openai/text-embedding-3-large",  # actual model name
             "api_key": os.getenv("OPENAI_API_KEY"),
-            "rpm": 5000,
+            "rpm": 10000,
             "tpm": 5000000,
         },
     },

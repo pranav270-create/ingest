@@ -11,7 +11,7 @@ from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.pipeline.registry.schema_registry import SchemaRegistry
 from src.pipeline.storage_backend import StorageFactory
-from src.schemas.schemas import BaseModelListType, Entry, Ingestion, RegisteredSchemaListType
+from src.schemas.schemas import BaseModelListType, Embedding, Entry, Ingestion, RegisteredSchemaListType
 
 
 class PipelineOrchestrator:
@@ -71,14 +71,14 @@ class PipelineOrchestrator:
                 types = get_args(annotation)
                 # Check each type in the Union
                 return any(
-                    (get_origin(t) is list and get_args(t)[0] in (Entry, Ingestion)) or
+                    (get_origin(t) is list and get_args(t)[0] in (Entry, Ingestion, Embedding)) or
                     t in (BaseModelListType, RegisteredSchemaListType)
                     for t in types
                 )
 
             # Check if it's a List[Entry], List[Ingestion]
             return ((get_origin(annotation) is list and
-                    get_args(annotation)[0] in (Entry, Ingestion)) or
+                    get_args(annotation)[0] in (Entry, Ingestion, Embedding)) or
                     annotation in (BaseModelListType, RegisteredSchemaListType))
 
         validation_errors = []

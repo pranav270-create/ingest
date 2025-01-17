@@ -4,6 +4,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -222,7 +223,7 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
             current_results = stage_results
 
         logger.info("Creating Entries. No more processing steps to run")
-        if current_results and current_results[0].schema__ == "Entry":
+        if current_results and (current_results[0].schema__ in {"Entry", "Embedding", "Upsert"}):
             result = await create_entries(
                 session,
                 current_results,

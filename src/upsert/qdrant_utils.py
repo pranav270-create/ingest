@@ -348,13 +348,13 @@ def process_embedding(embedding: Embedding, dense_model_name: str, sparse_model_
         "upsert": upsert,
         "vdb_payload": vdb_payload,
         "vector": vector,
-        "tokens": embedding["tokens"],
+        "tokens": embedding.tokens,
     }
 
 
 async def async_upsert_embed(
     client: AsyncQdrantClient,
-    embeddings: list[dict],
+    embeddings: list[Embedding],
     collection: str,
     dense_model_name: str,
     sparse_model_name: str,

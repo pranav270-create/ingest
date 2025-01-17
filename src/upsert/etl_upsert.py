@@ -4,12 +4,13 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parents[2]))
 
 from src.pipeline.registry.function_registry import FunctionRegistry
+from src.schemas.schemas import Embedding
 from src.upsert.qdrant_utils import async_create_hybrid_collection, async_get_qdrant_client, async_upsert_embed
 
 
 @FunctionRegistry.register("upsert", "upsert_embeddings")
 async def upsert_embeddings(
-    embeddings,
+    embeddings: list[Embedding],
     collection_name: str,
     dense_model_name: str,
     sparse_model_name: str,
