@@ -1,0 +1,32 @@
+stages:
+  - name: ingest
+    functions:
+      - name: local
+        input: null
+        return: Ingestion
+        params:
+          directory_path: "/Users/pranaviyer/Desktop/AstralisData/"
+          added_metadata:
+            document_title: "docbench"
+            content_type: "other"
+            ingestion_method: "local_file"
+            file_type: "pdf"
+
+  - name: extract
+    functions:
+      - name: marker
+        input: Ingestion
+        return: Entry
+
+pipeline:
+  version: "1.0"
+  description: "test_pipeline_pranav_marker"
+  # pipeline_id: 2
+  # resume_from_step: 2
+  # update_on_collision: true  # Add this flag
+  # fork_pipeline: true
+  # collection_name: "test_collection_pranav"
+
+storage:
+  storage_type: "local"
+  base_path: "/Users/pranaviyer/Desktop/local_files/"

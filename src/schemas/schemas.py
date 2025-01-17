@@ -2,8 +2,7 @@ import sys
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional, TypeVar, Union
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -363,7 +362,7 @@ class Ingestion(BaseModel):
     # Extraction fields
     extraction_method: Optional[ExtractionMethod] = None
     extraction_date: Optional[str] = None
-    # TODO: Should this be default of type .json of page_number and content?
+    # NOTE: The CONTENT is default of type .json with page_number and content?
     extracted_document_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
     # Chunking fields
     chunking_method: Optional[ChunkingMethod] = None
@@ -375,6 +374,12 @@ class Ingestion(BaseModel):
     feature_types: Optional[list[str]] = None # feature_dates = date of prompt from PromptRegistry
     # Unprocessed citations
     unprocessed_citations: Optional[dict[str, Any]] = None  # This is for citations that have not been processed yet
+
+    @field_validator('extracted_document_file_path')
+    def validate_extracted_document_file_path(cls, v):
+        if v and not v.endswith('.json'):
+            raise ValueError('extracted_document_file_path must end with .json')
+        return v
 
 
 @SchemaRegistry.register("Entry")

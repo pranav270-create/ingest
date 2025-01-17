@@ -12,9 +12,10 @@ from sql_db.database_simple import get_async_db_session
 @dataclass
 class ChunkComparison:
     content_hash: str
+    document_title: str
     page_range: Tuple[int, int]
-    pipeline_a_chunk: Optional[Entry]
-    pipeline_b_chunk: Optional[Entry]
+    pipeline_a_chunks: list[Entry]
+    pipeline_b_chunks: list[Entry]
 
 
 async def get_pipeline_entries(pipeline_id: str) -> List[Entry]:
@@ -43,36 +44,30 @@ def find_overlapping_chunks(
 ) -> List[ChunkComparison]:
     """Find overlapping chunks between two lists of entries from the same document."""
     comparisons = []
+    document_title = chunks_a[0].ingest.document_title if chunks_a else "Unknown"
 
-    # Create lookup dictionaries for quick access
-    chunks_b_dict = {
-        (chunk.min_primary_index, chunk.max_primary_index): chunk for chunk in chunks_b
-    }
+    # Create dictionaries grouping chunks by page range
+    chunks_b_dict = defaultdict(list)
+    for chunk in chunks_b:
+        page_range = (chunk.min_primary_index, chunk.max_primary_index)
+        chunks_b_dict[page_range].append(chunk)
 
-    for chunk_a in chunks_a:
-        range_a = (chunk_a.min_primary_index, chunk_a.max_primary_index)
-        matching_chunk_b = None
+    # Group chunks_a by page range
+    chunks_a_dict = defaultdict(list)
+    for chunk in chunks_a:
+        page_range = (chunk.min_primary_index, chunk.max_primary_index)
+        chunks_a_dict[page_range].append(chunk)
 
-        # Look for exact matches first
-        if range_a in chunks_b_dict:
-            matching_chunk_b = chunks_b_dict[range_a]
-        else:
-            # Look for overlapping ranges
-            for (min_b, max_b), chunk_b in chunks_b_dict.items():
-                # Check if ranges overlap
-                if not (
-                    max_b < chunk_a.min_primary_index
-                    or min_b > chunk_a.max_primary_index
-                ):
-                    matching_chunk_b = chunk_b
-                    break
-
+    # Create comparisons for all unique page ranges
+    all_page_ranges = set(chunks_a_dict.keys()) | set(chunks_b_dict.keys())
+    for page_range in all_page_ranges:
         comparisons.append(
             ChunkComparison(
-                content_hash=chunk_a.content_hash,
-                page_range=(chunk_a.min_primary_index, chunk_a.max_primary_index),
-                pipeline_a_chunk=chunk_a,
-                pipeline_b_chunk=matching_chunk_b,
+                content_hash=chunks_a[0].content_hash if chunks_a else chunks_b[0].content_hash,
+                document_title=document_title,
+                page_range=page_range,
+                pipeline_a_chunks=chunks_a_dict[page_range],
+                pipeline_b_chunks=chunks_b_dict[page_range],
             )
         )
 
@@ -117,10 +112,25 @@ async def main():
     # Print results
     for content_hash, chunk_comparisons in comparisons.items():
         print(f"\nDocument hash: {content_hash}")
+        print(f"Document title: {chunk_comparisons[0].document_title}")
+        print(f"Document path: {chunk_comparisons[0].pipeline_a_chunks[0].ingest.file_path}")
+
         for comp in chunk_comparisons:
-            print(f"Page range: {comp.page_range}")
-            print(f"Pipeline A chunk present: {comp.pipeline_a_chunk is not None}")
-            print(f"Pipeline B chunk present: {comp.pipeline_b_chunk is not None}")
+            print(f"\nPage range: {comp.page_range}")
+
+            # Count text or combined_text chunks for Pipeline A
+            combined_text_a = sum(1 for chunk in comp.pipeline_a_chunks if chunk.consolidated_feature_type in ['combined_text', 'text'])
+            print(f"Pipeline A chunks: {len(comp.pipeline_a_chunks)} entries")
+            print(f"\033[94mCombined text A: {combined_text_a} entries\033[0m")  # Print in blue
+            if comp.pipeline_a_chunks:
+                print("Feature types A:", [chunk.consolidated_feature_type for chunk in comp.pipeline_a_chunks])
+
+            # Count text or combined_text chunks for Pipeline B
+            combined_text_b = sum(1 for chunk in comp.pipeline_b_chunks if chunk.consolidated_feature_type in ['combined_text', 'text'])
+            print(f"Pipeline B chunks: {len(comp.pipeline_b_chunks)} entries")
+            print(f"\033[94mCombined text B: {combined_text_b} entries\033[0m")  # Print in blue
+            if comp.pipeline_b_chunks:
+                print("Feature types B:", [chunk.consolidated_feature_type for chunk in comp.pipeline_b_chunks])
             print("---")
 
 
