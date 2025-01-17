@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.append(str(Path(__file__).parents[2]))
 
@@ -38,7 +39,7 @@ async def featurize(
     write=None,  # noqa
     read=None,
     update_metadata=True,
-    **litellm_kwargs,
+    model_params: dict[str, Any] = None,
 ) -> BaseModelListType:
     """
     Use LLMs to featurize the data contained in an Ingestion or Entry
@@ -52,7 +53,7 @@ async def featurize(
     prompt = PromptRegistry.get(prompt_name)
 
     if prompt.has_data_model():
-        litellm_kwargs["response_format"] = prompt.DataModel
+        model_params["response_format"] = prompt.DataModel
 
     if not update_metadata:
         for base_model in basemodels:
@@ -65,7 +66,7 @@ async def featurize(
     messages_list = await asyncio.gather(*(prompt.format_prompt(basemodel, read=read) for basemodel in basemodels))
 
     # Run litellm Router, add results to basemodels
-    tasks = [router.acompletion(model=model_name, messages=messages, **litellm_kwargs) for messages in messages_list]
+    tasks = [router.acompletion(model=model_name, messages=messages, **model_params) for messages in messages_list]
     responses = await asyncio.gather(*tasks)
     updated_basemodels = prompt.parse_response(basemodels, responses)
 

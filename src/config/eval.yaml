@@ -32,7 +32,8 @@ stages:
         params:
           model: "text-embedding-3-large"
           provider: "openai"
-          dimensions: 512
+          embed_model_params:
+            dimensions: 512
   
   - name: eval
     functions:
