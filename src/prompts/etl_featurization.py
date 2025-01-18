@@ -1,37 +1,12 @@
-import base64
 import json
-from typing import Union
 from uuid import uuid4
-
 from litellm import ModelResponse
 from pydantic import BaseModel, Field
 
 from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.prompts.base_prompt import BasePrompt
-from src.schemas.schemas import Citation, EmbeddedFeatureType, Entry, ExtractedFeatureType, Ingestion, RelationshipType
-
-
-async def read_content(filepath, read) -> Union[str, bytes]:
-    if read is not None:
-        return await read(filepath)
-    with open(filepath) as f:
-        return f.read()
-
-
-async def base_model_to_encoded_image(base_model: BaseModel, read=None):
-    if isinstance(base_model, Ingestion):
-        content = await read_content(base_model.file_path, read)
-
-    elif isinstance(base_model, Entry):
-        content = base_model.string
-
-    # If content is already bytes (from S3), use it directly
-    if isinstance(content, bytes):
-        return base64.b64encode(content).decode('utf-8')
-
-    # If it's a string path, read and encode the local file
-    return base64.b64encode(content.encode('utf-8')).decode('utf-8')
+from src.schemas.schemas import Citation, EmbeddedFeatureType, Entry, ExtractedFeatureType, RelationshipType
 
 
 @PromptRegistry.register("summarize_entry")
@@ -94,8 +69,8 @@ class SummarizeEntryPrompt(BasePrompt[Entry]):
         # create citation
         citation = Citation(
             relationship_type=RelationshipType.SYNTHETIC,
-            source_uuid=uuid, # current
-            target_uuid=entry.uuid, # parent
+            source_uuid=uuid,  # current
+            target_uuid=entry.uuid,  # parent
         )
 
         # create new Entry
