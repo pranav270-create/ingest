@@ -1,12 +1,13 @@
 import base64
 import json
+from typing import Any
 from litellm import ModelResponse
 from pydantic import BaseModel, Field
 
 from src.llm_utils.utils import structure_image_prompt, text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.prompts.base_prompt import BasePrompt
-from src.schemas.schemas import VLMEvaluation
+from src.schemas.schemas import ChunkEvaluation
 
 
 @PromptRegistry.register("vlm_elo")
@@ -28,11 +29,11 @@ class VLMELOPrompt(BasePrompt):
     """
 
     class DataModel(BaseModel):
-        rationale: str = Field(description="The rationale for the winner")
+        reasoning: str = Field(description="The reasoning for the winner")
         winner: str = Field(description="The winner of the VLM evaluation")
 
     @classmethod
-    async def format_prompt(cls, vlm_evaluation: VLMEvaluation, read=None):
+    async def format_prompt(cls, vlm_evaluation: ChunkEvaluation, read=None) -> list[dict[str, Any]]:
         # Collect all unique page file paths from both chunks
         page_paths_a = [loc.page_file_path for chunk in vlm_evaluation.chunks_a for loc in chunk.chunk_locations]
         page_paths_b = [loc.page_file_path for chunk in vlm_evaluation.chunks_b for loc in chunk.chunk_locations]
@@ -55,16 +56,16 @@ class VLMELOPrompt(BasePrompt):
         chunks_b = vlm_evaluation.chunks_b
         return structure_image_prompt(
             cls.system_prompt,
-            cls.user_prompt.format(chunks_a=chunks_a, chunks_b=chunks_b), 
+            cls.user_prompt.format(chunks_a=chunks_a, chunks_b=chunks_b),
             images
         )
 
     @staticmethod
-    def parse_response(vlm_evaluation: VLMEvaluation, response: ModelResponse) -> VLMEvaluation:
+    def parse_response(vlm_evaluation: ChunkEvaluation, response: ModelResponse) -> ChunkEvaluation:
         # extract vlm evaluation data
         text, _ = text_cost_parser(response)
         winner = json.loads(text).get('winner', '')
-        rationale = json.loads(text).get('rationale', '')
+        reasoning = json.loads(text).get('reasoning', '')
         vlm_evaluation.winner = winner
-        vlm_evaluation.rationale = rationale
+        vlm_evaluation.reasoning = reasoning
         return vlm_evaluation
