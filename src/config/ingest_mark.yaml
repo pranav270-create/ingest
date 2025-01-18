@@ -5,7 +5,7 @@ stages:
         input: null
         return: Ingestion
         params:
-          directory_path: "C:/Users/marka/fun/ingest/local_files/"
+          directory_path: "/Users/pranaviyer/Desktop/AstralisData/"
           added_metadata:
             document_title: "docbench"
             content_type: "other"
@@ -42,7 +42,7 @@ stages:
         input: Embedding
         return: Upsert
         params:
-          collection_name: "test_collection_mark"
+          collection_name: "test_collection_pranav"
           dense_model_name: "text-embedding-3-large"
           sparse_model_name: "bm25"
           dimensions: 512
@@ -53,17 +53,18 @@ stages:
         input: Entry
         return: Upsert
         params:
-          collection_name: "test_collection_mark"
+          collection_name: "test_collection_pranav"
           version: "1.0"
           update_on_collision: true
 
 
 pipeline:
-  description: "test_pipeline_mark_featurize"
-  pipeline_id: 22
-  # resume_from_step: 2
-  # fork_pipeline: true
+  description: "pranav_test_pipeline"
+  pipeline_id: 34
+  collection_name: "test_collection_pranav"
+  resume_from_step: 3
+  fork_pipeline: true
 
 storage:
-  storage_type: "local"
-  base_path: "C:/Users/marka/fun/ingest/local_files/"
+  storage_type: "s3"
+  bucket_name: "astralis-data-4170a4f6"

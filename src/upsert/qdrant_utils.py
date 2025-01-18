@@ -6,9 +6,6 @@ import uuid
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
-
-import aiofiles
-import numpy as np
 from fastembed.sparse.bm25 import Bm25
 from qdrant_client import AsyncQdrantClient, QdrantClient, models
 from qdrant_client.http.exceptions import UnexpectedResponse
@@ -180,47 +177,6 @@ def get_bm25_model(sparse_model_name: str):
     return Bm25(f"Qdrant/{sparse_model_name}")
 
 
-def process_response(file_path: str, dense_model_name: str, sparse_model_name: Optional[str]) -> Optional[dict]:
-    """
-    Generate a Qdrant compatible vector from an async embedding model response.
-
-    Reads a JSON file, extracts relevant information, and creates a vector
-    representation using dense and optionally sparse embeddings.
-    Returns a dictionary with vector data or None if an error occurs.
-    """
-    try:
-        # read json embedding response
-        with open(file_path, encoding="utf-8") as file:
-            data = json.load(file)
-        prompt, response, metadata = data[0], data[1], data[2]
-
-        if isinstance(response, list):
-            logging.error(f"Error in {file_path}: {response}")
-            return None
-
-        # build the dense and sparse vector
-        vector = {dense_model_name: response["data"][0]["embedding"]}
-
-        if sparse_model_name:
-            bm25_embedding_model = get_bm25_model(sparse_model_name)
-            sparse_embedding = bm25_embedding_model.passage_embed(prompt["input"])
-            vector[sparse_model_name] = list(sparse_embedding)[0].as_object()
-
-        # build the payload
-        payload = {key: value for key, value in metadata.items() if value is not None}
-
-        return {
-            "id": str(uuid.uuid4()),
-            "vector": vector,
-            "payload": payload,
-            "input": prompt["input"],
-            "tokens": response["usage"]["total_tokens"],
-        }
-    except Exception as e:
-        logging.error(f"Error processing {file_path}: {str(e)}")
-        return None
-
-
 def batch_update_points(
     client: QdrantClient, collection: str, points: list[models.PointStruct], records: list[dict], save_path: str
 ) -> bool:
@@ -252,75 +208,6 @@ def batch_update_points(
         return False
 
 
-async def async_upsert_embed_response_files(
-    client: AsyncQdrantClient,
-    collection: str,
-    dense_model_name: str,
-    sparse_model_name: str,
-    response_base_dir: str,
-    vdb_record_base_dir: str,
-    batch_size: int = 1000,
-) -> list[str]:
-    """
-    Upserts data into a Qdrant collection from specified directories.
-    Saves a record of the upserted points in a jsonl file
-    Removes and re-applies index threshold to ensure faster indexing
-    """
-
-    async def upsert_batch(points, records):
-        response = await client.upsert(collection_name=collection, points=points)
-        if response.status == UpdateStatus.COMPLETED:
-            async with aiofiles.open(save_path, "a", encoding="utf-8") as f:
-                for record in records:
-                    serializable_record = json.loads(
-                        json.dumps(record, default=lambda x: x.tolist() if isinstance(x, np.ndarray) else x)
-                    )
-                    await f.write(json.dumps(serializable_record) + "\n")
-            return len(points)
-        else:
-            logging.warning(f"Upsert batch to {save_path} not completed. Status: {response.status}")
-            return 0
-
-    await async_change_index_threshold(client, collection, threshold=0)
-    try:
-        points_batch, records_batch = [], []
-        total_usage, total_points = 0, 0
-
-        # create a save path using the base dir and the basename of the source directory
-        folder_name = os.path.basename(response_base_dir)
-        save_path = os.path.join(vdb_record_base_dir, folder_name, "records.jsonl")
-
-        # iterate over files in folder
-        for json_file in filter(lambda f: f.endswith(".json"), os.listdir(response_base_dir)):
-            file_path = os.path.join(response_base_dir, json_file)
-            processed = process_response(file_path, dense_model_name, sparse_model_name)
-
-            if processed:
-                # make point
-                points_batch.append(
-                    models.PointStruct(id=processed["id"], vector=processed["vector"], payload=processed["payload"])
-                )
-
-                # save some records, don't save the vector
-                records_batch.append(processed.pop("vector", None))
-                total_usage += processed["tokens"]
-
-                # upsert
-                if len(points_batch) >= batch_size:
-                    total_points += await upsert_batch(points_batch, records_batch)
-                    points_batch.clear()
-                    records_batch.clear()
-
-        if points_batch:
-            total_points += await upsert_batch(points_batch, records_batch)
-
-        print(f"Upserted {total_points}")
-        print(f"Total cost of embedding with {dense_model_name}: ${total_usage * model_mapping[dense_model_name].cost.input:.6f}")
-
-    finally:
-        await async_change_index_threshold(client, collection, 2000)
-
-
 def create_payload(embedding: Embedding) -> dict:
     """
     Returns a dictionary dump of the Upsert schema, which is a flattened Entry and Ingestion
@@ -332,13 +219,23 @@ def create_payload(embedding: Embedding) -> dict:
         'schema__',
         'embedding',
         'tokens',
-        'ingestion'  # Handle ingestion separately
+        'ingestion',  # Handle ingestion separately
+        # Fields from ENTRY we dont want to store in the payload
+        'string',
+        'added_featurization',
+        'citations',
     })
     payload.update({k: v for k, v in entry_fields.items() if v is not None})
 
     # Add Ingestion fields if present
     if embedding.ingestion:
-        ingestion_fields = embedding.ingestion.model_dump(exclude={'schema__'})
+        ingestion_fields = embedding.ingestion.model_dump(exclude={
+            'schema__',
+            # Fields from INGESTION we dont want to store in the payload
+            'document_summary'
+            'unprocessed_citations',
+            'citations'
+        })
         payload.update({k: v for k, v in ingestion_fields.items() if v is not None})
 
     return payload
@@ -382,28 +279,27 @@ async def async_upsert_embed(
         # iterate over files in folder
         for embedding in embeddings:
             if embedding.embedding:
-                uuid = embedding.uuid
-
                 # make vector
                 vector = {dense_model_name: embedding.embedding}
+                sparse_vector_upsert = []
                 if sparse_model_name:
                     sparse_embedding_model = get_bm25_model(sparse_model_name)
                     sparse_embedding = list(sparse_embedding_model.passage_embed(embedding.string))[0].as_object()
                     vector[sparse_model_name] = sparse_embedding
+                    sparse_vector_upsert = sparse_embedding['values'].tolist()
 
                 # make payload
                 payload = create_payload(embedding)
 
                 # make Upsert record
                 upsert_record = Upsert(
-                    uuid=embedding.uuid,
                     dense_vector=embedding.embedding,
-                    sparse_vector={sparse_model_name: vector[sparse_model_name]} if sparse_model_name in vector else {},
+                    sparse_vector={sparse_model_name: sparse_vector_upsert} if sparse_model_name in vector else {},
                     **payload  # Include all payload fields in the Upsert record
                 )
 
                 # make point
-                point = models.PointStruct(id=uuid, vector=vector, payload=payload)
+                point = models.PointStruct(id=embedding.uuid, vector=vector, payload=payload)
                 points_batch.append(point)
 
                 # save some records, don't save the vector

@@ -475,7 +475,7 @@ async def create_entries(
     )  # noqa
 
     for batch_start in range(0, len(data_list), batch_size):
-        batch = data_list[batch_start : batch_start + batch_size]
+        batch = data_list[batch_start: batch_start + batch_size]
         try:
             for data in batch:
                 data_dict = data.model_dump()

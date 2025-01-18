@@ -350,7 +350,6 @@ class ChunkLocation(BaseModel):
     )
 
 
-
 # ------------------------------ CORE MODELS ------------------------------ #
 
 
@@ -381,7 +380,6 @@ class Ingestion(BaseModel):
     # Extraction fields
     extraction_method: Optional[ExtractionMethod] = None
     extraction_date: Optional[str] = None
-    # NOTE: The CONTENT is default of type .json with page_number and content?
     extracted_document_file_path: Optional[str] = None  # This is the path to the extracted file which we can use for more context
     # Chunking fields
     chunking_method: Optional[ChunkingMethod] = None
@@ -393,9 +391,11 @@ class Ingestion(BaseModel):
     feature_types: Optional[list[str]] = None  # feature_dates = date of prompt from PromptRegistry
     # Unprocessed citations
     unprocessed_citations: Optional[dict[str, Any]] = None  # This is for citations that have not been processed yet
+    citations: Optional[list[Citation]] = None
 
     @field_validator("extracted_document_file_path")
     def validate_extracted_document_file_path(cls, v):
+        # NOTE: The CONTENT is default of type .json with page_number and content?
         if v and not v.endswith(".json"):
             raise ValueError("extracted_document_file_path must end with .json")
         return v
@@ -446,8 +446,17 @@ class Record(Entry):
 class Upsert(BaseModel):
     schema__: str = Field(default="Upsert", alias="schema__")
 
+    # Created during Qdrant Upsert
+    # ------------------------------
+    sparse_vector: dict[str, Union[list[float], list[int]]]
+
+    # From EMBEDDING
+    # ------------------------------
+    dense_vector: Union[list[float], float]
+
+    # From ENTRY
+    # ------------------------------
     uuid: str
-    # From Entry
     string: Optional[str] = None
     # Featurization fields
     entry_title: Optional[str] = None  # From Entry - title of figure, table, or other content
@@ -465,15 +474,13 @@ class Upsert(BaseModel):
     embedding_date: Optional[str] = None
     embedding_model: Optional[str] = None
     embedding_dimensions: Optional[int] = None
-    # From Embedding
-    sparse_vector: dict[str, Union[list[float], list[int]]]
-    dense_vector: Union[list[float], float]
     # Random
     added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
     # Graph DB
     citations: Optional[list[Citation]] = None
 
-    # From Ingestion
+    # From INGESTION
+    # ------------------------------
     document_hash: str
     # Processing fields from Ingestion
     ingestion_id: Optional[int] = None
@@ -507,6 +514,9 @@ class Upsert(BaseModel):
     feature_models: Optional[list[str]] = None
     feature_dates: Optional[list[str]] = None
     feature_types: Optional[list[str]] = None
+    # Citations from Ingestion
+    unprocessed_citations: Optional[dict[str, Any]] = None
+    citations: Optional[list[Citation]] = None
 
 
 @SchemaRegistry.register("Embedding")

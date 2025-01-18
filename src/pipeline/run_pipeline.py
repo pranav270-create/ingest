@@ -145,21 +145,21 @@ async def pipeline_step(
         if order == 0:
             results = await batched_ingestion(session, results, pipeline)
 
-        # Save results and handle special cases
-        result_dicts = [item.model_dump() for item in results]
-        await storage.write(output_path, json.dumps(result_dicts))
-
-        # Update SQL database with latest information
-        await update_ingests_from_results(session, results)
-        await session.commit()
+        if results:
+            # Save results and handle special cases
+            result_dicts = [item.model_dump() for item in results]
+            await storage.write(output_path, json.dumps(result_dicts))
+            # Update SQL database with latest information
+            await update_ingests_from_results(session, results)
         step.status = "completed"
-
+        await session.commit()
         return results
 
     except Exception as e:
         await session.rollback()
-        await session.commit()
         step.status = "failed"
+        await session.add(step)
+        await session.commit()
         raise e
 
 

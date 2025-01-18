@@ -16,14 +16,19 @@ async def upsert_entries(
     collection_name: str,
     version: str,
     update_on_collision: bool = False,
+    read: callable = None, # noqa
+    write: callable = None, # noqa
+    **kwargs, # noqa
 ):
     async for session in get_async_db_session():
-
-        await create_entries(
+        # Perform the upsert operation
+        created_entries = await create_entries(
             session=session,
             data_list=results,
             collection_name=collection_name,
             version=version,
             update_on_collision=update_on_collision
         )
-
+        # Return the original results to maintain pipeline consistency
+        # This allows the pipeline to track what was actually upserted
+        return results
