@@ -2,7 +2,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Union
+from typing import Callable, Optional, Union
 
 from sqlalchemy import and_, delete, inspect, select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
@@ -248,7 +248,9 @@ async def create_processing_step(
     existing_step = result.scalar_one_or_none()
 
     if existing_step:
-        print(f"WARNING: ProcessingStep already exists with pipeline_id {pipeline_id} and order {order}. This step will be overwritten.")
+        print(
+            f"\033[93mWARNING\033[0m: ProcessingStep already exists with pipeline_id {pipeline_id} and order {order}. This step will be overwritten."
+        )  # noqa
         existing_step.previous_step_id = previous_step_id
         existing_step.status = status
         existing_step.function_name = function_name
@@ -344,6 +346,122 @@ async def map_citations_to_relationships(session: AsyncSession, pydantic_entry: 
     return relationships
 
 
+def create_content_hash(data: dict, version: str) -> str:
+    """Create a consistent hash from entry content."""
+    content_to_hash = {
+        "string": data.get("string", "").replace("\x00", "").encode("utf-8", "ignore").decode("utf-8"),
+        "ingestion_id": data.get("ingestion_id"),
+        "chunk_locations": data.get("chunk_locations", []),
+        "entry_title": data.get("entry_title"),
+        "keywords": data.get("keywords"),
+        "consolidated_feature_type": data.get("consolidated_feature_type"),
+        "citations": data.get("citations", []),
+        "version": version,
+    }
+    return hashlib.sha256(json.dumps(content_to_hash, sort_keys=True).encode()).hexdigest()
+
+
+def map_entry_data(data: dict, content_hash: str, collection_name: str) -> dict:
+    """Map schema data to SQL Entry model fields."""
+    entry_data = {
+        "content_hash": content_hash,
+        "uuid": data.get("uuid"),
+        "collection_name": collection_name,
+        "pipeline_id": data.get("pipeline_id"),
+        "ingestion_id": data.get("ingestion_id"),
+        "string": data.get("string", "").replace("\x00", "").encode("utf-8", "ignore").decode("utf-8"),
+        "entry_title": data.get("entry_title"),
+        "keywords": json.dumps(data.get("keywords", [])),
+        "added_featurization": json.dumps(data.get("added_featurization", {})),
+        "consolidated_feature_type": data.get("consolidated_feature_type"),
+        "chunk_locations": json.dumps(data.get("chunk_locations", [])),
+        "min_primary_index": data.get("min_primary_index"),
+        "max_primary_index": data.get("max_primary_index"),
+        "chunk_index": data.get("chunk_index"),
+        "table_number": data.get("table_number"),
+        "figure_number": data.get("figure_number"),
+        "embedded_feature_type": data.get("embedded_feature_type"),
+        "embedding_date": data.get("embedding_date"),
+        "embedding_model": data.get("embedding_model"),
+        "embedding_dimensions": data.get("embedding_dimensions"),
+    }
+    if "sparse_vector" in data or "dense_vector" in data:
+        entry_data["sparse_vector"] = data.get("sparse_vector")
+        entry_data["dense_vector"] = data.get("dense_vector")
+
+    return entry_data
+
+
+async def process_single_entry(
+    session: AsyncSession,
+    entry_data: dict,
+    original_data: Union[EntrySchema, Embedding, Upsert],
+    update_on_collision: bool,
+    result: EntryCreationResult,
+) -> Optional[Entry]:
+    """Process a single entry and handle its citations."""
+    try:
+        stmt = select(Entry).where(and_(Entry.content_hash == entry_data["content_hash"], Entry.pipeline_id == entry_data["pipeline_id"]))
+        existing_entry = (await session.execute(stmt)).scalar_one_or_none()
+
+        if existing_entry:
+            if not update_on_collision:
+                result.skipped_duplicates += 1
+                return None
+            # Update existing entry
+            for key, value in entry_data.items():
+                setattr(existing_entry, key, value)
+            current_entry = existing_entry
+            result.updated_entries += 1
+        else:
+            current_entry = Entry(**entry_data)
+            session.add(current_entry)
+            result.new_entries += 1
+
+        await session.flush()
+
+        # Handle citations
+        if update_on_collision:
+            await session.execute(delete(EntryRelationship).where(EntryRelationship.source_id == current_entry.id))
+
+        relationships = await map_citations_to_relationships(session, original_data, current_entry)
+        for relationship in relationships:
+            session.add(relationship)
+
+        return current_entry
+
+    except Exception as e:
+        result.failed_entries += 1
+        result.error_messages.append(f"Error processing entry: {str(e)}")
+        return None
+
+
+async def validate_data(data: dict, result: EntryCreationResult) -> bool:
+    """Validate required fields based on data type."""
+    if "sparse_vector" in data or "dense_vector" in data:
+        # Upsert-specific validation
+        required_fields = ["uuid", "pipeline_id", "ingestion_id", "document_hash", "scope", "creator_name", "ingestion_method"]
+
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            result.failed_entries += 1
+            result.error_messages.append(f"Missing required Upsert fields: {missing_fields} for entry {data.get('uuid')}")
+            return False
+
+        if not (data.get("dense_vector") or data.get("sparse_vector")):
+            result.failed_entries += 1
+            result.error_messages.append(f"Upsert must have either dense_vector or sparse_vector for entry {data.get('uuid')}")
+            return False
+    else:
+        # Original Entry/Embedding validation
+        if not data.get("pipeline_id") or not data.get("ingestion", {}).get("ingestion_id"):
+            result.failed_entries += 1
+            result.error_messages.append(f"Missing required fields for entry {data.get('uuid')}")
+            return False
+
+    return True
+
+
 async def create_entries(
     session: AsyncSession,
     data_list: Union[list[EntrySchema], list[Embedding], list[Upsert]],
@@ -352,127 +470,31 @@ async def create_entries(
     update_on_collision: bool = False,
     batch_size: int = 1000,
 ) -> EntryCreationResult:
+    result = EntryCreationResult(
+        total_processed=len(data_list), new_entries=0, skipped_duplicates=0, updated_entries=0, failed_entries=0, error_messages=[]
+    )  # noqa
 
-    result = EntryCreationResult(total_processed=len(data_list), new_entries=0, skipped_duplicates=0, updated_entries=0, failed_entries=0, error_messages=[]) # noqa
-
-    for i in range(0, len(data_list), batch_size):
-        batch = data_list[i : i + batch_size]
-        values = []
-        for data in batch:
-            data = data.model_dump()
-
-            # Get pipeline_id from ingestion
-            pipeline_id = data.get("ingestion", {}).get("pipeline_id")
-            if not pipeline_id:
-                result.failed_entries += 1
-                result.error_messages.append(f"Missing pipeline_id for entry with uuid {data.get('uuid')}")
-                continue
-
-            # Get ingestion_id from ingestion
-            ingestion_id = data.get("ingestion", {}).get("ingestion_id")
-            if not ingestion_id:
-                result.failed_entries += 1
-                result.error_messages.append(f"Missing ingestion_id for entry with uuid {data.get('uuid')}")
-                continue
-
-            # Sanitize string fields
-            string_value = data.get("string")
-            if string_value:
-                string_value = string_value.replace("\x00", "").encode("utf-8", "ignore").decode("utf-8")
-
-            # Create content hash from relevant fields
-            content_to_hash = {
-                "string": string_value,
-                "ingestion_id": ingestion_id,
-                "chunk_locations": data.get("chunk_locations", []),
-                "entry_title": data.get("entry_title"),
-                "keywords": data.get("keywords"),
-                "consolidated_feature_type": data.get("consolidated_feature_type"),
-                # "added_featurization": json.dumps(data.get("added_featurization", {})),  # if it exists, overwrite to update existing featurization
-                "citations": data.get("citations", []),
-                "version": version,
-            }
-            content_hash = hashlib.sha256(json.dumps(content_to_hash, sort_keys=True).encode()).hexdigest()
-
-            # Map all fields from schema to SQL model
-            entry_data = {
-                # Core identification fields
-                "content_hash": content_hash,
-                "uuid": data.get("uuid"),
-                "collection_name": collection_name,
-                "pipeline_id": pipeline_id,
-                "ingestion_id": ingestion_id,
-                # Core content fields
-                "string": string_value,
-                "entry_title": data.get("entry_title"),
-                "keywords": json.dumps(data.get("keywords", [])),
-                "added_featurization": json.dumps(data.get("added_featurization", {})),
-                # Chunk location fields
-                "consolidated_feature_type": data.get("consolidated_feature_type"),
-                "chunk_locations": json.dumps(data.get("chunk_locations", [])),
-                "min_primary_index": data.get("min_primary_index"),
-                "max_primary_index": data.get("max_primary_index"),
-                "chunk_index": data.get("chunk_index"),
-                "table_number": data.get("table_number"),
-                "figure_number": data.get("figure_number"),
-                # Embedding fields
-                "embedded_feature_type": data.get("embedded_feature_type"),
-                "embedding_date": data.get("embedding_date"),
-                "embedding_model": data.get("embedding_model"),
-                "embedding_dimensions": data.get("embedding_dimensions"),
-            }
-            values.append(entry_data)
-
+    for batch_start in range(0, len(data_list), batch_size):
+        batch = data_list[batch_start : batch_start + batch_size]
         try:
-            # Process each entry - check for hash collisions within same pipeline
-            for entry_data in values:
-                try:
-                    stmt = select(Entry).where(and_(Entry.content_hash == entry_data["content_hash"], Entry.pipeline_id == entry_data["pipeline_id"]))
-                    result_query = await session.execute(stmt)
-                    existing_entry = result_query.scalar_one_or_none()
+            for data in batch:
+                data_dict = data.model_dump()
 
-                    current_entry = None
-                    if existing_entry:
-                        if update_on_collision:
-                            # Update existing entry with new data
-                            for key, value in entry_data.items():
-                                setattr(existing_entry, key, value)
-                            current_entry = existing_entry
-                            result.updated_entries += 1
-                        else:
-                            result.skipped_duplicates += 1
-                            continue
-                    else:
-                        current_entry = Entry(**entry_data)
-                        session.add(current_entry)
-                        result.new_entries += 1
+                # Validate based on data type
+                if not await validate_data(data_dict, result):
+                    continue
 
-                    # If we have a valid entry (new or updated), process its citations
-                    if current_entry:
-                        # First, clear existing relationships if updating
-                        if update_on_collision:
-                            await session.execute(delete(EntryRelationship).where(EntryRelationship.source_id == current_entry.id))
+                content_hash = create_content_hash(data_dict, version)
+                entry_data = map_entry_data(data_dict, content_hash, collection_name)
 
-                        # Need to flush to ensure current_entry has an id
-                        await session.flush()
-
-                        # Create new relationships
-                        original_data = next(d for d in data_list if d.uuid == entry_data["uuid"])
-                        relationships = await map_citations_to_relationships(session, original_data, current_entry)
-                        for relationship in relationships:
-                            session.add(relationship)
-
-                except Exception as e:
-                    result.failed_entries += 1
-                    result.error_messages.append(f"Error processing entry: {str(e)}")
+                await process_single_entry(session, entry_data, data, update_on_collision, result)
 
             await session.commit()
 
         except SQLAlchemyError as e:
             await session.rollback()
-            result.error_messages.append(f"Error in batch commit: {str(e)}")
-            result.failed_entries += len(values)
-            print(f"SQLAlchemy error: {str(e)}")
+            result.error_messages.append(f"Batch commit error: {str(e)}")
+            result.failed_entries += len(batch)
 
     return result
 
