@@ -603,6 +603,13 @@ class Upsert(BaseModel):
     added_featurization: Optional[dict[str, Any]] = None
     citations: Optional[list[Citation]] = None
 
+@SchemaRegistry.register("chunk_evaluation")
+class ChunkEvaluation(BaseModel):
+    schema__: str = Field(default="ChunkEvaluation", alias="schema__")
+    chunks_a: list[Entry]
+    chunks_b: list[Entry]
+    winner: str
+    reasoning: str
 
 @SchemaRegistry.register("vlm_evaluation")
 class VLMEvaluation(BaseModel):

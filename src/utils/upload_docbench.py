@@ -15,6 +15,14 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+DOCBENCH_TYPE_RANGES = {
+    'academic_papers': range(0, 49),
+    'finance': range(49, 89),
+    'government': range(89, 133),
+    'laws': range(133, 179),
+    'news': range(179, 229)
+}
+
 async def upload_docbench_to_s3(
     base_path: str,
     bucket_name: str,
@@ -22,7 +30,7 @@ async def upload_docbench_to_s3(
     max_concurrency: int = 10
 ) -> None:
     """
-    Upload DocBench PDFs and their metadata JSONs to S3
+    Upload DocBench PDFs and their metadata JSONs to S3, organized by document type
     """
     stats = {
         'total_folders': 0,
@@ -36,11 +44,18 @@ async def upload_docbench_to_s3(
     semaphore = asyncio.Semaphore(max_concurrency)
     tasks = []
 
+    def get_doc_type(folder_num: int) -> str:
+        for doc_type, range_obj in DOCBENCH_TYPE_RANGES.items():
+            if folder_num in range_obj:
+                return doc_type
+        return "unknown"
+
     async def upload_folder_content(folder_path: str):
         folder_name = os.path.basename(folder_path)
-        all_files = os.listdir(folder_path)
-        logging.info(f"Files in {folder_path}: {all_files}")
+        folder_num = int(folder_name)
+        doc_type = get_doc_type(folder_num)
         
+        all_files = os.listdir(folder_path)
         pdf_files = [f for f in all_files if f.lower().endswith('.pdf')]
         json_files = [f for f in all_files if f.lower().endswith(('.json', '.jsonl'))]
 
@@ -54,8 +69,8 @@ async def upload_docbench_to_s3(
 
         async with semaphore:
             try:
-                # Upload PDF
-                pdf_key = f"{prefix}/{folder_name}/{pdf_files[0]}"
+                # Upload PDF with document type in path
+                pdf_key = f"{prefix}/{doc_type}/{folder_name}/{pdf_files[0]}"
                 await upload_single_file_async(
                     session,
                     pdf_path,
@@ -66,7 +81,7 @@ async def upload_docbench_to_s3(
                 logging.info(f"Uploaded PDF: {pdf_key}")
 
                 # Upload JSON
-                json_key = f"{prefix}/{folder_name}/{json_files[0]}"
+                json_key = f"{prefix}/{doc_type}/{folder_name}/{json_files[0]}"
                 await upload_single_file_async(
                     session,
                     json_path,
