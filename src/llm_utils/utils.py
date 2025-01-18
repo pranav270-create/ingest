@@ -402,13 +402,28 @@ def text_cost_parser(completion: Any) -> tuple[str, float]:
     return completion.choices[0].message.content, completion_cost(completion)
 
 
-def structure_image_prompt(system_prompt: str, user_prompt: str, base64_images: list[str]) -> list[dict[str, Any]]:
-    # Convert multiple images into content array
+def structure_image_prompt(system_prompt: str, user_prompt: str, base64_images: Union[list[str], str]) -> list[dict[str, Any]]:
+    """
+    Structure a prompt for image analysis with OpenAI's vision models.
+
+    Args:
+        system_prompt: The system instruction
+        user_prompt: The user's question or instruction
+        base64_images: One or more base64 encoded images
+
+    Returns:
+        List of message dictionaries formatted for OpenAI's chat completion
+    """
+    # Convert single image to list for consistent handling
+    if isinstance(base64_images, str):
+        base64_images = [base64_images]
+
+    # Create image content entries with proper base64 formatting
     image_contents = [
         {
             "type": "image_url",
             "image_url": {
-                "url": base64_image,
+                "url": f"data:image/jpeg;base64,{base64_image}",
             },
         }
         for base64_image in base64_images

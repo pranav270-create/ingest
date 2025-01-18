@@ -15,7 +15,7 @@ stages:
 
   - name: extract
     functions:
-      - name: simple
+      - name: marker
         input: Ingestion
         return: Entry
 
@@ -25,9 +25,11 @@ stages:
         input: Entry
         return: Entry
         params:
-          prompt_name: "summarize_entry"
+          prompt_name: "describe_image"
           model_name: "gpt-4o-mini"
-    
+          filter_params:
+            consolidated_feature_type: ["figure", "picture", "table", "complexregion"]
+
   - name: embed
     functions:
       - name: embed
@@ -60,10 +62,10 @@ stages:
 
 
 pipeline:
-  description: "pranav_test_pipeline"
+  description: "pranav_marker_test"
   collection_name: "test_collection_pranav"
-  # pipeline_id: 34
-  # resume_from_step: 4
+  pipeline_id: 45
+  resume_from_step: 2
   # fork_pipeline: true
 
 storage:

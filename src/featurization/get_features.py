@@ -10,7 +10,7 @@ from litellm import Router
 from src.llm_utils.model_lists import chat_model_list
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.prompt_registry import PromptRegistry
-from src.schemas.schemas import BaseModelListType, Ingestion
+from src.schemas.schemas import BaseModelListType, Ingestion, ExtractedFeatureType, EmbeddedFeatureType
 from src.utils.datetime_utils import get_current_utc_datetime
 
 router = Router(
@@ -35,19 +35,64 @@ def filter_basemodels(basemodels: BaseModelListType, filter_params: dict[str, An
     Filter basemodels based on provided field conditions.
     Returns tuple of (filtered_models, unfiltered_models)
 
-    Example usage:
-        filter_params = {
-            'consolidated_feature_type': ExtractedFeatureType.image,
-            'chunk_index': 1,
-            'embedded_feature_type': [EmbeddedFeatureType.RAW, EmbeddedFeatureType.SYNTHETIC]  # list for multiple allowed values
-        }
+    Example usage in yaml:
+        filter_params:
+            consolidated_feature_type: "image"
+            chunk_index: 1
+            embedded_feature_type: ["raw", "synthetic"]
     """
+    # Map of field names to their enum classes
+    enum_fields = {
+        'consolidated_feature_type': ExtractedFeatureType,
+        'embedded_feature_type': EmbeddedFeatureType,
+    }
+
+    # Preprocess filter_params to convert string values to enums where needed
+    processed_params = {}
+    for key, value in filter_params.items():
+        if key in enum_fields:
+            enum_class = enum_fields[key]
+            if isinstance(value, list):
+                # Handle list of values
+                processed_values = []
+                for v in value:
+                    if isinstance(v, str):
+                        try:
+                            matching_member = next(
+                                member for member in enum_class
+                                if member.value == v.lower()
+                            )
+                            processed_values.append(matching_member)
+                        except StopIteration:
+                            valid_values = [member.value for member in enum_class]
+                            raise ValueError(f"Invalid value '{v}' for {key}. Must be one of {valid_values}")
+                    else:
+                        processed_values.append(v)
+                processed_params[key] = processed_values
+            elif isinstance(value, str):
+                # Handle single string value
+                try:
+                    matching_member = next(
+                        member for member in enum_class 
+                        if member.value == value.lower()
+                    )
+                    processed_params[key] = matching_member
+                except StopIteration:
+                    valid_values = [member.value for member in enum_class]
+                    raise ValueError(f"Invalid value '{value}' for {key}. Must be one of {valid_values}")
+            else:
+                processed_params[key] = value
+        else:
+            processed_params[key] = value
+
     filtered = []
     unfiltered = []
+
     for model in basemodels:
         matches_all_conditions = True
-        for field, expected_value in filter_params.items():
+        for field, expected_value in processed_params.items():
             actual_value = getattr(model, field, None)
+
             # Handle list of allowed values
             if isinstance(expected_value, list):
                 if actual_value not in expected_value:
@@ -57,10 +102,12 @@ def filter_basemodels(basemodels: BaseModelListType, filter_params: dict[str, An
             elif actual_value != expected_value:
                 matches_all_conditions = False
                 break
+
         if matches_all_conditions:
             filtered.append(model)
         else:
             unfiltered.append(model)
+
     return filtered, unfiltered
 
 
@@ -87,12 +134,13 @@ async def featurize(
     """
     # If filter_params provided, only process matching models
     models_to_process = basemodels
+    print(f"Number of models to process: {len(models_to_process)}")
     unfiltered_models = []
     if filter_params:
         models_to_process, unfiltered_models = filter_basemodels(basemodels, filter_params)
         if not models_to_process:
             return basemodels  # Return original list if no models match filter
-
+    print(f"Number of models to process after filtering: {len(models_to_process)}")
     prompt = PromptRegistry.get(prompt_name)
 
     if prompt.has_data_model():
