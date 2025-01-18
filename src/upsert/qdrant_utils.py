@@ -321,35 +321,27 @@ async def async_upsert_embed_response_files(
         await async_change_index_threshold(client, collection, 2000)
 
 
-def process_embedding(embedding: Embedding, dense_model_name: str, sparse_model_name: Optional[str]) -> Optional[dict]:
+def create_payload(embedding: Embedding) -> dict:
     """
-    Generate a Qdrant compatible vector from an embedding dictionary.
-
-    Extracts relevant information and creates a vector representation using dense and optionally sparse embeddings.
-    Returns a dictionary with vector data or None if an error occurs.
+    Returns a dictionary dump of the Upsert schema, which is a flattened Entry and Ingestion
     """
-    # build the dense and sparse vector
-    vector = {dense_model_name: embedding.embedding}
+    payload = {}
 
-    if sparse_model_name:
-        bm25_embedding_model = get_bm25_model(sparse_model_name)
-        sparse_embedding = bm25_embedding_model.passage_embed(embedding.string)
-        vector[sparse_model_name] = list(sparse_embedding)[0].as_object()
+    # Add Entry fields first (excluding vector-related fields)
+    entry_fields = embedding.model_dump(exclude={
+        'schema__',
+        'embedding',
+        'tokens',
+        'ingestion'  # Handle ingestion separately
+    })
+    payload.update({k: v for k, v in entry_fields.items() if v is not None})
 
-    upsert = embedding.to_upsert(dense_model_name, sparse_model_name, vector)
+    # Add Ingestion fields if present
+    if embedding.ingestion:
+        ingestion_fields = embedding.ingestion.model_dump(exclude={'schema__'})
+        payload.update({k: v for k, v in ingestion_fields.items() if v is not None})
 
-    vdb_payload = {
-        key: value
-        for key, value in embedding.ingestion.model_dump().items()
-        if value is not None and key in Upsert.model_fields
-    } if embedding.ingestion else {}
-
-    return {
-        "upsert": upsert,
-        "vdb_payload": vdb_payload,
-        "vector": vector,
-        "tokens": embedding.tokens,
-    }
+    return payload
 
 
 async def async_upsert_embed(
@@ -368,36 +360,64 @@ async def async_upsert_embed(
 
     all_upserts = []
 
-    async def upsert_batch(points, records):
+    async def upsert_batch(points: list, records: list[Upsert]):
+        """
+        efficient Qdrant upsert
+        """
         response = await client.upsert(collection_name=collection, points=points)
+
+        # save a record of successful upserts
         if response.status == UpdateStatus.COMPLETED:
             all_upserts.extend(records)
             return len(points)
         else:
             raise Exception(f"Upsert batch not completed. Status: {response.status}")
 
-    await async_change_index_threshold(client, collection, threshold=0)
+    await async_change_index_threshold(client, collection, threshold=0) # makes upsert faster
+
     try:
         points_batch, records_batch = [], []
         total_usage, total_points = 0, 0
 
         # iterate over files in folder
         for embedding in embeddings:
-            processed = process_embedding(embedding, dense_model_name, sparse_model_name)
-            if processed:
-                upsert = processed["upsert"]
-                # make point
-                points_batch.append(
-                    models.PointStruct(id=upsert.uuid, vector=processed["vector"], payload=processed["vdb_payload"])
+            if embedding.embedding:
+                uuid = embedding.uuid
+
+                # make vector
+                vector = {dense_model_name: embedding.embedding}
+                if sparse_model_name:
+                    sparse_embedding_model = get_bm25_model(sparse_model_name)
+                    sparse_embedding = list(sparse_embedding_model.passage_embed(embedding.string))[0].as_object()
+                    vector[sparse_model_name] = sparse_embedding
+
+                # make payload
+                payload = create_payload(embedding)
+
+                # make Upsert record
+                upsert_record = Upsert(
+                    uuid=embedding.uuid,
+                    dense_vector=embedding.embedding,
+                    sparse_vector={sparse_model_name: vector[sparse_model_name]} if sparse_model_name in vector else {},
+                    **payload  # Include all payload fields in the Upsert record
                 )
+
+                # make point
+                point = models.PointStruct(id=uuid, vector=vector, payload=payload)
+                points_batch.append(point)
+
                 # save some records, don't save the vector
-                records_batch.append(upsert)
-                total_usage += processed["tokens"]
-                # upsert
+                records_batch.append(upsert_record)
+
+                # upsert batch of points
                 if len(points_batch) >= batch_size:
                     total_points += await upsert_batch(points_batch, records_batch)
                     points_batch.clear()
                     records_batch.clear()
+
+                total_usage += embedding.tokens
+
+        # upsert remaining points
         if points_batch:
             total_points += await upsert_batch(points_batch, records_batch)
 
@@ -405,11 +425,13 @@ async def async_upsert_embed(
         print(f"Total cost of embedding with {dense_model_name}: ${total_usage * model_mapping[dense_model_name].cost.input:.6f}")
 
         return all_upserts
+
     except Exception as e:
         print(e)
         raise Exception("Upsert failed") from None
+
     finally:
-        await async_change_index_threshold(client, collection, 2000)
+        await async_change_index_threshold(client, collection, 2000) # reset to default
 
 
 # remove points
