@@ -249,9 +249,7 @@ class Entry(AsyncAttrs, AbstractBase):
     # Featurization fields
     entry_title: Mapped[str] = mapped_column(Text, nullable=True, comment="The title of the entry")
     keywords: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Keywords for the entry")
-    context_summary_string: Mapped[str] = mapped_column(Text, nullable=True, comment="The summary of the document")
     added_featurization: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="The featurization added to the entry")
-    index_numbers: Mapped[list[int]] = mapped_column(JSON, nullable=True, comment="The index numbers of the entry")
     # Chunk location fields. Used for reconstruction
     consolidated_feature_type: Mapped[str] = mapped_column(String(100), nullable=True, comment="The type of the feature being embedded")
     chunk_locations: Mapped[list[JSON]] = mapped_column(JSON, nullable=True, comment="The locations of the chunks in the entry")
@@ -265,7 +263,7 @@ class Entry(AsyncAttrs, AbstractBase):
     embedding_date: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=True, comment="Date the embedding was created")
     embedding_model: Mapped[str] = mapped_column(String(100), nullable=True, comment="The model used to embed the feature")
     embedding_dimensions: Mapped[int] = mapped_column(Integer, nullable=True, comment="The dimensions of the embedding")
-
+    # Processing fields
     collection_name: Mapped[str] = mapped_column(String(100), nullable=True, comment="The name of the collection the entry belongs to")
     pipeline_id: Mapped[Optional[int]] = mapped_column(ForeignKey('processing_pipelines.id'), nullable=True, index=True)
     ingestion_id: Mapped[Optional[int]] = mapped_column(ForeignKey('ingest.id'), nullable=True, index=True)
@@ -292,6 +290,33 @@ class Entry(AsyncAttrs, AbstractBase):
         if value not in EmbeddedFeatureType._value2member_map_:
             raise ValueError(f"Invalid embedded feature type: {value}")
         return value
+
+    @staticmethod
+    def _convert_to_datetime(value):
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            # Try common date formats
+            formats = [
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d",
+                "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%S.%fZ",
+            ]
+            for fmt in formats:
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    continue
+            raise ValueError(f"Could not parse date string: {value}")
+        raise ValueError(f"Cannot convert {type(value)} to datetime")
+
+    @validates('embedding_date')
+    def validate_embedding_date(self, key, value):  # noqa
+        return self._convert_to_datetime(value)
 
 
 class EntryRelationship(Base):

@@ -81,12 +81,12 @@ class S3StorageBackend(StorageBackend):
         # Check if file is likely binary based on extension BEFORE reading
         binary_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx']
         text_extensions = ['.json', '.jsonl', '.txt', '.csv']
-        
+
         is_binary = (
             any(file_path.lower().endswith(ext) for ext in binary_extensions) and
             not any(file_path.lower().endswith(ext) for ext in text_extensions)
         )
-        
+
         response = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: self.s3.get_object(Bucket=self.bucket_name, Key=file_path)
@@ -95,7 +95,6 @@ class S3StorageBackend(StorageBackend):
         if is_binary:
             return content
         else:
-            print(f"Decoding {file_path} as utf-8")
             # For text files (json, jsonl, txt, etc)
             return content.decode('utf-8')
 

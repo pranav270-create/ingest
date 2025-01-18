@@ -385,10 +385,6 @@ def map_entry_data(data: dict, content_hash: str, collection_name: str) -> dict:
         "embedding_model": data.get("embedding_model"),
         "embedding_dimensions": data.get("embedding_dimensions"),
     }
-    if "sparse_vector" in data or "dense_vector" in data:
-        entry_data["sparse_vector"] = data.get("sparse_vector")
-        entry_data["dense_vector"] = data.get("dense_vector")
-
     return entry_data
 
 

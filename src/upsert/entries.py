@@ -29,6 +29,15 @@ async def upsert_entries(
             version=version,
             update_on_collision=update_on_collision
         )
+
+        # Print the results from EntryCreationResult
+        print(f"Total Processed: {created_entries.total_processed}")
+        print(f"New Entries: {created_entries.new_entries}")
+        print(f"Skipped Duplicates: {created_entries.skipped_duplicates}")
+        print(f"Updated Entries: {created_entries.updated_entries}")
+        print(f"Failed Entries: {created_entries.failed_entries}")
+        print(f"Error Messages: {created_entries.error_messages}")
+
         # Return the original results to maintain pipeline consistency
         # This allows the pipeline to track what was actually upserted
         return results

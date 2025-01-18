@@ -221,9 +221,9 @@ def create_payload(embedding: Embedding) -> dict:
         'tokens',
         'ingestion',  # Handle ingestion separately
         # Fields from ENTRY we dont want to store in the payload
-        'string',
-        'added_featurization',
-        'citations',
+        # 'string',
+        # 'added_featurization',
+        # 'citations',
     })
     payload.update({k: v for k, v in entry_fields.items() if v is not None})
 
@@ -232,9 +232,9 @@ def create_payload(embedding: Embedding) -> dict:
         ingestion_fields = embedding.ingestion.model_dump(exclude={
             'schema__',
             # Fields from INGESTION we dont want to store in the payload
-            'document_summary'
-            'unprocessed_citations',
-            'citations'
+            # 'document_summary'
+            # 'unprocessed_citations',
+            # 'citations'
         })
         payload.update({k: v for k, v in ingestion_fields.items() if v is not None})
 

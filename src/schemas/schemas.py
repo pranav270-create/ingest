@@ -414,6 +414,7 @@ class Entry(BaseModel):
     # Featurization fields
     entry_title: Optional[str] = None  # Title of a figure, table, or other content
     keywords: Optional[list[str]] = None  # This is for any keywords that we have not captured in other fields yet
+    added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
 
     # Chunk location fields. Used for reconstruction.
     consolidated_feature_type: Optional[ExtractedFeatureType] = None  # This is the type of feature that is being embedded
@@ -429,9 +430,6 @@ class Entry(BaseModel):
     embedding_date: Optional[str] = None  # embedding_date = date of embedding
     embedding_model: Optional[str] = None  # embedding_model = name of model used
     embedding_dimensions: Optional[int] = None  # embedding_dimensions = dimensions of embedding
-
-    # Random
-    added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
 
     # Graph DB
     citations: Optional[list[Citation]] = None

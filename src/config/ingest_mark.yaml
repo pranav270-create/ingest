@@ -11,10 +11,11 @@ stages:
             content_type: "other"
             ingestion_method: "local_file"
             file_type: "pdf"
+            creator_name: "pranav"
 
   - name: extract
     functions:
-      - name: marker
+      - name: simple
         input: Ingestion
         return: Entry
 
@@ -60,10 +61,10 @@ stages:
 
 pipeline:
   description: "pranav_test_pipeline"
-  pipeline_id: 34
   collection_name: "test_collection_pranav"
-  resume_from_step: 3
-  fork_pipeline: true
+  # pipeline_id: 34
+  # resume_from_step: 4
+  # fork_pipeline: true
 
 storage:
   storage_type: "s3"
