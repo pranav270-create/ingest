@@ -2,6 +2,7 @@ import inspect
 import sys
 from pathlib import Path
 from typing import Union, get_args, get_origin
+
 import yaml
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
