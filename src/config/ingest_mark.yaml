@@ -46,16 +46,23 @@ stages:
           dense_model_name: "text-embedding-3-large"
           sparse_model_name: "bm25"
           dimensions: 512
+    
+  - name: upsert
+    functions:
+      - name: upsert_entries
+        input: Entry
+        return: Upsert
+        params:
+          collection_name: "test_collection_mark"
+          version: "1.0"
+          update_on_collision: true
 
 
 pipeline:
-  version: "1.0"
   description: "test_pipeline_mark_featurize"
   pipeline_id: 22
   # resume_from_step: 2
-  # update_on_collision: true  # Add this flag
   # fork_pipeline: true
-  collection_name: "test_collection_mark"
 
 storage:
   storage_type: "local"
