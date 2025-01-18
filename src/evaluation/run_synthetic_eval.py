@@ -17,7 +17,7 @@ from src.llm_utils.utils import Provider
 from src.retrieval.retrieve_new import hybrid_retrieval
 from src.schemas.schemas import EmbeddedFeatureType
 from src.upsert.qdrant_utils import async_get_qdrant_client
-from src.sql_db.database_simple import get_async_session
+from src.sql_db.database import get_async_session
 from src.sql_db.etl_model import Entry
 
 

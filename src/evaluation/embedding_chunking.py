@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.storage_backend import StorageFactory
-from src.sql_db.database_simple import get_async_session
+from src.sql_db.database import get_async_session
 from src.sql_db.etl_model import ProcessingPipeline, ProcessingStep, Status, StepType
 
 

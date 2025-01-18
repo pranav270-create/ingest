@@ -14,10 +14,9 @@ from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.schema_registry import SchemaRegistry
 from src.pipeline.storage_backend import StorageBackend
 from src.schemas.schemas import BaseModelListType, Ingestion, RegisteredSchemaListType
-from src.sql_db.database_simple import get_async_db_session
+from src.sql_db.database import get_async_db_session
 from src.sql_db.etl_crud import (
     clone_pipeline,
-    create_entries,
     create_or_get_processing_pipeline,
     create_or_update_ingest_batch,
     create_processing_step,
@@ -152,15 +151,15 @@ async def pipeline_step(
 
         # Update SQL database with latest information
         await update_ingests_from_results(session, results)
-        step.status = "completed"
         await session.commit()
+        step.status = "completed"
 
         return results
 
     except Exception as e:
         await session.rollback()
-        step.status = "failed"
         await session.commit()
+        step.status = "failed"
         raise e
 
 
@@ -222,25 +221,6 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
             # move to the next step and update current results
             step_order += 1
             current_results = stage_results
-
-        logger.info("Creating Entries. No more processing steps to run")
-        if current_results and (current_results[0].schema__ in {"Entry", "Embedding", "Upsert"}):
-            result = await create_entries(
-                session,
-                current_results,
-                pipeline_config.get("collection_name"),
-                pipeline_config.get("version"),
-                update_on_collision=pipeline_config.get("update_on_collision", False)
-            )
-            print(f"Processed {result.total_processed} entries:")
-            print(f"- {result.new_entries} new entries created")
-            print(f"- {result.updated_entries} existing entries updated")
-            print(f"- {result.skipped_duplicates} duplicates skipped")
-            print(f"- {result.failed_entries} entries failed")
-            if result.error_messages:
-                print("\nErrors encountered:")
-                for error in result.error_messages:
-                    print(f"- {error}")
 
 
 if __name__ == "__main__":

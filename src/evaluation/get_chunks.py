@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parents[2]))
 
 from src.schemas.schemas import Entry
-from src.sql_db.database_simple import get_async_db_session
+from src.sql_db.database import get_async_db_session
 
 
 @dataclass
