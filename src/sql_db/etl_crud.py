@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.schemas.schemas import Embedding, Upsert
 from src.schemas.schemas import Entry as EntrySchema
 from src.sql_db.etl_model import Entry, EntryRelationship, Ingest, ProcessingPipeline, ProcessingStep, StepType, ingest_pipeline
 
@@ -344,11 +345,15 @@ async def map_citations_to_relationships(session: AsyncSession, pydantic_entry: 
 
 
 async def create_entries(
-    session: AsyncSession, data_list: list[EntrySchema], collection_name: str, version: str, update_on_collision: bool = False, batch_size: int = 1000
+    session: AsyncSession,
+    data_list: Union[list[EntrySchema], list[Embedding], list[Upsert]],
+    collection_name: str,
+    version: str,
+    update_on_collision: bool = False,
+    batch_size: int = 1000,
 ) -> EntryCreationResult:
-    result = EntryCreationResult(
-        total_processed=len(data_list), new_entries=0, skipped_duplicates=0, updated_entries=0, failed_entries=0, error_messages=[]
-    )
+
+    result = EntryCreationResult(total_processed=len(data_list), new_entries=0, skipped_duplicates=0, updated_entries=0, failed_entries=0, error_messages=[]) # noqa
 
     for i in range(0, len(data_list), batch_size):
         batch = data_list[i : i + batch_size]
@@ -360,14 +365,14 @@ async def create_entries(
             pipeline_id = data.get("ingestion", {}).get("pipeline_id")
             if not pipeline_id:
                 result.failed_entries += 1
-                result.error_messages.append(f"Missing pipeline_id for entry with hash {data.get('content_hash')}")
+                result.error_messages.append(f"Missing pipeline_id for entry with uuid {data.get('uuid')}")
                 continue
 
             # Get ingestion_id from ingestion
             ingestion_id = data.get("ingestion", {}).get("ingestion_id")
             if not ingestion_id:
                 result.failed_entries += 1
-                result.error_messages.append(f"Missing ingestion_id for entry with hash {data.get('content_hash')}")
+                result.error_messages.append(f"Missing ingestion_id for entry with uuid {data.get('uuid')}")
                 continue
 
             # Sanitize string fields

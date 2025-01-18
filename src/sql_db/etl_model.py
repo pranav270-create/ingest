@@ -389,7 +389,7 @@ if __name__ == '__main__':
     from sqlalchemy import select, text
     from sqlalchemy.orm import sessionmaker
 
-    from src.sql_db.database_simple import get_engine
+    from src.sql_db.database import get_engine
 
     engine = get_engine()
 

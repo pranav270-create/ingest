@@ -1,20 +1,20 @@
-from typing import List, Tuple
+import sys
+from pathlib import Path
+
 import networkx as nx
 from pyvis.network import Network
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-import sys
-from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.sql_db.database_simple import get_engine, get_async_db_session
-from src.sql_db.etl_model import Entry, EntryRelationship
+from src.sql_db.database import get_async_db_session
+from src.sql_db.etl_model import Entry
 
 
 async def get_entry_relationships(
     pipeline_id: int,
-) -> Tuple[List[Entry], List[Tuple[int, int, str]]]:
+) -> tuple[list[Entry], list[tuple[int, int, str]]]:
     """
     Fetch all entries and their relationships for a given pipeline ID.
     Returns tuple of (entries, relationships) where relationships are (source_id, target_id, relationship_type)
@@ -49,8 +49,8 @@ async def get_entry_relationships(
 
 
 def create_relationship_graph(
-    entries: List[Entry],
-    relationships: List[Tuple[int, int, str]],
+    entries: list[Entry],
+    relationships: list[tuple[int, int, str]],
     output_path: str = "entry_relationships.html"
 ) -> None:
     """
