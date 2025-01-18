@@ -41,7 +41,7 @@ async def evaluate_chunk_quality(chunk: Entry) -> dict:
         return {"text_clarity": 0, "coherence": 0, "organization": 0, "error": f"Failed to parse LLM response: {e}"}
 
 
-async def compare_chunk_sets(chunks_a: list[Entry], chunks_b: list[Entry], page_image: bytes = None) -> dict:
+async def compare_chunk_sets(chunks_a: list[Entry], chunks_b: list[Entry], page_image: bytes = None, pipeline_a: str = None, pipeline_b: str = None) -> dict:
     """Compare two sets of chunks for the same page."""
     if page_image:
         # Use VLM comparison when image is available
@@ -49,7 +49,21 @@ async def compare_chunk_sets(chunks_a: list[Entry], chunks_b: list[Entry], page_
         vlm_result = await compare_with_vlm(all_chunks, page_image)
 
         # Add A/B comparison to VLM result
-        vlm_result["winner"] = "A" if vlm_result.get("score", 0) >= 3 else "B"
+        score = vlm_result.get("score", 0)
+        vlm_result["winner"] = "A" if score >= 3 else "B"
+        
+        # Update ELO if pipeline IDs provided
+        if pipeline_a and pipeline_b:
+            elo_system = ELOSystem()
+            # Normalize score to 0-1 range for ELO
+            elo_score = 1.0 if score >= 3 else 0.0
+            elo_system.update_ratings(
+                pipeline_a,
+                pipeline_b,
+                elo_score,
+                num_comparisons=len(chunks_a) + len(chunks_b)
+            )
+        
         return vlm_result
 
     # Use text-only LLM comparison when no image
@@ -70,6 +84,22 @@ async def compare_chunk_sets(chunks_a: list[Entry], chunks_b: list[Entry], page_
     response = await get_completion(prompt)
     try:
         result = eval(response)
+        
+        # Update ELO if pipeline IDs provided
+        if pipeline_a and pipeline_b and "winner" in result:
+            elo_system = ELOSystem()
+            elo_score = 1.0 if result["winner"] == "A" else 0.0
+            elo_system.update_ratings(
+                pipeline_a,
+                pipeline_b,
+                elo_score,
+                num_comparisons=len(chunks_a) + len(chunks_b)
+            )
+            
+            # Add ELO ratings to result
+            analysis = run_elo_analysis([pipeline_a, pipeline_b])
+            result["elo_ratings"] = analysis["current_ratings"]
+            
         return result
     except Exception as e:
         return {"error": f"Failed to parse LLM response: {e}"}
