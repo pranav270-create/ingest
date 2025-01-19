@@ -37,7 +37,7 @@ async def create_or_update_ingest(session: AsyncSession, data: dict, pipeline=No
     hash_value = data["document_hash"]
 
     # Check if an Ingest with this hash already exists
-    stmt = select(Ingest).where(Ingest.hash == hash_value)
+    stmt = select(Ingest).where(Ingest.document_hash == hash_value)
     result = await session.execute(stmt)
     existing_ingest = result.scalar_one_or_none()
 
@@ -79,9 +79,9 @@ async def create_or_update_ingest_batch(session: AsyncSession, items: list[dict]
     try:
         # Get existing ingests by hash
         existing_hashes = list(hash_to_data.keys())
-        stmt = select(Ingest).where(Ingest.hash.in_(existing_hashes))
+        stmt = select(Ingest).where(Ingest.document_hash.in_(existing_hashes))
         result = await session.execute(stmt)
-        existing_ingests = {i.hash: i for i in result.scalars().all()}
+        existing_ingests = {i.document_hash: i for i in result.scalars().all()}
 
         # Update existing and create new ingests
         ingests = {}

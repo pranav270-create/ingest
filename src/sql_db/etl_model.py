@@ -48,6 +48,7 @@ class Ingest(AsyncAttrs, AbstractBase):
     __tablename__ = 'ingest'
 
     id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True, unique=True)
+    document_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True, unique=True, comment="SHA256 hash of the data")
     # document fields
     document_title: Mapped[str] = mapped_column(Text, nullable=False, comment="Title of the document")
     scope: Mapped[str] = mapped_column(String(50), nullable=False, comment="Scope of the data")
@@ -80,9 +81,6 @@ class Ingest(AsyncAttrs, AbstractBase):
     feature_dates: Mapped[list[str]] = mapped_column(JSON, nullable=True, comment="Dates of the features used")
     # Unprocessed citations
     unprocessed_citations: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True, comment="Unprocessed citations")
-
-    hash: Mapped[str] = mapped_column(String(64), primary_key=True, nullable=False, index=True, unique=True, comment="SHA256 hash of the data")
-    __table_args__ = (UniqueConstraint('hash', name='uq_ingest_hash'),)
 
     # Relationships
     processing_pipelines: Mapped[list["ProcessingPipeline"]] = relationship("ProcessingPipeline", secondary="ingest_pipeline", back_populates="ingests")  # noqa
