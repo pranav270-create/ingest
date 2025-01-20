@@ -30,10 +30,17 @@ async def upsert_embeddings(
         if not embeddings_to_process:
             return unfiltered_embeddings
 
-    # Filter out entries without embeddings
-    embeddings_to_process = [basemodel for basemodel in embeddings_to_process if basemodel.embedding is not None]
-    if not embeddings_to_process:
-        return unfiltered_embeddings
+    # Separate entries with and without embeddings
+    embeddings_with_vectors = []
+    embeddings_without_vectors = []
+    for embedding in embeddings_to_process:
+        if embedding.embedding is not None:
+            embeddings_with_vectors.append(embedding)
+        else:
+            embeddings_without_vectors.append(embedding)
+
+    if not embeddings_with_vectors:
+        return embeddings_without_vectors + unfiltered_embeddings
 
     client = await async_get_qdrant_client(timeout=1000)
 
@@ -47,10 +54,10 @@ async def upsert_embeddings(
 
     all_upserts = await async_upsert_embed(
         client=client,
-        embeddings=embeddings_to_process,
+        embeddings=embeddings_with_vectors,
         collection=collection_name,
         dense_model_name=dense_model_name,
         sparse_model_name=sparse_model_name,
         batch_size=batch_size,
     )
-    return all_upserts + unfiltered_embeddings
+    return all_upserts + embeddings_without_vectors + unfiltered_embeddings
