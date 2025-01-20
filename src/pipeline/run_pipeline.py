@@ -218,6 +218,9 @@ async def run_pipeline(orchestrator: PipelineOrchestrator):
                 )
                 stage_results.extend(step_results)
 
+            # Print result count in blue
+            print(f"\033[94mStage '{stage}' produced {len(stage_results)} results\033[0m")
+
             # move to the next step and update current results
             step_order += 1
             current_results = stage_results

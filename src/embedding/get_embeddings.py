@@ -72,27 +72,33 @@ async def get_embeddings(
     read=None,  # noqa
     filter_params: Optional[dict[str, Any]] = None,
 ) -> list[Embedding]:
-    """
-    Get embeddings for a list of entries
-    """
+    """Get embeddings for a list of entries"""
     # Apply filters if provided
     models_to_process = basemodels
     unfiltered_models = []
     if filter_params:
         models_to_process, unfiltered_models = filter_basemodels(basemodels, filter_params)
         if not models_to_process:
-            return []  # Return empty list if no models match filter
+            # Convert unfiltered models to Embeddings without actual embeddings
+            return [Embedding(**model.model_dump(exclude_none=True)) for model in unfiltered_models]
 
-    # # Filter out entries without strings
-    # models_to_process = [entry for entry in models_to_process if entry.string]
+    # Separate entries with and without strings
+    models_with_strings = []
+    models_without_strings = []
+    for entry in models_to_process:
+        if entry.string:
+            models_with_strings.append(entry)
+        else:
+            models_without_strings.append(entry)
 
-    # if not models_to_process:
-    #     return []
+    if not models_with_strings:
+        # Convert all models without strings to Embeddings
+        return [Embedding(**model.model_dump(exclude_none=True)) for model in models_without_strings + unfiltered_models]
 
     inputs = []
     flat_entries = []
     using_image_embedding = False
-    for i, entry in enumerate(models_to_process):
+    for i, entry in enumerate(models_with_strings):
         if i == 0:
             if is_base64_image(entry.string):
                 using_image_embedding = True
@@ -107,7 +113,7 @@ async def get_embeddings(
         entry.embedding_model = model_name
         entry.embedding_dimensions = dimensions
 
-        inputs.append(entry.string or "placeholder")
+        inputs.append(entry.string)
 
         # pop schema so we can create Embedding(Entry) later
         metadata = entry.model_dump(exclude_none=True)
@@ -130,8 +136,12 @@ async def get_embeddings(
         embeddings = embedding_response.data
         tokens = embedding_response.usage.total_tokens
 
-    # Return only the embeddings for processed entries
-    return [
+    # Return processed embeddings + models without strings + unfiltered models
+    processed_embeddings = [
         Embedding(**{**entry, "embedding": embed_dict["embedding"], "string": string, "tokens": tokens})
         for entry, embed_dict, string in zip(flat_entries, embeddings, inputs)
     ]
+    models_without_strings_embeddings = [Embedding(**model.model_dump(exclude_none=True)) for model in models_without_strings]
+    unfiltered_embeddings = [Embedding(**model.model_dump(exclude_none=True)) for model in unfiltered_models]
+
+    return processed_embeddings + models_without_strings_embeddings + unfiltered_embeddings

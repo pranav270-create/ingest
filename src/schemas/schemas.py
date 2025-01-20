@@ -520,7 +520,7 @@ class Upsert(BaseModel):
 @SchemaRegistry.register("Embedding")
 class Embedding(Entry):
     schema__: str = Field(default="Embedding", alias="schema__")
-    embedding: Union[list[float], float]
+    embedding: Optional[Union[list[float], float]] = None
     tokens: Optional[int] = None
 
 

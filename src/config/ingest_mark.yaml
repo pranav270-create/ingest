@@ -53,7 +53,7 @@ stages:
   - name: upsert
     functions:
       - name: upsert_entries
-        input: Entry
+        input: Upsert
         return: Upsert
         params:
           collection_name: "test_collection_pranav"
@@ -64,7 +64,7 @@ stages:
 pipeline:
   description: "pranav_marker_test"
   collection_name: "test_collection_pranav"
-  # pipeline_id: 45
+  # pipeline_id: 46
   # resume_from_step: 2
   # fork_pipeline: true
 

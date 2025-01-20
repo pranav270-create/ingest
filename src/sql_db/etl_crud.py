@@ -490,7 +490,7 @@ async def create_entries(
             )
         )
         existing_entries = {
-            (e.content_hash, e.pipeline_id): e 
+            (e.content_hash, e.pipeline_id): e
             for e in (await session.execute(stmt)).scalars().all()
         }
 
