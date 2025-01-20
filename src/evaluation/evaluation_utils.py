@@ -28,16 +28,32 @@ class ELOSystem:
             return {}
     
     def _load_history(self) -> pd.DataFrame:
-        """Load rating history from CSV or create new."""
+        """Load rating history from CSV or create new with proper dtypes."""
         try:
-            return pd.read_csv(self.history_file)
+            dtypes = {
+                'timestamp': 'str',
+                'pipeline_a': 'str',
+                'pipeline_b': 'str',
+                'rating_a_before': 'float64',
+                'rating_b_before': 'float64',
+                'rating_a_after': 'float64',
+                'rating_b_after': 'float64',
+                'score': 'float64',
+                'num_comparisons': 'int64'
+            }
+            return pd.read_csv(self.history_file, dtype=dtypes)
         except FileNotFoundError:
-            return pd.DataFrame(columns=[
-                'timestamp', 'pipeline_a', 'pipeline_b', 
-                'rating_a_before', 'rating_b_before',
-                'rating_a_after', 'rating_b_after',
-                'score', 'num_comparisons'
-            ])
+            return pd.DataFrame({
+                'timestamp': pd.Series(dtype='str'),
+                'pipeline_a': pd.Series(dtype='str'),
+                'pipeline_b': pd.Series(dtype='str'),
+                'rating_a_before': pd.Series(dtype='float64'),
+                'rating_b_before': pd.Series(dtype='float64'),
+                'rating_a_after': pd.Series(dtype='float64'),
+                'rating_b_after': pd.Series(dtype='float64'),
+                'score': pd.Series(dtype='float64'),
+                'num_comparisons': pd.Series(dtype='int64')
+            })
     
     def _save_ratings(self):
         """Save current ratings to file."""
@@ -66,41 +82,45 @@ class ELOSystem:
         return 1.0 / (1.0 + 10.0 ** ((rating_b - rating_a) / 400.0))
     
     def update_ratings(self, pipeline_a: str, pipeline_b: str, score: float, num_comparisons: int = 1):
-        """Update ratings based on comparison outcome.
+        """Update ratings based on comparison outcome."""
+        # Debug logging
+        print(f"\nELO Update:")
+        print(f"Pipeline A ({pipeline_a}) vs Pipeline B ({pipeline_b})")
+        print(f"Score: {score}")
         
-        Args:
-            pipeline_a: ID of first pipeline
-            pipeline_b: ID of second pipeline
-            score: 1.0 for A win, 0.0 for B win, 0.5 for draw
-            num_comparisons: Number of individual comparisons that contributed to the score
-        """
         # Initialize ratings if needed
         rating_a_before = self.get_rating(pipeline_a)
         rating_b_before = self.get_rating(pipeline_b)
         
+        print(f"Ratings before - A: {rating_a_before:.1f}, B: {rating_b_before:.1f}")
+        
         # Calculate expected scores
         expected_a = self.expected_score(rating_a_before, rating_b_before)
+        print(f"Expected score for A: {expected_a:.3f}")
         
         # Update ratings
         rating_a_after = rating_a_before + self.k_factor * (score - expected_a)
         rating_b_after = rating_b_before + self.k_factor * ((1.0 - score) - (1.0 - expected_a))
         
+        print(f"Ratings after - A: {rating_a_after:.1f}, B: {rating_b_after:.1f}")
+        
         # Store new ratings
         self.ratings[str(pipeline_a)] = rating_a_after
         self.ratings[str(pipeline_b)] = rating_b_after
         
-        # Record history
-        new_record = pd.DataFrame([{
-            'timestamp': datetime.now().isoformat(),
-            'pipeline_a': str(pipeline_a),
-            'pipeline_b': str(pipeline_b),
-            'rating_a_before': rating_a_before,
-            'rating_b_before': rating_b_before,
-            'rating_a_after': rating_a_after,
-            'rating_b_after': rating_b_after,
-            'score': score,
-            'num_comparisons': num_comparisons
-        }])
+        # Record history with proper types
+        new_record = pd.DataFrame({
+            'timestamp': [datetime.now().isoformat()],
+            'pipeline_a': [str(pipeline_a)],
+            'pipeline_b': [str(pipeline_b)],
+            'rating_a_before': [float(rating_a_before)],
+            'rating_b_before': [float(rating_b_before)],
+            'rating_a_after': [float(rating_a_after)],
+            'rating_b_after': [float(rating_b_after)],
+            'score': [float(score)],
+            'num_comparisons': [int(num_comparisons)]
+        })
+        
         self.history = pd.concat([self.history, new_record], ignore_index=True)
         
         # Save both files
@@ -130,6 +150,17 @@ class ELOSystem:
         plt.xticks(rotation=45)
         plt.tight_layout()
         plt.show()
+
+    def get_rating_confidence(self, pipeline_id: str) -> float:
+        """Calculate confidence interval for a pipeline's rating."""
+        history = self.get_rating_history(pipeline_id)
+        n_matches = len(history)
+        if n_matches < 2:
+            return float('inf')
+        
+        # Standard error of the mean
+        std_dev = history['rating'].std()
+        return 1.96 * std_dev / np.sqrt(n_matches)
 
 
 def calculate_chunk_comparison_score(comp_a: int, comp_b: int) -> float:

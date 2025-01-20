@@ -6,8 +6,6 @@ from scipy.spatial import ConvexHull
 from sentence_transformers import SentenceTransformer
 import umap
 
-from src.extraction.textract import textract_parse
-from src.extraction.ocr_service import main_ocr
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import ChunkingMethod, ContentType, Entry, FileType, Ingestion, ExtractionMethod, Scope
 import src.pipeline.pipeline
@@ -15,6 +13,8 @@ import src.pipeline.pipeline
 class ExtractionMethod(Enum):
     TEXTRACT = "textract"
     OCR = "ocr"
+    SIMPLE = "simple"
+    MARKER = "marker"
 
 
 async def evaluate_extraction_chunking(
@@ -28,6 +28,8 @@ async def evaluate_extraction_chunking(
 ) -> tuple[list[Entry], dict[str, float]]:
     """Run extraction + chunking and return chunks with metrics."""
 
+    # Temporarily comment out extraction logic
+    """
     # Extract
     if extraction_method == ExtractionMethod.TEXTRACT:
         document = textract_parse(pdf_path, scope=scope, content_type=content_type)
@@ -47,6 +49,9 @@ async def evaluate_extraction_chunking(
         document = documents[0]
         if not document:
             raise ValueError("OCR parsing failed to return a document")
+    """
+    # For now, just return empty results since we're evaluating existing pipelines
+    document = Entry()  # placeholder
 
     # Chunk
     chunking_func = FunctionRegistry.get("chunk", chunking_method.value)

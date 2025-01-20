@@ -1,0 +1,31 @@
+# Pipeline comparison settings
+pipeline_comparison:
+  enabled: true
+  evaluation_type: "LLM"
+  pipeline_ids:
+    - id: 20
+      name: "baseline"
+      extraction: "SIMPLE"
+      chunking: "SLIDING_WINDOW"
+    - id: 21
+      name: "experimental"
+      extraction: "MARKER"
+      chunking: "SLIDING_WINDOW"
+  batch_size: 5
+  delay_seconds: 1.0
+
+# ELO rating settings
+elo:
+  enabled: true
+  initial_rating: 1500
+  k_factor: 32
+  ratings_file: "chunking_elo_ratings.json"
+  history_file: "chunking_elo_history.csv"
+
+# Output settings
+output:
+  save_results: true
+  output_dir: "evaluation_results"
+  metrics:
+    - "quality_scores"
+    - "elo_ratings" 

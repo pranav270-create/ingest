@@ -1,7 +1,7 @@
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Optional, TypeVar, Union
+from typing import Annotated, Any, Optional, TypeVar, Union, List
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -524,14 +524,19 @@ class Embedding(Entry):
     tokens: Optional[int] = None
 
 
-@SchemaRegistry.register("chunk_evaluation")
-class ChunkEvaluation(BaseModel):
-    schema__: str = Field(default="ChunkEvaluation", alias="schema__")
-    chunks_a: list[Entry]
-    chunks_b: list[Entry]
-    winner: str
-    reasoning: str
+@SchemaRegistry.register("chunk_comparison")
+class ChunkComparison(BaseModel):
+    schema__: str = Field(default="ChunkComparison", alias="schema__")
+    chunks_a: List[Entry]
+    chunks_b: List[Entry]
+    winner: Optional[str] = None
+    reasoning: Optional[str] = None
 
+@SchemaRegistry.register("chunk_evaluation")
+class ChunkEvaluation(Entry):
+    schema__: str = Field(default="ChunkEvaluation", alias="schema__")
+    score: Annotated[float, Field(gt=0, lt=5)] = Field(description="The score of the chunk")
+    reasoning: str = Field(description="The reasoning behind the score")
 
 @SchemaRegistry.register("formatted_scored_points")
 class FormattedScoredPoints(BaseModel):

@@ -1,5 +1,6 @@
 import asyncio
 from base64 import b64encode
+import json
 
 from openai import AsyncOpenAI
 from tqdm.asyncio import tqdm_asyncio
@@ -9,16 +10,27 @@ from src.featurization.get_features import featurize
 from src.llm_utils.utils import text_cost_parser
 from src.prompts.evaluation_prompts import ChunkEvaluationPrompt
 from src.schemas.schemas import ChunkingMethod, Entry
+from src.evaluation.evaluation_utils import ELOSystem, run_elo_analysis
 
 client = AsyncOpenAI()
 
 
 async def get_completion(prompt: str, model: str = "gpt-4-turbo-preview") -> str:
     """Use existing OpenAI infrastructure."""
-    completion = await client.chat.completions.create(model=model, messages=[{"role": "user", "content": prompt}], temperature=0.0)
+    system_message = """You are a helpful assistant that evaluates text chunks. 
+    Always respond with a valid Python dictionary containing your evaluation.
+    The dictionary must be properly formatted with quotes around keys and string values."""
+    
+    completion = await client.chat.completions.create(
+        model=model, 
+        messages=[
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.0
+    )
     text, _ = text_cost_parser(completion)
     return text
-
 
 CHUNK_RUBRIC = """
 Rate this text chunk from 1-5 on the following criteria:
@@ -76,14 +88,14 @@ async def compare_chunk_sets(chunks_a: list[Entry], chunks_b: list[Entry], page_
     Chunking B:
     {[c.string for c in chunks_b]}
 
-    Respond with a JSON containing:
+    Respond with a JSON object containing:
     1. winner: "A" or "B"
     2. reasoning: Brief explanation
     """
 
     response = await get_completion(prompt)
     try:
-        result = eval(response)
+        result = json.loads(response)
         
         # Update ELO if pipeline IDs provided
         if pipeline_a and pipeline_b and "winner" in result:
@@ -101,7 +113,7 @@ async def compare_chunk_sets(chunks_a: list[Entry], chunks_b: list[Entry], page_
             result["elo_ratings"] = analysis["current_ratings"]
             
         return result
-    except Exception as e:
+    except json.JSONDecodeError as e:
         return {"error": f"Failed to parse LLM response: {e}"}
 
 
