@@ -12,15 +12,12 @@ from src.sql_db.database import get_async_db_session
 from src.sql_db.etl_model import Entry
 
 
-async def get_entry_relationships(
-    pipeline_id: int,
-) -> tuple[list[Entry], list[tuple[int, int, str]]]:
+async def get_entry_relationships(pipeline_id: int) -> tuple[list[Entry], list[tuple[int, int, str]]]:
     """
     Fetch all entries and their relationships for a given pipeline ID.
-    Returns tuple of (entries, relationships) where relationships are (source_id, target_id, relationship_type)
     """
     async for session in get_async_db_session():
-        # Get all entries for this pipeline
+        # Get all entries for this pipeline with relationships
         entry_stmt = (
             select(Entry)
             .where(Entry.pipeline_id == pipeline_id)
@@ -33,18 +30,21 @@ async def get_entry_relationships(
         result = await session.execute(entry_stmt)
         entries = result.scalars().all()
 
-        # Collect all relationships between these entries
-        entry_ids = {entry.id for entry in entries}
+        # Debug prints
+        print(f"Found {len(entries)} entries for pipeline {pipeline_id}")
+
+        # Collect all relationships
         relationships = []
-
         for entry in entries:
-            for rel in entry.outgoing_relationships:
-                # Only include relationships where both ends are in our pipeline
-                if rel.target_id in entry_ids:
-                    relationships.append(
-                        (rel.source_id, rel.target_id, rel.relationship_type)
-                    )
+            print(f"Entry {entry.id} has:")
+            print(f"  - {len(entry.outgoing_relationships)} outgoing relationships")
+            print(f"  - {len(entry.incoming_relationships)} incoming relationships")
 
+            for rel in entry.outgoing_relationships:
+                relationships.append((rel.source_id, rel.target_id, rel.relationship_type))
+                print(f"  - Relationship: {rel.source_id} -> {rel.target_id} ({rel.relationship_type})")
+
+        print(f"Found {len(relationships)} total relationships")
         return entries, relationships
 
 
@@ -149,10 +149,17 @@ async def visualize_pipeline_relationships(
 
 if __name__ == "__main__":
     import asyncio
+    import argparse
+
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Visualize entry relationships for a pipeline')
+    parser.add_argument('pipeline_id', type=int, help='Pipeline ID to visualize')
+    parser.add_argument('--output', '-o', default="entry_relationships.html",
+                        help='Output path for the HTML visualization (default: entry_relationships.html)')
+    args = parser.parse_args()
 
     # Example usage
     async def main():
-        pipeline_id = 1  # Replace with your pipeline ID
-        await visualize_pipeline_relationships(pipeline_id)
+        await visualize_pipeline_relationships(args.pipeline_id, args.output)
 
     asyncio.run(main())

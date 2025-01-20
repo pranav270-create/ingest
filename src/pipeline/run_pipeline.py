@@ -158,7 +158,7 @@ async def pipeline_step(
     except Exception as e:
         await session.rollback()
         step.status = "failed"
-        await session.add(step)
+        session.add(step)
         await session.commit()
         raise e
 

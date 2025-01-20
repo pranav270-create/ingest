@@ -3,6 +3,7 @@ from uuid import uuid4
 from litellm import ModelResponse
 from pydantic import BaseModel, Field
 import base64
+import copy
 
 from src.llm_utils.utils import structure_image_prompt, text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
@@ -53,6 +54,7 @@ class DescribeImagePrompt(BasePrompt):
 
     @staticmethod
     def parse_response(entry: Entry, response: ModelResponse) -> list[Entry]:
+        original_entry = copy.deepcopy(entry)
 
         # extract synthetic data
         text, _ = text_cost_parser(response)
@@ -94,4 +96,4 @@ class DescribeImagePrompt(BasePrompt):
             consolidated_feature_type=ExtractedFeatureType.text
         )
 
-        return [caption_entry, description_entry]
+        return [original_entry, caption_entry, description_entry]

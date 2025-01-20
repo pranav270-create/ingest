@@ -49,7 +49,7 @@ stages:
           dense_model_name: "text-embedding-3-large"
           sparse_model_name: "bm25"
           dimensions: 512
-    
+
   - name: upsert
     functions:
       - name: upsert_entries
@@ -64,8 +64,8 @@ stages:
 pipeline:
   description: "pranav_marker_test"
   collection_name: "test_collection_pranav"
-  pipeline_id: 45
-  resume_from_step: 2
+  # pipeline_id: 45
+  # resume_from_step: 2
   # fork_pipeline: true
 
 storage:

@@ -242,42 +242,64 @@ async def create_processing_step(
     output_path: str = None,
     metadata: dict = None,
 ) -> ProcessingStep:
-    # see if step exists with that pipeline_id and order
-    stmt = select(ProcessingStep).where((ProcessingStep.pipeline_id == pipeline_id) & (ProcessingStep.order == order))
-    result = await session.execute(stmt)
-    existing_step = result.scalar_one_or_none()
+    try:
+        # see if step exists with that pipeline_id and order
+        stmt = select(ProcessingStep).where(
+            (ProcessingStep.pipeline_id == pipeline_id) &
+            (ProcessingStep.order == order)
+        )
+        result = await session.execute(stmt)
+        existing_step = result.scalar_one_or_none()
 
-    if existing_step:
-        print(
-            f"\033[93mWARNING\033[0m: ProcessingStep already exists with pipeline_id {pipeline_id} and order {order}. This step will be overwritten."
-        )  # noqa
-        existing_step.previous_step_id = previous_step_id
-        existing_step.status = status
-        existing_step.function_name = function_name
-        existing_step.step_type = step_type
-        existing_step.date = datetime.now()
-        existing_step.output_path = output_path
-        existing_step.metadata_field = metadata
-        session.add(existing_step)
+        if existing_step:
+            print(
+                f"\033[93mWARNING\033[0m: ProcessingStep already exists with pipeline_id {pipeline_id} and order {order}. This step will be overwritten."
+            )
+            existing_step.previous_step_id = previous_step_id
+            existing_step.status = status
+            existing_step.function_name = function_name
+            existing_step.step_type = StepType[step_type.upper()]
+            existing_step.date = datetime.now()
+            existing_step.output_path = output_path
+            existing_step.metadata_field = metadata
+            session.add(existing_step)
+            await session.commit()
+            await session.refresh(existing_step)
+            return existing_step
+
+        new_step = ProcessingStep(
+            pipeline_id=pipeline_id,
+            previous_step_id=previous_step_id,
+            order=order,
+            status=status,
+            function_name=function_name,
+            step_type=StepType[step_type.upper()],
+            date=datetime.now(),
+            output_path=output_path,
+            metadata_field=metadata,
+        )
+        session.add(new_step)
         await session.commit()
-        await session.refresh(existing_step)
-        return existing_step
+        await session.refresh(new_step)
+        return new_step
 
-    new_step = ProcessingStep(
-        pipeline_id=pipeline_id,
-        previous_step_id=previous_step_id,
-        order=order,
-        status=status,
-        function_name=function_name,
-        step_type=StepType[step_type.upper()],
-        date=datetime.now(),
-        output_path=output_path,
-        metadata_field=metadata,
-    )
-    session.add(new_step)
-    await session.commit()
-    await session.refresh(new_step)
-    return new_step
+    except Exception as e:
+        print(f"Error creating processing step: {str(e)}")
+        # Create a failed step if we encounter an error
+        failed_step = ProcessingStep(
+            pipeline_id=pipeline_id,
+            order=order,
+            status="failed",
+            function_name=function_name,
+            step_type=StepType.UNKNOWN,  # Default to UNKNOWN if we can't parse the step type
+            date=datetime.now(),
+            output_path=output_path,
+            metadata_field={"error": str(e), **(metadata or {})}
+        )
+        session.add(failed_step)
+        await session.commit()
+        await session.refresh(failed_step)
+        return failed_step
 
 
 async def get_latest_processing_step(session: AsyncSession, pipeline_id: int) -> ProcessingStep:
@@ -321,36 +343,11 @@ class EntryCreationResult:
     error_messages: list[str]
 
 
-async def map_citations_to_relationships(session: AsyncSession, pydantic_entry: EntrySchema, orm_entry: Entry) -> list[EntryRelationship]:
-    if not pydantic_entry.citations:
-        return []
-
-    # Get all target UUIDs from citations
-    target_uuids = [citation.target_uuid for citation in pydantic_entry.citations]
-
-    # Query to get all target entries in one go
-    stmt = select(Entry).where(Entry.uuid.in_(target_uuids))
-    result = await session.execute(stmt)
-    target_entries = {entry.uuid: entry.id for entry in result.scalars().all()}
-
-    relationships = []
-    for citation in pydantic_entry.citations:
-        if target_id := target_entries.get(citation.target_uuid):
-            relationship = EntryRelationship(
-                source_id=orm_entry.id,
-                target_id=target_id,
-                relationship_type=citation.relationship_type.value,  # Convert enum to string
-            )
-            relationships.append(relationship)
-
-    return relationships
-
-
 def create_content_hash(data: dict, version: str) -> str:
     """Create a consistent hash from entry content."""
     content_to_hash = {
         "string": data.get("string", "").replace("\x00", "").encode("utf-8", "ignore").decode("utf-8"),
-        "ingestion_id": data.get("ingestion_id"),
+        "ingestion_id": data.get("ingestion_id", data.get("ingestion", {}).get("ingestion_id")),
         "chunk_locations": data.get("chunk_locations", []),
         "entry_title": data.get("entry_title"),
         "keywords": data.get("keywords"),
@@ -367,8 +364,8 @@ def map_entry_data(data: dict, content_hash: str, collection_name: str) -> dict:
         "content_hash": content_hash,
         "uuid": data.get("uuid"),
         "collection_name": collection_name,
-        "pipeline_id": data.get("pipeline_id"),
-        "ingestion_id": data.get("ingestion_id"),
+        "pipeline_id": data.get("pipeline_id", data.get("ingestion", {}).get("pipeline_id", None)),
+        "ingestion_id": data.get("ingestion_id", data.get("ingestion", {}).get("ingestion_id", None)),
         "string": data.get("string", "").replace("\x00", "").encode("utf-8", "ignore").decode("utf-8"),
         "entry_title": data.get("entry_title"),
         "keywords": json.dumps(data.get("keywords", [])),
@@ -391,13 +388,18 @@ def map_entry_data(data: dict, content_hash: str, collection_name: str) -> dict:
 async def process_single_entry(
     session: AsyncSession,
     entry_data: dict,
-    original_data: Union[EntrySchema, Embedding, Upsert],
     update_on_collision: bool,
-    result: EntryCreationResult,
+    result: EntryCreationResult
 ) -> Optional[Entry]:
-    """Process a single entry and handle its citations."""
+    """Process a single entry and its relationships."""
     try:
-        stmt = select(Entry).where(and_(Entry.content_hash == entry_data["content_hash"], Entry.pipeline_id == entry_data["pipeline_id"]))
+        # Check if entry exists by content hash and pipeline_id
+        stmt = select(Entry).where(
+            and_(
+                Entry.content_hash == entry_data["content_hash"],
+                Entry.pipeline_id == entry_data["pipeline_id"]
+            )
+        )
         existing_entry = (await session.execute(stmt)).scalar_one_or_none()
 
         if existing_entry:
@@ -414,16 +416,7 @@ async def process_single_entry(
             session.add(current_entry)
             result.new_entries += 1
 
-        await session.flush()
-
-        # Handle citations
-        if update_on_collision:
-            await session.execute(delete(EntryRelationship).where(EntryRelationship.source_id == current_entry.id))
-
-        relationships = await map_citations_to_relationships(session, original_data, current_entry)
-        for relationship in relationships:
-            session.add(relationship)
-
+        await session.flush()  # Ensure we have an ID
         return current_entry
 
     except Exception as e:
@@ -450,7 +443,7 @@ async def validate_data(data: dict, result: EntryCreationResult) -> bool:
             return False
     else:
         # Original Entry/Embedding validation
-        if not data.get("pipeline_id") or not data.get("ingestion", {}).get("ingestion_id"):
+        if not data.get("ingestion", {}).get("pipeline_id") or not data.get("ingestion", {}).get("ingestion_id"):
             result.failed_entries += 1
             result.error_messages.append(f"Missing required fields for entry {data.get('uuid')}")
             return False
@@ -467,32 +460,122 @@ async def create_entries(
     batch_size: int = 1000,
 ) -> EntryCreationResult:
     result = EntryCreationResult(
-        total_processed=len(data_list), new_entries=0, skipped_duplicates=0, updated_entries=0, failed_entries=0, error_messages=[]
-    )  # noqa
+        total_processed=len(data_list), new_entries=0, skipped_duplicates=0, 
+        updated_entries=0, failed_entries=0, error_messages=[]
+    )
 
-    for batch_start in range(0, len(data_list), batch_size):
-        batch = data_list[batch_start: batch_start + batch_size]
-        try:
-            for data in batch:
-                data_dict = data.model_dump()
+    try:
+        # Phase 1: Prepare all entry data and collect existing entries
+        entry_data_map = {}  # UUID to entry data mapping
+        content_hashes = set()
+        pipeline_ids = set()
 
-                # Validate based on data type
-                if not await validate_data(data_dict, result):
-                    continue
+        for data in data_list:
+            if not await validate_data(data.model_dump(), result):
+                continue
 
-                content_hash = create_content_hash(data_dict, version)
-                entry_data = map_entry_data(data_dict, content_hash, collection_name)
+            data_dict = data.model_dump()
+            content_hash = create_content_hash(data_dict, version)
+            entry_data = map_entry_data(data_dict, content_hash, collection_name)
 
-                await process_single_entry(session, entry_data, data, update_on_collision, result)
+            entry_data_map[data.uuid] = entry_data
+            content_hashes.add(content_hash)
+            pipeline_ids.add(entry_data['pipeline_id'])
 
-            await session.commit()
+        # Bulk fetch existing entries
+        stmt = select(Entry).where(
+            and_(
+                Entry.content_hash.in_(content_hashes),
+                Entry.pipeline_id.in_(pipeline_ids)
+            )
+        )
+        existing_entries = {
+            (e.content_hash, e.pipeline_id): e 
+            for e in (await session.execute(stmt)).scalars().all()
+        }
 
-        except SQLAlchemyError as e:
-            await session.rollback()
-            result.error_messages.append(f"Batch commit error: {str(e)}")
-            result.failed_entries += len(batch)
+        # Phase 2: Bulk create/update entries
+        new_entries = []
+        source_entries = {}
 
-    return result
+        for uuid, entry_data in entry_data_map.items():
+            key = (entry_data['content_hash'], entry_data['pipeline_id'])
+            if key in existing_entries:
+                if update_on_collision:
+                    entry = existing_entries[key]
+                    for k, v in entry_data.items():
+                        setattr(entry, k, v)
+                    source_entries[uuid] = entry
+                    result.updated_entries += 1
+                else:
+                    result.skipped_duplicates += 1
+            else:
+                entry = Entry(**entry_data)
+                new_entries.append(entry)
+                source_entries[uuid] = entry
+                result.new_entries += 1
+
+        if new_entries:
+            session.add_all(new_entries)
+            await session.flush()
+
+        # Phase 3: Handle relationships
+        citation_data = []
+        missing_target_uuids = set()
+
+        for data in data_list:
+            if hasattr(data, 'citations') and data.citations:
+                for citation in data.citations:
+                    if citation.target_uuid not in source_entries:
+                        missing_target_uuids.add(citation.target_uuid)
+                    citation_data.append((data.uuid, citation))
+
+        # Bulk fetch missing target entries
+        target_entries = {}
+        if missing_target_uuids:
+            stmt = select(Entry).where(Entry.uuid.in_(missing_target_uuids))
+            target_entries = {
+                entry.uuid: entry
+                for entry in (await session.execute(stmt)).scalars().all()
+            }
+
+        # Bulk create relationships
+        relationships = []
+        for source_uuid, citation in citation_data:
+            source_entry = source_entries.get(source_uuid)
+            target_entry = source_entries.get(citation.target_uuid) or target_entries.get(citation.target_uuid)
+
+            if source_entry and target_entry:
+                relationships.append(
+                    EntryRelationship(
+                        source_id=source_entry.id,
+                        target_id=target_entry.id,
+                        relationship_type=citation.relationship_type.value,
+                    )
+                )
+
+        if relationships:
+            # Use insert().prefix_with('IGNORE') for MySQL or on_conflict_do_nothing() for PostgreSQL
+            insert_stmt = await get_insert_stmt(session)
+            stmt = insert_stmt(EntryRelationship.__table__).values(
+                [{'source_id': r.source_id, 'target_id': r.target_id, 'relationship_type': r.relationship_type} 
+                 for r in relationships]
+            )
+            if session.get_bind().dialect.name == "mysql":
+                stmt = stmt.prefix_with("IGNORE")
+            else:
+                stmt = stmt.on_conflict_do_nothing()
+
+            await session.execute(stmt)
+
+        await session.commit()
+        return result
+
+    except Exception as e:
+        await session.rollback()
+        result.error_messages.append(f"Unexpected error: {str(e)}")
+        result.failed_entries += len(data_list)
+        return result
 
 
 async def update_ingests_from_results(session: AsyncSession, input_data: list[dict]):

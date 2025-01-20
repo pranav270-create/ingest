@@ -2,7 +2,7 @@ import base64
 import os
 import sys
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 import httpx
 from litellm import Router
@@ -13,6 +13,7 @@ from src.llm_utils.model_lists import embedding_model_list
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import EmbeddedFeatureType, Embedding, Entry
 from src.utils.datetime_utils import get_current_utc_datetime
+from src.utils.filter_utils import filter_basemodels
 
 router = Router(
     model_list=embedding_model_list,
@@ -69,14 +70,29 @@ async def get_embeddings(
     dimensions: int,
     write=None,  # noqa
     read=None,  # noqa
+    filter_params: Optional[dict[str, Any]] = None,
 ) -> list[Embedding]:
     """
     Get embeddings for a list of entries
     """
+    # Apply filters if provided
+    models_to_process = basemodels
+    unfiltered_models = []
+    if filter_params:
+        models_to_process, unfiltered_models = filter_basemodels(basemodels, filter_params)
+        if not models_to_process:
+            return []  # Return empty list if no models match filter
+
+    # # Filter out entries without strings
+    # models_to_process = [entry for entry in models_to_process if entry.string]
+
+    # if not models_to_process:
+    #     return []
+
     inputs = []
     flat_entries = []
     using_image_embedding = False
-    for i, entry in enumerate(basemodels):
+    for i, entry in enumerate(models_to_process):
         if i == 0:
             if is_base64_image(entry.string):
                 using_image_embedding = True
@@ -91,7 +107,7 @@ async def get_embeddings(
         entry.embedding_model = model_name
         entry.embedding_dimensions = dimensions
 
-        inputs.append(entry.string)
+        inputs.append(entry.string or "placeholder")
 
         # pop schema so we can create Embedding(Entry) later
         metadata = entry.model_dump(exclude_none=True)
@@ -114,6 +130,7 @@ async def get_embeddings(
         embeddings = embedding_response.data
         tokens = embedding_response.usage.total_tokens
 
+    # Return only the embeddings for processed entries
     return [
         Embedding(**{**entry, "embedding": embed_dict["embedding"], "string": string, "tokens": tokens})
         for entry, embed_dict, string in zip(flat_entries, embeddings, inputs)
