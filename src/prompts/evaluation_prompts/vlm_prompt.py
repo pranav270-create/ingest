@@ -49,24 +49,20 @@ class VLMELOPrompt(BasePrompt):
             if read is not None:
                 image = await read(path)
             else:
-                with open(path, 'rb') as f:
+                with open(path, "rb") as f:
                     image = f.read()
-            images.append(base64.b64encode(image).decode('utf-8'))
+            images.append(base64.b64encode(image).decode("utf-8"))
 
         chunks_a = vlm_evaluation.chunks_a
         chunks_b = vlm_evaluation.chunks_b
-        return structure_image_prompt(
-            cls.system_prompt,
-            cls.user_prompt.format(chunks_a=chunks_a, chunks_b=chunks_b),
-            images
-        )
+        return structure_image_prompt(cls.system_prompt, cls.user_prompt.format(chunks_a=chunks_a, chunks_b=chunks_b), images)
 
     @staticmethod
     def parse_response(vlm_evaluation: ChunkEvaluation, response: ModelResponse) -> ChunkEvaluation:
         # extract vlm evaluation data
         text, _ = text_cost_parser(response)
-        winner = json.loads(text).get('winner', '')
-        reasoning = json.loads(text).get('reasoning', '')
+        winner = json.loads(text).get("winner", "")
+        reasoning = json.loads(text).get("reasoning", "")
         vlm_evaluation.winner = winner
         vlm_evaluation.reasoning = reasoning
         return vlm_evaluation

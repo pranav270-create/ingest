@@ -9,16 +9,16 @@ from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.schemas.schemas import ChunkComparison
 
+
 @PromptRegistry.register("LLM_relative_evaluation")
 class LLMRelativeEvaluationPrompt:
     system_prompt = (
         "You are an assistant specialized in RAG tasks."
-        "The task is the following: given two chunkings of the same page, you will have to" 
+        "The task is the following: given two chunkings of the same page, you will have to"
         "determine which better preserves the meaning and structure of the original text?"
     )
 
-    user_prompt = (
-    '''    
+    user_prompt = """    
     Chunking A:
     {chunks_a}
     
@@ -27,7 +27,7 @@ class LLMRelativeEvaluationPrompt:
 
     Respond with a JSON containing:
     1. winner: "A" or "B"
-    2. reasoning: Brief explanation''')
+    2. reasoning: Brief explanation"""
 
     class DataModel(BaseModel):
         winner: str = Field(..., description="The winner of the chunking, either 'A' or 'B'")
