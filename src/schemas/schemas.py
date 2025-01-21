@@ -1,7 +1,7 @@
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, List, Optional, TypeVar, Union, Dict
+from typing import Annotated, Any, Dict, List, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field, field_validator
 
