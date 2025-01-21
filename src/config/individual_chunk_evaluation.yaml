@@ -1,0 +1,14 @@
+# Individual pipeline evaluation settings
+pipeline_evaluation:
+  enabled: true
+  evaluation_type: "LLM"
+  pipeline_id: 21  # Single pipeline to evaluate
+  batch_size: 5
+  delay_seconds: 1.0
+
+# Output settings
+output:
+  save_results: true
+  output_dir: "evaluation_results"
+  metrics:
+    - "quality_scores"

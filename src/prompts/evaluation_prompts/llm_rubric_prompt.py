@@ -1,15 +1,13 @@
 from pydantic import BaseModel, Field
-
 from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.prompts.base_prompt import BasePrompt
 from src.schemas.schemas import Entry
 
-
-@PromptRegistry.register("chunk_evaluation")
-class ChunkEvaluationPrompt(BasePrompt[Entry]):
+@PromptRegistry.register("LLM_chunk_rubric")
+class ChunkRubricPrompt(BasePrompt[Entry]):
     """Prompt for evaluating individual chunk quality."""
-
+    
     system_prompt = """
     You are an expert at evaluating text chunks for RAG systems.
     Your task is to rate the quality of individual text chunks.
@@ -34,14 +32,18 @@ class ChunkEvaluationPrompt(BasePrompt[Entry]):
         explanation: str = Field(..., description="Brief explanation of ratings")
 
     @classmethod
-    async def format_prompt(cls, entry: Entry, read=None) -> tuple[str, str]:
-        return cls.system_prompt, cls.user_prompt.format(chunk=entry.string)
+    async def format_prompt(cls, entry: Entry, read=None) -> list[dict[str, str]]:
+        """Format the prompt as a list of message dictionaries."""
+        return [
+            {"role": "system", "content": cls.system_prompt},
+            {"role": "user", "content": cls.user_prompt.format(chunk=entry.string)}
+        ]
 
     @staticmethod
     def parse_response(entry: Entry, response) -> Entry:
         text, _ = text_cost_parser(response)
         try:
-            scores = ChunkEvaluationPrompt.DataModel.model_validate_json(text)
+            scores = ChunkRubricPrompt.DataModel.model_validate_json(text)
             entry.evaluation_scores = {
                 "text_clarity": scores.text_clarity,
                 "coherence": scores.coherence,

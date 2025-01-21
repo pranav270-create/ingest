@@ -1,18 +1,18 @@
-import sys
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List
-
+from typing import Dict, List, Tuple
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+import sys
+from pathlib import Path
+from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
 
 sys.path.append(str(Path(__file__).parents[2]))
 
+from src.sql_db.etl_model import Entry as DBEntry
 from src.schemas.schemas import Entry, Ingestion
 from src.sql_db.database import get_async_db_session
-from src.sql_db.etl_model import Entry as DBEntry
 
 
 @dataclass
@@ -26,17 +26,17 @@ class ChunkComparison:
 async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[Entry]:
     """Get all entries for a given pipeline ID."""
     pipeline_id = int(pipeline_id)
-
+    
     query = select(DBEntry).where(DBEntry.pipeline_id == pipeline_id).options(
         selectinload(DBEntry.ingest)
     )
-
+    
     result = await session.execute(query)
     db_entries = result.scalars().all()
-
+    
     # Debug logging
     print(f"Found {len(db_entries)} entries for pipeline {pipeline_id}")
-
+    
     entries = []
     for db_entry in db_entries:
         try:
@@ -52,7 +52,7 @@ async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[
                 ingestion_date=db_entry.ingest.ingestion_date.isoformat() if db_entry.ingest.ingestion_date else None,
                 scope=db_entry.ingest.scope
             )
-
+            
             # Then create the Entry with the Ingestion object
             entry = Entry(
                 uuid=db_entry.uuid,
@@ -64,14 +64,14 @@ async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[
                 ingestion=ingest  # Use ingestion instead of ingest
             )
             entries.append(entry)
-
+            
             # Debug verification
             print(f"Created entry {entry.uuid} with ingestion: {entry.ingestion is not None}")
-
+            
         except Exception as e:
             print(f"Error creating entry: {e}")
             continue
-
+    
     return entries
 
 
@@ -139,39 +139,92 @@ async def compare_pipeline_chunks(pipeline_a: str, pipeline_b: str) -> Dict[str,
         return comparisons
 
 
+async def get_single_pipeline_entries(pipeline_id: str) -> List[Entry]:
+    """Get entries from a single pipeline."""
+    async for session in get_async_db_session():
+        pipeline_id = int(pipeline_id)
+        query = select(DBEntry).where(DBEntry.pipeline_id == pipeline_id).options(
+            selectinload(DBEntry.ingest)
+        )
+        result = await session.execute(query)
+        db_entries = result.scalars().all()
+        
+        entries = []
+        for db_entry in db_entries:
+            try:
+                # First create the Ingestion object
+                ingest = Ingestion(
+                    document_hash=db_entry.ingest.document_hash,
+                    document_title=db_entry.ingest.document_title,
+                    file_path=db_entry.ingest.file_path,
+                    creator_name=db_entry.ingest.creator_name,
+                    creation_date=db_entry.ingest.creation_date.isoformat() if db_entry.ingest.creation_date else None,
+                    file_type=db_entry.ingest.file_type,
+                    ingestion_method=db_entry.ingest.ingestion_method,
+                    ingestion_date=db_entry.ingest.ingestion_date.isoformat() if db_entry.ingest.ingestion_date else None,
+                    scope=db_entry.ingest.scope
+                )
+                
+                # Then create the Entry with the Ingestion object
+                entry = Entry(
+                    uuid=db_entry.uuid,
+                    string=db_entry.string,
+                    consolidated_feature_type=db_entry.consolidated_feature_type,
+                    pipeline_id=db_entry.pipeline_id,
+                    min_primary_index=db_entry.min_primary_index,
+                    max_primary_index=db_entry.max_primary_index,
+                    ingestion=ingest
+                )
+                entries.append(entry)
+                
+            except Exception as e:
+                print(f"Error creating entry: {e}")
+                continue
+        
+        return entries
+
+
+async def inspect_pipeline_chunks(pipeline_id: str):
+    """Inspect chunks from a pipeline for VLM-related attributes."""
+    async for session in get_async_db_session():
+        pipeline_id = int(pipeline_id)
+        query = select(DBEntry).options(
+            selectinload(DBEntry.ingest)  # Eagerly load the ingestion relationship
+        ).where(DBEntry.pipeline_id == pipeline_id)
+        result = await session.execute(query)
+        entries = result.scalars().all()
+        
+        print(f"\nPipeline {pipeline_id} Inspection:")
+        print(f"Total chunks: {len(entries)}")
+        
+        if entries:
+            sample_entry = entries[0]
+            print("\nSample Entry Attributes:")
+            print(f"Has chunk_locations: {hasattr(sample_entry, 'chunk_locations')}")
+            if hasattr(sample_entry, 'chunk_locations'):
+                print(f"Locations data: {sample_entry.chunk_locations}")
+            print(f"Feature type: {sample_entry.consolidated_feature_type}")
+            if sample_entry.ingest:
+                print(f"File path: {sample_entry.ingest.file_path}")
+
+
 async def main():
-    # Example pipeline IDs
-    pipeline_a = 2
-    pipeline_b = 1
-
-    comparisons = await compare_pipeline_chunks(pipeline_a, pipeline_b)
-
-    # Print results
-    for content_hash, chunk_comparisons in comparisons.items():
-        print(f"\nDocument hash: {content_hash}")
-        print(f"Document title: {chunk_comparisons[0].document_title}")
-        print(f"Document path: {chunk_comparisons[0].pipeline_a_chunks[0].ingestion.file_path}")
-
-        for comp in chunk_comparisons:
-            print(f"\nPage range: {comp.page_range}")
-
-            # Count text or combined_text chunks for Pipeline A
-            combined_text_a = sum(1 for chunk in comp.pipeline_a_chunks if chunk.consolidated_feature_type in ['combined_text', 'text'])
-            print(f"Pipeline A chunks: {len(comp.pipeline_a_chunks)} entries")
-            print(f"\033[94mCombined text A: {combined_text_a} entries\033[0m")  # Print in blue
-            if comp.pipeline_a_chunks:
-                print("Feature types A:", [chunk.consolidated_feature_type for chunk in comp.pipeline_a_chunks])
-
-            # Count text or combined_text chunks for Pipeline B
-            combined_text_b = sum(1 for chunk in comp.pipeline_b_chunks if chunk.consolidated_feature_type in ['combined_text', 'text'])
-            print(f"Pipeline B chunks: {len(comp.pipeline_b_chunks)} entries")
-            print(f"\033[94mCombined text B: {combined_text_b} entries\033[0m")  # Print in blue
-            if comp.pipeline_b_chunks:
-                print("Feature types B:", [chunk.consolidated_feature_type for chunk in comp.pipeline_b_chunks])
-            print("---")
+    """Run inspection for multiple pipelines."""
+    pipeline_ids = ["49", "50", "51"]
+    for pid in pipeline_ids:
+        await inspect_pipeline_chunks(pid)
 
 
 if __name__ == "__main__":
-    import asyncio
+    # Set up the event loop explicitly
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(main())
+    finally:
+        loop.close()
 
-    asyncio.run(main())
+"""
+Module for retrieving and managing document chunks from different sources.
+Handles the loading, filtering, and preprocessing of chunks before evaluation.
+Supports multiple chunk storage backends and formats.
+"""

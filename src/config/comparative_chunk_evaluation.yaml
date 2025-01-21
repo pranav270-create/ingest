@@ -1,13 +1,13 @@
 # Pipeline comparison settings
 pipeline_comparison:
   enabled: true
-  evaluation_type: "LLM"
+  evaluation_type: "VLM"
   pipeline_ids:
-    - id: 20
+    - id: 50
       name: "baseline"
       extraction: "SIMPLE"
       chunking: "SLIDING_WINDOW"
-    - id: 21
+    - id: 50
       name: "experimental"
       extraction: "MARKER"
       chunking: "SLIDING_WINDOW"

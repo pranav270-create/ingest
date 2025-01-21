@@ -1,7 +1,7 @@
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, List, Optional, TypeVar, Union
+from typing import Annotated, Any, List, Optional, TypeVar, Union, Dict
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -433,6 +433,12 @@ class Entry(BaseModel):
 
     # Graph DB
     citations: Optional[list[Citation]] = None
+
+    # field for evaluation scores
+    evaluation_scores: Optional[Dict[str, Union[int, str]]] = Field(
+        default=None,
+        description="Scores from chunk quality evaluation"
+    )
 
 
 @SchemaRegistry.register("Record")

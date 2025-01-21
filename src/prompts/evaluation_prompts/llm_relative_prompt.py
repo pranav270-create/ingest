@@ -7,14 +7,13 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
-from src.schemas.schemas import ChunkEvaluation
+from src.schemas.schemas import ChunkComparison
 
-
-@PromptRegistry.register("LLM_chunk_rubric")
-class LLMChunkRubricPrompt:
+@PromptRegistry.register("LLM_relative_evaluation")
+class LLMRelativeEvaluationPrompt:
     system_prompt = (
         "You are an assistant specialized in RAG tasks."
-        "The task is the following: given two chunkings of the same page, you will have to"
+        "The task is the following: given two chunkings of the same page, you will have to" 
         "determine which better preserves the meaning and structure of the original text?"
     )
 
@@ -35,13 +34,13 @@ class LLMChunkRubricPrompt:
         reasoning: str = Field(..., description="A brief explanation of why the winner is the way it is")
 
     @classmethod
-    async def format_prompt(cls, base_model: ChunkEvaluation, read=None, **kwargs) -> tuple[str, str]:
+    async def format_prompt(cls, base_model: ChunkComparison, read=None, **kwargs) -> tuple[str, str]:
         chunks_a = base_model.chunks_a
         chunks_b = base_model.chunks_b
         return cls.system_prompt, cls.user_prompt.format(chunks_a=chunks_a, chunks_b=chunks_b)
 
     @classmethod
-    def parse_response(cls, base_models: list[ChunkEvaluation], parsed_items: dict[str, ChunkEvaluation]) -> list[ChunkEvaluation]:
+    def parse_response(cls, base_models: list[ChunkComparison], parsed_items: dict[str, ChunkComparison]) -> list[ChunkComparison]:
         for i, base_model in enumerate(base_models):
             model_response, cost = text_cost_parser(parsed_items.get(i))
             print(model_response)
