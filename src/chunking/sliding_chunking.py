@@ -8,12 +8,10 @@ from src.schemas.schemas import ChunkingMethod, Entry
 
 
 @FunctionRegistry.register("chunk", ChunkingMethod.SLIDING_WINDOW.value)
-async def sliding_chunks(entries: list[Entry], **kwargs) -> list[Entry]:
+async def sliding_chunks(entries: list[Entry], chunk_size: int = 500, overlap: int = 50, **kwargs) -> list[Entry]:
     """
     Chunk the given entries using a sliding window approach, operating directly on Entry schemas.
     """
-    chunk_size = kwargs.get("chunk_size", 500)
-    overlap = kwargs.get("overlap", 50)
     provider = kwargs.get("provider", None)
     model = kwargs.get("model", None)
     chunking_metadata = {

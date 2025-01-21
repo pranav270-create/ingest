@@ -19,36 +19,45 @@ stages:
         input: Ingestion
         return: Entry
 
-  - name: featurize
+  - name: chunk
     functions:
-      - name: featurize_model
-        input: Entry
+      - name: sliding_window
+        input: Ingestion
         return: Entry
         params:
-          prompt_name: "describe_image"
-          model_name: "gpt-4o-mini"
-          filter_params:
-            consolidated_feature_type: ["figure", "picture", "table", "complexregion"]
+          chunk_size: 500
+          overlap: 50
 
-  - name: embed
-    functions:
-      - name: embed
-        input: Entry
-        return: Embedding
-        params:
-          model_name: "openai"
-          dimensions: 512
+  # - name: featurize
+  #   functions:
+  #     - name: featurize_model
+  #       input: Entry
+  #       return: Entry
+  #       params:
+  #         prompt_name: "describe_image"
+  #         model_name: "gpt-4o-mini"
+  #         filter_params:
+  #           consolidated_feature_type: ["figure", "picture", "table", "complexregion"]
 
-  - name: upsert
-    functions:
-      - name: upsert_embeddings
-        input: Embedding
-        return: Upsert
-        params:
-          collection_name: "test_collection_pranav"
-          dense_model_name: "text-embedding-3-large"
-          sparse_model_name: "bm25"
-          dimensions: 512
+  # - name: embed
+  #   functions:
+  #     - name: embed
+  #       input: Entry
+  #       return: Embedding
+  #       params:
+  #         model_name: "openai"
+  #         dimensions: 512
+
+  # - name: upsert
+  #   functions:
+  #     - name: upsert_embeddings
+  #       input: Embedding
+  #       return: Upsert
+  #       params:
+  #         collection_name: "test_collection_pranav"
+  #         dense_model_name: "text-embedding-3-large"
+  #         sparse_model_name: "bm25"
+  #         dimensions: 512
 
   - name: upsert
     functions:
@@ -64,9 +73,9 @@ stages:
 pipeline:
   description: "pranav_marker_test"
   collection_name: "test_collection_pranav"
-  # pipeline_id: 46
-  # resume_from_step: 2
-  # fork_pipeline: true
+  pipeline_id: 50
+  resume_from_step: 2
+  fork_pipeline: true
 
 storage:
   storage_type: "s3"
