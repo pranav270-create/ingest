@@ -35,6 +35,7 @@ async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[
             # First create the Ingestion object
             ingest = Ingestion(
                 document_hash=db_entry.ingest.document_hash,
+                pipeline_id=pipeline_id,
                 document_title=db_entry.ingest.document_title,
                 file_path=db_entry.ingest.file_path,
                 creator_name=db_entry.ingest.creator_name,

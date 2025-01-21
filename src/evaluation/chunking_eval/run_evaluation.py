@@ -156,10 +156,10 @@ async def run_comparative_evaluation(config: dict):
                 all_results = await featurize(comparisons_list, "LLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}))
 
             for result in all_results:
-                pipeline_a = result.chunks_a[0].pipeline_id
-                pipeline_b = result.chunks_b[0].pipeline_id
+                pipeline_a = result.chunks_a[0].ingestion.pipeline_id
+                pipeline_b = result.chunks_b[0].ingestion.pipeline_id
                 elo_score = 1.0 if result.winner == "A" else 0.0
-                elo_system.update_ratings(pipeline_a, pipeline_b, elo_score, num_comparisons=len(chunks_a) + len(chunks_b))
+                elo_system.update_ratings(pipeline_a, pipeline_b, elo_score)
                 run_elo_analysis([pipeline_a, pipeline_b])
 
     # Run final ELO analysis

@@ -42,7 +42,7 @@ class LLMRelativeEvaluationPrompt(BasePrompt):
         chunks_b_str = "\n".join([chunk.string for chunk in chunks_b])
         return [{"role": "system", "content": cls.system_prompt}, {"role": "user", "content": cls.user_prompt.format(chunks_a=chunks_a_str, chunks_b=chunks_b_str)}]
 
-    @classmethod
+    @staticmethod
     def parse_response(entry: ChunkComparison, response: ModelResponse) -> ChunkComparison:
         text, _ = text_cost_parser(response)
         try:
