@@ -541,8 +541,11 @@ class ChunkComparison(BaseModel):
 @SchemaRegistry.register("chunk_evaluation")
 class ChunkEvaluation(Entry):
     schema__: str = Field(default="ChunkEvaluation", alias="schema__")
-    score: Annotated[float, Field(gt=0, lt=5)] = Field(description="The score of the chunk")
-    reasoning: str = Field(description="The reasoning behind the score")
+    text_clarity: Optional[Annotated[float, Field(gt=0, lt=5)]] = Field(description="The score of the chunk")
+    coherence: Optional[Annotated[float, Field(gt=0, lt=5)]] = Field(description="The score of the chunk") 
+    organization: Optional[Annotated[float, Field(gt=0, lt=5)]] = Field(description="The score of the chunk")
+    score: Optional[Annotated[float, Field(gt=0, lt=15)]] = Field(description="The score of the chunk")
+    explanation: Optional[str] = Field(description="The reasoning behind the score")
 
 @SchemaRegistry.register("formatted_scored_points")
 class FormattedScoredPoints(BaseModel):

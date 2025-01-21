@@ -74,7 +74,7 @@ async def run_single_evaluation(pdf_path: str, extraction: ExtractionMethod, chu
     """Run evaluation for a single extraction + chunking combination."""
     chunks, metrics = await evaluate_extraction_chunking(pdf_path=pdf_path, extraction_method=extraction, chunking_method=chunking, **kwargs)
 
-    results = await featurize(chunks, "chunk_evaluation", "Entry")
+    results = await featurize(chunks, "LLM_chunk_rubric", "Entry")
 
     print(results)
 

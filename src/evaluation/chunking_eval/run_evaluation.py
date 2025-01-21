@@ -25,6 +25,7 @@ from src.evaluation.chunking_eval.llm_evaluation import compare_chunk_sets, eval
 from src.evaluation.chunking_eval.vlm_evaluation import can_use_vlm
 from src.evaluation.chunking_eval.vlm_evaluation import evaluate_chunks as evaluate_chunks_vlm
 from src.schemas.schemas import Entry
+from src.featurization.get_features import featurize
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -51,12 +52,6 @@ async def run_evaluation_pipeline(config_path: str, eval_type: str = "comparativ
     if output_config.get("save_results"):
         save_evaluation_results(results, output_config)
 
-
-async def get_pipeline_chunks(pipeline_id: str) -> List[Entry]:
-    """Get chunks from a single pipeline."""
-    return await get_single_pipeline_entries(pipeline_id)
-
-
 async def run_individual_evaluation(config: dict) -> List[Dict]:
     """Run individual chunk quality evaluation."""
     pipeline_config = config.get("pipeline_evaluation", {})
@@ -68,27 +63,29 @@ async def run_individual_evaluation(config: dict) -> List[Dict]:
     delay_seconds = pipeline_config.get("delay_seconds", 1.0)
 
     # Get chunks from pipeline
-    chunks = await get_pipeline_chunks(str(pipeline_id))
+    chunks = await get_single_pipeline_entries(str(pipeline_id))
     results = []
 
     print(f"\nEvaluating {len(chunks)} chunks from pipeline {pipeline_id}")
 
-    for i, chunk in enumerate(chunks, 1):
-        # Evaluate individual chunk quality
-        quality_scores = await evaluate_chunk_quality(chunk)
+   results = await featurize(chunks, "chunk_evaluation")
 
-        result = {
-            "pipeline_id": pipeline_id,
-            "chunk_uuid": chunk.uuid,  # Using uuid instead of id
-            "chunk_text": chunk.string,  # Adding text for reference
-            "quality_scores": quality_scores,
-            "document_title": chunk.ingestion.document_title if chunk.ingestion else "Unknown",
-            "page_range": (chunk.min_primary_index, chunk.max_primary_index),
-        }
-        results.append(result)
+    # for i, chunk in enumerate(chunks, 1):
+    #     # Evaluate individual chunk quality
+    #     quality_scores = await evaluate_chunk_quality(chunk)
 
-        print(f"Evaluated chunk {i}/{len(chunks)}")
-        await asyncio.sleep(delay_seconds)
+    #     result = {
+    #         "pipeline_id": pipeline_id,
+    #         "chunk_uuid": chunk.uuid,  # Using uuid instead of id
+    #         "chunk_text": chunk.string,  # Adding text for reference
+    #         "quality_scores": quality_scores,
+    #         "document_title": chunk.ingestion.document_title if chunk.ingestion else "Unknown",
+    #         "page_range": (chunk.min_primary_index, chunk.max_primary_index),
+    #     }
+    #     results.append(result)
+
+    #     print(f"Evaluated chunk {i}/{len(chunks)}")
+    #     await asyncio.sleep(delay_seconds)
 
     # Print summary statistics
     if results:
