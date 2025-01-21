@@ -11,9 +11,13 @@ import argparse
 import asyncio
 import json
 import sys
+import numpy as np
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
+from sentence_transformers import SentenceTransformer
+import umap
+from scipy.spatial import ConvexHull
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
@@ -21,11 +25,11 @@ import yaml
 
 from src.evaluation.chunking_eval.chunk_retrieval import compare_pipeline_chunks, get_single_pipeline_entries
 from src.evaluation.chunking_eval.elo_system import run_elo_analysis
-from src.evaluation.chunking_eval.llm_evaluation import compare_chunk_sets, evaluate_chunk_quality
-from src.evaluation.chunking_eval.vlm_evaluation import can_use_vlm
-from src.evaluation.chunking_eval.vlm_evaluation import evaluate_chunks as evaluate_chunks_vlm
-from src.schemas.schemas import Entry
+from src.schemas.schemas import ChunkEvaluation, Entry
 from src.featurization.get_features import featurize
+from src.evaluation.chunking_eval.evaluation_utils import can_use_vlm
+from src.evaluation.chunking_eval.elo_system import ELOSystem
+from src.pipeline.storage_backend import StorageFactory
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -52,6 +56,52 @@ async def run_evaluation_pipeline(config_path: str, eval_type: str = "comparativ
     if output_config.get("save_results"):
         save_evaluation_results(results, output_config)
 
+
+def calculate_chunk_metrics(chunks: list[Entry]) -> dict[str, float]:
+    """Calculate diversity metrics for chunks."""
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # Get embeddings for all chunks
+    texts = [chunk.string for chunk in chunks if chunk.string]
+    embeddings = model.encode(texts)
+
+    metrics = {}
+
+    # For large datasets, reduce dimensionality with UMAP first
+    if len(embeddings) > 100:  # Threshold for using UMAP
+        try:
+            # Configure UMAP for dimensionality reduction
+            reducer = umap.UMAP(
+                n_neighbors=min(int((len(embeddings) - 1) ** 0.5), 50),
+                n_components=min(20, len(embeddings) - 1),
+                min_dist=0,
+                metric="cosine",
+                random_state=42
+            )
+            embeddings = reducer.fit_transform(embeddings)
+        except Exception as e:
+            print(f"Warning: UMAP reduction failed with error: {str(e)}. Using original embeddings.")
+
+    # Calculate convex hull volume as diversity metric
+    if len(embeddings) > 3:  # Need at least 4 points for 3D hull
+        try:
+            hull = ConvexHull(embeddings)
+            metrics["embedding_diversity"] = hull.volume
+        except Exception:
+            metrics["embedding_diversity"] = 0
+
+    # Calculate average pairwise distance
+    distances = []
+    for i in range(len(embeddings)):
+        for j in range(i + 1, len(embeddings)):
+            dist = np.linalg.norm(embeddings[i] - embeddings[j])
+            distances.append(dist)
+    metrics["avg_pairwise_distance"] = np.mean(distances) if distances else 0
+
+    return metrics
+
+
+
 async def run_individual_evaluation(config: dict) -> List[Dict]:
     """Run individual chunk quality evaluation."""
     pipeline_config = config.get("pipeline_evaluation", {})
@@ -60,46 +110,28 @@ async def run_individual_evaluation(config: dict) -> List[Dict]:
         return []
 
     pipeline_id = pipeline_config.get("pipeline_id")
-    delay_seconds = pipeline_config.get("delay_seconds", 1.0)
-
-    # Get chunks from pipeline
-    chunks = await get_single_pipeline_entries(str(pipeline_id))
-    results = []
-
-    print(f"\nEvaluating {len(chunks)} chunks from pipeline {pipeline_id}")
-
-   results = await featurize(chunks, "chunk_evaluation")
-
-    # for i, chunk in enumerate(chunks, 1):
-    #     # Evaluate individual chunk quality
-    #     quality_scores = await evaluate_chunk_quality(chunk)
-
-    #     result = {
-    #         "pipeline_id": pipeline_id,
-    #         "chunk_uuid": chunk.uuid,  # Using uuid instead of id
-    #         "chunk_text": chunk.string,  # Adding text for reference
-    #         "quality_scores": quality_scores,
-    #         "document_title": chunk.ingestion.document_title if chunk.ingestion else "Unknown",
-    #         "page_range": (chunk.min_primary_index, chunk.max_primary_index),
-    #     }
-    #     results.append(result)
-
-    #     print(f"Evaluated chunk {i}/{len(chunks)}")
-    #     await asyncio.sleep(delay_seconds)
+    # Get entries from pipeline
+    entries = await get_single_pipeline_entries(str(pipeline_id))
+    # Cast Entry to ChunkEvaluation type
+    chunk_evaluations = [ChunkEvaluation(**entry) for entry in entries]
+    # Featurize chunks
+    print(f"\nEvaluating {len(chunk_evaluations)} chunks from pipeline {pipeline_id}")
+    results = await featurize(chunk_evaluations, "LLM_chunk_rubric", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}))
 
     # Print summary statistics
     if results:
+        # Populate the score field for each result
+        for r in results:
+            r.score = r.text_clarity + r.coherence + r.organization
         print("\nEvaluation Summary:")
-        avg_clarity = sum(r["quality_scores"]["text_clarity"] for r in results) / len(results)
-        avg_coherence = sum(r["quality_scores"]["coherence"] for r in results) / len(results)
-        avg_organization = sum(r["quality_scores"]["organization"] for r in results) / len(results)
+        avg_clarity = sum(r.text_clarity for r in results) / len(results)
+        avg_coherence = sum(r.coherence for r in results) / len(results)
+        avg_organization = sum(r.organization for r in results) / len(results)
         total_score = avg_clarity + avg_coherence + avg_organization
-
         print(f"Average Text Clarity: {avg_clarity:.2f}/5.00")
         print(f"Average Coherence: {avg_coherence:.2f}/5.00")
         print(f"Average Organization: {avg_organization:.2f}/5.00")
         print(f"Total Score: {total_score:.2f}/15.00")
-
     return results
 
 
@@ -112,8 +144,11 @@ async def run_comparative_evaluation(config: dict):
 
     pipeline_configs = pipeline_config.get("pipeline_ids", [])
     evaluation_type = pipeline_config.get("evaluation_type", "LLM")
-    delay_seconds = pipeline_config.get("delay_seconds", 1.0)
-    results = []
+    elo_system = ELOSystem()
+
+    if evaluation_type == "VLM":
+        storage_config = config.get("storage", {})
+        storage_client = StorageFactory.create(**storage_config)
 
     for i, pipeline_a in enumerate(pipeline_configs):
         for pipeline_b in pipeline_configs[i + 1 :]:
@@ -121,63 +156,27 @@ async def run_comparative_evaluation(config: dict):
 
             # Get chunks from both pipelines
             comparisons = await compare_pipeline_chunks(str(pipeline_a["id"]), str(pipeline_b["id"]))
+            # Flatten the dictionary of lists into a [ChunkComparison]
+            comparisons_list = [comp for comps in comparisons.values() for comp in comps]
 
-            for content_hash, comps in comparisons.items():
-                for comp in comps:
-                    # Use VLM evaluation if specified and possible
-                    if evaluation_type == "VLM":
-                        can_use_vlm_eval = can_use_vlm(comp.pipeline_a_chunks, comp.pipeline_b_chunks)
-                        if can_use_vlm_eval:
-                            try:
-                                evaluation_result = await evaluate_chunks_vlm(
-                                    comp.pipeline_a_chunks, comp.pipeline_b_chunks, pipeline_ids=(str(pipeline_a["id"]), str(pipeline_b["id"]))
-                                )
-                            except Exception as e:
-                                print(f"\nVLM evaluation failed with error: {e}")
-                                print(f"Falling back to LLM evaluation for page range: {comp.page_range}")
-                                evaluation_result = await compare_chunk_sets(
-                                    comp.pipeline_a_chunks, comp.pipeline_b_chunks, str(pipeline_a["id"]), str(pipeline_b["id"])
-                                )
-                        else:
-                            print(f"\nVLM evaluation not possible for page range: {comp.page_range} (missing locations or page files)")
-                            evaluation_result = await compare_chunk_sets(
-                                comp.pipeline_a_chunks, comp.pipeline_b_chunks, str(pipeline_a["id"]), str(pipeline_b["id"])
-                            )
-                    else:
-                        evaluation_result = await compare_chunk_sets(
-                            comp.pipeline_a_chunks, comp.pipeline_b_chunks, str(pipeline_a["id"]), str(pipeline_b["id"])
-                        )
+            if evaluation_type == "VLM":
+                # Use VLM evaluation if specified and possible
+                can_use_vlm_eval = all([can_use_vlm(comp.pipeline_a_chunks, comp.pipeline_b_chunks) for comp in comparisons_list])
+                if can_use_vlm_eval:
+                    try:
+                        all_results = await featurize(comparisons_list, "VLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}), read=storage_client.read)
+                    except Exception as e:
+                        print(f"\nVLM evaluation failed with error: {e}")
+                        all_results = await featurize(comparisons_list, "LLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}))
+                else:
+                    all_results = await featurize(comparisons_list, "LLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}))
 
-                    if "error" in evaluation_result:
-                        print(f"Error in evaluation: {evaluation_result['error']}")
-                        continue
-
-                    # Run LLM quality evaluation on individual chunks
-                    quality_scores_a = []
-                    quality_scores_b = []
-
-                    for chunk in comp.pipeline_a_chunks:
-                        score = await evaluate_chunk_quality(chunk)
-                        quality_scores_a.append(score)
-
-                    for chunk in comp.pipeline_b_chunks:
-                        score = await evaluate_chunk_quality(chunk)
-                        quality_scores_b.append(score)
-
-                    result = {
-                        "content_hash": content_hash,
-                        "page_range": comp.page_range,
-                        "pipeline_a": pipeline_a["id"],
-                        "pipeline_b": pipeline_b["id"],
-                        "evaluation_type": evaluation_type,
-                        "evaluation_result": evaluation_result,
-                        "quality_scores_a": quality_scores_a,
-                        "quality_scores_b": quality_scores_b,
-                    }
-                    results.append(result)
-
-                    # Add delay between evaluations
-                    await asyncio.sleep(delay_seconds)
+            for result in all_results:
+                pipeline_a = result.chunks_a[0].pipeline_id
+                pipeline_b = result.chunks_b[0].pipeline_id
+                elo_score = 1.0 if result.winner == "A" else 0.0
+                elo_system.update_ratings(pipeline_a, pipeline_b, elo_score, num_comparisons=len(chunks_a) + len(chunks_b))
+                run_elo_analysis([pipeline_a, pipeline_b])
 
     # Run final ELO analysis
     if config.get("elo", {}).get("enabled"):
@@ -186,7 +185,7 @@ async def run_comparative_evaluation(config: dict):
         for pipeline_id, rating in elo_analysis["current_ratings"].items():
             print(f"Pipeline {pipeline_id}: {rating}")
 
-    return results
+    return all_results
 
 
 def save_evaluation_results(results: List[Dict], output_config: dict):

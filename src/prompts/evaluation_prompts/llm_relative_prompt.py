@@ -18,10 +18,10 @@ class LLMRelativeEvaluationPrompt:
         "determine which better preserves the meaning and structure of the original text?"
     )
 
-    user_prompt = """    
+    user_prompt = """
     Chunking A:
     {chunks_a}
-    
+
     Chunking B:
     {chunks_b}
 
@@ -36,8 +36,10 @@ class LLMRelativeEvaluationPrompt:
     @classmethod
     async def format_prompt(cls, base_model: ChunkComparison, read=None, **kwargs) -> tuple[str, str]:
         chunks_a = base_model.chunks_a
+        chunks_a_str = "\n".join([chunk.string for chunk in chunks_a])
         chunks_b = base_model.chunks_b
-        return cls.system_prompt, cls.user_prompt.format(chunks_a=chunks_a, chunks_b=chunks_b)
+        chunks_b_str = "\n".join([chunk.string for chunk in chunks_b])
+        return cls.system_prompt, cls.user_prompt.format(chunks_a=chunks_a_str, chunks_b=chunks_b_str)
 
     @classmethod
     def parse_response(cls, base_models: list[ChunkComparison], parsed_items: dict[str, ChunkComparison]) -> list[ChunkComparison]:

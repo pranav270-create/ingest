@@ -11,7 +11,7 @@ from src.prompts.base_prompt import BasePrompt
 from src.schemas.schemas import ChunkEvaluation
 
 
-@PromptRegistry.register("vlm_elo")
+@PromptRegistry.register("VLM_relative_evaluation")
 class VLMELOPrompt(BasePrompt):
     """
     A prompt class for evaluating the winner of a VLM evaluation.
@@ -53,9 +53,9 @@ class VLMELOPrompt(BasePrompt):
                     image = f.read()
             images.append(base64.b64encode(image).decode("utf-8"))
 
-        chunks_a = vlm_evaluation.chunks_a
-        chunks_b = vlm_evaluation.chunks_b
-        return structure_image_prompt(cls.system_prompt, cls.user_prompt.format(chunks_a=chunks_a, chunks_b=chunks_b), images)
+        chunks_a_str = "\n".join([chunk.string for chunk in vlm_evaluation.chunks_a])
+        chunks_b_str = "\n".join([chunk.string for chunk in vlm_evaluation.chunks_b])
+        return structure_image_prompt(cls.system_prompt, cls.user_prompt.format(chunks_a=chunks_a_str, chunks_b=chunks_b_str), images)
 
     @staticmethod
     def parse_response(vlm_evaluation: ChunkEvaluation, response: ModelResponse) -> ChunkEvaluation:

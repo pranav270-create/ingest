@@ -57,6 +57,8 @@ async def process_pdf(
             page_image_path = f"{pages_dir}/page_{i + 1}.jpg"
 
             if write:
+                # just sent the relative path
+                page_image_path = os.path.relpath(page_image_path, pages_dir)
                 await write(page_image_path, img_bytes)
             else:
                 os.makedirs(os.path.dirname(page_image_path), exist_ok=True)

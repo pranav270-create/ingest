@@ -4,7 +4,6 @@ import os
 import sys
 import uuid
 from pathlib import Path
-
 import fitz
 import modal
 from PIL import Image
@@ -132,9 +131,11 @@ async def _extract_region(
     region = img.crop((left, top, right, bottom))
 
     # Save extracted region
-    extracted_path = (
-        f"{extracts_dir}/{feature_type.value}_{page_num + 1}_{secondary_index}.jpg"
-    )
+    extracted_path = f"{extracts_dir}/{feature_type.value}_{page_num + 1}_{secondary_index}.jpg"
+    if write:
+        # Make path relative for cloud storage
+        extracted_path = f"extracts/{feature_type.value}_{page_num + 1}_{secondary_index}.jpg"
+
     img_byte_arr = io.BytesIO()
     region.save(img_byte_arr, format="JPEG")
     img_byte_arr = img_byte_arr.getvalue()
@@ -588,7 +589,8 @@ async def main_marker(
 
         # Create output directories
         base_dir = os.path.dirname(current_ingestion.extracted_document_file_path)
-        base_dir = os.path.dirname(Path(__file__).resolve())  # current file directory
+        if not write:  # Only use current file directory for local processing
+            base_dir = os.path.dirname(Path(__file__).resolve())
         pages_dir = os.path.join(base_dir, "pages")
         extracts_dir = os.path.join(base_dir, "extracts")
 
@@ -600,13 +602,18 @@ async def main_marker(
                 pix = doc[page_num].get_pixmap(matrix=fitz.Matrix(1, 1))
                 img_bytes = pix.tobytes("jpg")
                 page_image_path = f"{pages_dir}/page_{page_num + 1}.jpg"
+                
                 if write:
-                    await write(page_image_path, img_bytes)
+                    # Make path relative for cloud storage
+                    relative_path = f"pages/page_{page_num + 1}.jpg"
+                    await write(relative_path, img_bytes)
+                    page_image_paths[page_num] = relative_path
                 else:
+                    # Use full path for local storage
                     os.makedirs(os.path.dirname(page_image_path), exist_ok=True)
                     with open(page_image_path, "wb") as f:
                         f.write(img_bytes)
-                page_image_paths[page_num] = page_image_path
+                    page_image_paths[page_num] = page_image_path
 
         all_text = {}
         if mode == "by_page":
@@ -815,7 +822,7 @@ async def main_marker(
 
         # Handle visualization after processing entries if requested
         if visualize:
-            output_dir = os.path.join(base_dir, "annotated")
+            output_dir = os.path.join(base_dir, "annotated") if not write else "annotated"
             # Group entries by page using the utility function
             entries_by_page = group_entries_by_page(all_entries)
 
@@ -830,7 +837,9 @@ async def main_marker(
                 )
 
                 if write:
-                    await write(output_path, annotated_image)
+                    # Make path relative for cloud storage
+                    relative_path = f"annotated/page_{page_num + 1}_annotated.png"
+                    await write(relative_path, annotated_image)
                 else:
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
                     with open(output_path, "wb") as f:
@@ -838,6 +847,7 @@ async def main_marker(
 
         # Write the combined text for this specific ingestion
         if write:
+            # Use the original extracted_document_file_path as is since it should already be relative
             await write(
                 current_ingestion.extracted_document_file_path,
                 json.dumps(all_text, indent=4),

@@ -3,7 +3,7 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,17 +11,9 @@ from sqlalchemy.orm import selectinload
 
 sys.path.append(str(Path(__file__).parents[2]))
 
-from src.schemas.schemas import Entry, Ingestion
+from src.schemas.schemas import Entry, Ingestion, ChunkComparison
 from src.sql_db.database import get_async_db_session
 from src.sql_db.etl_model import Entry as DBEntry
-
-
-@dataclass
-class ChunkComparison:
-    document_title: str
-    page_range: tuple[int, int]
-    pipeline_a_chunks: list[Entry]
-    pipeline_b_chunks: list[Entry]
 
 
 async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[Entry]:
@@ -74,7 +66,7 @@ async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[
     return entries
 
 
-def group_entries_by_document(entries: List[Entry]) -> Dict[str, List[Entry]]:
+def group_entries_by_document(entries: list[Entry]) -> Dict[str, list[Entry]]:
     """Group entries by document hash."""
     grouped = defaultdict(list)
     for entry in entries:
@@ -89,7 +81,7 @@ def group_entries_by_document(entries: List[Entry]) -> Dict[str, List[Entry]]:
     return dict(grouped)
 
 
-def find_overlapping_chunks(entries_a: List[Entry], entries_b: List[Entry]) -> List[ChunkComparison]:
+def find_overlapping_chunks(entries_a: list[Entry], entries_b: list[Entry]) -> list[ChunkComparison]:
     """Find chunks that cover the same page ranges across two sets of entries."""
     comparisons = []
     document_title = entries_a[0].ingestion.document_title if entries_a else "Unknown"
@@ -112,15 +104,15 @@ def find_overlapping_chunks(entries_a: List[Entry], entries_b: List[Entry]) -> L
             ChunkComparison(
                 document_title=document_title,
                 page_range=page_range,
-                pipeline_a_chunks=entries_a_dict[page_range],
-                pipeline_b_chunks=entries_b_dict[page_range],
+                chunks_a=entries_a_dict[page_range],
+                chunks_b=entries_b_dict[page_range],
             )
         )
 
     return comparisons
 
 
-async def compare_pipeline_chunks(pipeline_a: str, pipeline_b: str) -> Dict[str, List[ChunkComparison]]:
+async def compare_pipeline_chunks(pipeline_a: str, pipeline_b: str) -> Dict[str, list[ChunkComparison]]:
     """Compare chunks between two pipelines."""
     async for session in get_async_db_session():
         entries_a = await get_pipeline_entries(session, pipeline_a)
@@ -136,7 +128,7 @@ async def compare_pipeline_chunks(pipeline_a: str, pipeline_b: str) -> Dict[str,
         return comparisons
 
 
-async def get_single_pipeline_entries(pipeline_id: str) -> List[Entry]:
+async def get_single_pipeline_entries(pipeline_id: str) -> list[Entry]:
     """Get entries from a single pipeline."""
     async for session in get_async_db_session():
         pipeline_id = int(pipeline_id)

@@ -533,10 +533,13 @@ class Embedding(Entry):
 @SchemaRegistry.register("chunk_comparison")
 class ChunkComparison(BaseModel):
     schema__: str = Field(default="ChunkComparison", alias="schema__")
-    chunks_a: List[Entry]
-    chunks_b: List[Entry]
+    document_title: str
+    page_range: tuple[int, int]
+    chunks_a: list[Entry]
+    chunks_b: list[Entry]
     winner: Optional[str] = None
     reasoning: Optional[str] = None
+
 
 @SchemaRegistry.register("chunk_evaluation")
 class ChunkEvaluation(Entry):
@@ -546,6 +549,7 @@ class ChunkEvaluation(Entry):
     organization: Optional[Annotated[float, Field(gt=0, lt=5)]] = Field(description="The score of the chunk")
     score: Optional[Annotated[float, Field(gt=0, lt=15)]] = Field(description="The score of the chunk")
     explanation: Optional[str] = Field(description="The reasoning behind the score")
+
 
 @SchemaRegistry.register("formatted_scored_points")
 class FormattedScoredPoints(BaseModel):

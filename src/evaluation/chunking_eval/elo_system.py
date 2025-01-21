@@ -140,7 +140,6 @@ class ELOSystem:
         # Save both files
         self._save_ratings()
         self._save_history()
-
         return rating_a_after, rating_b_after
 
     def plot_rating_history(self, pipeline_ids: list[str] = None):

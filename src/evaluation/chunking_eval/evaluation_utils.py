@@ -1,9 +1,9 @@
 import asyncio
-
+from pathlib import Path
 import numpy as np
 
 from src.evaluation.experimental.chunking_evaluation import ExtractionMethod
-from src.schemas.schemas import ChunkingMethod
+from src.schemas.schemas import ChunkingMethod, Entry
 
 """
 Utility functions and helper classes for chunk evaluation.
@@ -12,6 +12,23 @@ Contains shared functionality used across different evaluation methods:
 - Data processing helpers
 - Common evaluation metrics
 """
+
+
+def can_use_vlm(chunks_a: list[Entry], chunks_b: list[Entry]) -> bool:
+    """Check if VLM evaluation is possible for these chunks."""
+    # Check if chunks have locations
+    has_locations_a = all(hasattr(chunk, "chunk_locations") and chunk.chunk_locations for chunk in chunks_a)
+    has_locations_b = all(hasattr(chunk, "chunk_locations") and chunk.chunk_locations for chunk in chunks_b)
+
+    if not (has_locations_a and has_locations_b):
+        return False
+
+    # Check if all referenced pages exist
+    page_paths_a = [loc.page_file_path for chunk in chunks_a for loc in chunk.chunk_locations]
+    page_paths_b = [loc.page_file_path for chunk in chunks_b for loc in chunk.chunk_locations]
+
+    all_paths = set(page_paths_a + page_paths_b)
+    return all(Path(path).exists() for path in all_paths)
 
 
 def calculate_chunk_comparison_score(comp_a: int, comp_b: int) -> float:
@@ -42,27 +59,3 @@ def get_chunk_metrics(chunks: list) -> dict:
         "std_length": np.std(lengths),
     }
 
-
-async def evaluate_single_pipeline(pdf_path: str, extraction: ExtractionMethod, chunking: ChunkingMethod, **kwargs):
-    """Evaluate a single pipeline's chunk quality."""
-    chunks, metrics = await evaluate_extraction_chunking(pdf_path=pdf_path, extraction_method=extraction, chunking_method=chunking, **kwargs)
-
-    quality_scores = []
-    batch_size = 5
-
-    for i in range(0, len(chunks), batch_size):
-        batch = chunks[i : i + batch_size]
-        tasks = [evaluate_chunk_quality(chunk) for chunk in batch]
-        batch_scores = await asyncio.gather(*tasks)
-        quality_scores.extend(batch_scores)
-
-        if i + batch_size < len(chunks):
-            await asyncio.sleep(1)
-
-    return {
-        "extraction": extraction.value,
-        "chunking": chunking.value,
-        "metrics": metrics,
-        "quality_scores": quality_scores,
-        "num_chunks": len(chunks),
-    }
