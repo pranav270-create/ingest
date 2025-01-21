@@ -1,9 +1,10 @@
-import json
-from uuid import uuid4
-from litellm import ModelResponse
-from pydantic import BaseModel, Field
 import base64
 import copy
+import json
+from uuid import uuid4
+
+from litellm import ModelResponse
+from pydantic import BaseModel, Field
 
 from src.llm_utils.utils import structure_image_prompt, text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry

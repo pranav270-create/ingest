@@ -1,10 +1,10 @@
+import json
+import os
+import subprocess
+
 import modal
 from modal import App, build, enter, method
-import subprocess
-import requests
-import time
-import os
-import json
+
 app = App("colpali-modal")
 MINUTES = 60  # seconds
 HOURS = 60 * MINUTES
@@ -75,36 +75,36 @@ class Model:
         try:
             # Change to the Vidore directory
             os.chdir("/vidore")
-            
+
             # Run the benchmark command
             cmd = [
-                "python", 
-                "-m", 
+                "python",
+                "-m",
                 "vidore.run_benchmark",
                 "--model", model_name,
                 "--dataset", dataset_name,
                 "--output_dir", "/tmp/results"
             ]
-            
+
             process = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 check=True
             )
-            
+
             # Read the results
             results_file = f"/tmp/results/{model_name}_{dataset_name}_results.json"
-            with open(results_file, 'r') as f:
+            with open(results_file) as f:
                 results = json.load(f)
-                
+
             return {
                 "status": "success",
                 "results": results,
                 "stdout": process.stdout,
                 "stderr": process.stderr
             }
-            
+
         except subprocess.CalledProcessError as e:
             return {
                 "status": "error",

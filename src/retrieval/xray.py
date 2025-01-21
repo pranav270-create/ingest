@@ -1,6 +1,7 @@
-from groundx import GroundX
 import os
 from typing import Optional
+
+from groundx import GroundX
 
 client = GroundX(
     api_key=os.environ["GROUNDX_API_KEY"],
@@ -35,4 +36,3 @@ if __name__ == "__main__":
     # next_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9"
     response = search_bucket(bucket_name, num_results, verbosity, query, relevance_threshold)
     print(response)
- 

@@ -1,10 +1,11 @@
-from transformers import AutoModel, AutoTokenizer
-from io import BytesIO
-import modal
-from PIL import Image
-import uuid
 import os
+import uuid
+from io import BytesIO
+
+import modal
 from modal import App, build, enter, method
+from PIL import Image
+from transformers import AutoModel, AutoTokenizer
 
 app = App("ocr-modal")
 MINUTES = 60  # seconds

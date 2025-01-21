@@ -2,10 +2,9 @@ import json
 import logging
 import os
 import sys
-import uuid
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+
 from fastembed.sparse.bm25 import Bm25
 from qdrant_client import AsyncQdrantClient, QdrantClient, models
 from qdrant_client.http.exceptions import UnexpectedResponse

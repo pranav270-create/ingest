@@ -1,7 +1,7 @@
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Optional, TypeVar, Union, List
+from typing import Annotated, Any, List, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -416,7 +416,7 @@ class Entry(BaseModel):
     keywords: Optional[list[str]] = None  # This is for any keywords that we have not captured in other fields yet
     added_featurization: Optional[dict[str, Any]] = None  # This is for any additional features that we have added
 
-    # Chunk location fields. Used for reconstruction.
+    # Chunk location fields. Used for reconstruction
     consolidated_feature_type: Optional[ExtractedFeatureType] = None  # This is the type of feature that is being embedded
     chunk_locations: Optional[list[ChunkLocation]] = None  # Combined location information
     min_primary_index: Optional[int] = None  # Cached for quick access

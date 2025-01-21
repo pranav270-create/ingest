@@ -1,14 +1,17 @@
 import sys
 from pathlib import Path
+
 sys.path.append(str(Path(__file__).parents[2]))
 
-import json
-import os
 import asyncio
+import json
 import logging
+import os
 from typing import Dict, List
-from src.utils.s3_utils import upload_single_file_async
+
 import aioboto3
+
+from src.utils.s3_utils import upload_single_file_async
 
 # Configure logging
 logging.basicConfig(
@@ -28,27 +31,27 @@ async def upload_omnibench_to_s3(
     # Load metadata
     json_path = os.path.join(base_path, "OmniDocBench.json")
     logging.info(f"Loading metadata from {json_path}")
-    with open(json_path, 'r', encoding='utf-8') as f:
+    with open(json_path, encoding='utf-8') as f:
         metadata = json.load(f)
     logging.info(f"Found {len(metadata)} entries in metadata file")
-    
+
     # Create mapping of files to document types and build global metadata
     file_mapping: Dict[str, List[str]] = {}
     global_metadata: Dict[str, dict] = {}
-    
+
     for entry in metadata:
         doc_type = entry['page_info']['page_attribute']['data_source']
         image_path = entry['page_info']['image_path']
         base_name = os.path.splitext(os.path.basename(image_path))[0]
         pdf_path = os.path.join(base_path, 'pdfs', f"{base_name}.pdf")
-        
+
         if doc_type not in file_mapping:
             file_mapping[doc_type] = []
-        
+
         s3_key = f"{prefix}/{doc_type}/{base_name}.pdf"
         file_mapping[doc_type].append(pdf_path)
         global_metadata[s3_key] = entry
-    
+
     # Upload files
     session = aioboto3.Session()
     tasks = []
@@ -59,7 +62,7 @@ async def upload_omnibench_to_s3(
         async with semaphore:
             base_name = os.path.splitext(os.path.basename(pdf_path))[0]
             s3_key = f"{prefix}/{doc_type}/{base_name}.pdf"
-            
+
             if os.path.exists(pdf_path):
                 try:
                     await upload_single_file_async(
@@ -82,10 +85,10 @@ async def upload_omnibench_to_s3(
         for pdf_path in files:
             task = asyncio.create_task(upload_file(pdf_path, doc_type))
             tasks.append(task)
-    
+
     # Upload files
     await asyncio.gather(*tasks)
-    
+
     # Upload global metadata JSON
     metadata_key = f"{prefix}/metadata.json"
     metadata_bytes = json.dumps(global_metadata).encode('utf-8')
@@ -101,7 +104,7 @@ async def upload_omnibench_to_s3(
             Body=metadata_bytes,
             ContentType='application/json'
         )
-    
+
     # Print statistics
     logging.info("\nUpload Statistics:")
     logging.info(f"PDFs uploaded: {stats['uploaded']}")
@@ -111,15 +114,15 @@ async def upload_omnibench_to_s3(
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='Upload OmniBench PDFs to S3')
     parser.add_argument('--base_path', type=str, default="OmniDocBench", help='Path to OmniBench directory')
     parser.add_argument('--bucket', type=str, default="astralis-data-4170a4f6", help='Target S3 bucket')
     parser.add_argument('--prefix', type=str, default='omnibench', help='S3 prefix')
     parser.add_argument('--max_concurrency', type=int, default=10, help='Maximum concurrent uploads')
-    
+
     args = parser.parse_args()
-    
+
     asyncio.run(upload_omnibench_to_s3(
         base_path=args.base_path,
         bucket_name=args.bucket,

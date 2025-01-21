@@ -1,14 +1,15 @@
 import sys
 from pathlib import Path
+
 sys.path.append(str(Path(__file__).parents[2]))
 
-import json
-import os
 import asyncio
 import logging
-from typing import Dict, List
-from src.utils.s3_utils import upload_single_file_async
+import os
+
 import aioboto3
+
+from src.utils.s3_utils import upload_single_file_async
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,7 +55,7 @@ async def upload_docbench_to_s3(
         folder_name = os.path.basename(folder_path)
         folder_num = int(folder_name)
         doc_type = get_doc_type(folder_num)
-        
+
         all_files = os.listdir(folder_path)
         pdf_files = [f for f in all_files if f.lower().endswith('.pdf')]
         json_files = [f for f in all_files if f.lower().endswith(('.json', '.jsonl'))]
@@ -90,7 +91,7 @@ async def upload_docbench_to_s3(
                 )
                 stats['uploaded_jsons'] += 1
                 logging.info(f"Uploaded JSON: {json_key}")
-                
+
             except Exception as e:
                 stats['failed_uploads'] += 1
                 logging.error(f"Error uploading from {folder_path}: {str(e)}")
@@ -115,18 +116,18 @@ async def upload_docbench_to_s3(
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='Upload DocBench data to S3')
     parser.add_argument('--base_path', type=str, default="DocBench_Data", help='Path to DocBench directory')
     parser.add_argument('--bucket', type=str, default="astralis-data-4170a4f6", help='Target S3 bucket')
     parser.add_argument('--prefix', type=str, default='docbench', help='S3 prefix')
     parser.add_argument('--max_concurrency', type=int, default=10, help='Maximum concurrent uploads')
-    
+
     args = parser.parse_args()
-    
+
     asyncio.run(upload_docbench_to_s3(
         base_path=args.base_path,
         bucket_name=args.bucket,
         prefix=args.prefix,
         max_concurrency=args.max_concurrency
-    )) 
+    ))

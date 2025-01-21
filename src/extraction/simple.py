@@ -1,23 +1,24 @@
-import sys
-from pathlib import Path
-import fitz
 import io
-import os
 import json
+import os
+import sys
 import uuid
+from pathlib import Path
+
+import fitz
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import (
+    ChunkLocation,
+    EmbeddedFeatureType,
     Entry,
-    Index,
-    Ingestion,
     ExtractedFeatureType,
     ExtractionMethod,
     FileType,
-    ChunkLocation,
-    EmbeddedFeatureType,
+    Index,
+    Ingestion,
 )
 from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 

@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.featurization.get_features import featurize
-import src.prompts  # This import will execute all the class definitions and register the prompts
 from src.sql_db.database import get_async_session
 from src.sql_db.etl_model import Entry
 

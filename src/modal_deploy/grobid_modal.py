@@ -1,8 +1,9 @@
-import modal
-from modal import App, build, enter, method
 import subprocess
-import requests
 import time
+
+import modal
+import requests
+from modal import App, build, enter, method
 
 app = App("grobid-modal")
 MINUTES = 60  # seconds

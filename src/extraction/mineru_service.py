@@ -1,29 +1,30 @@
-import sys
-from pathlib import Path
-import modal
+import io
 import json
 import os
+import sys
 import uuid
-from PIL import Image, ImageDraw, ImageFont
-import io
+from pathlib import Path
+
 import fitz
+import modal
+from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import (
-    Entry,
     ChunkLocation,
-    Index,
-    Ingestion,
+    Citation,
+    Entry,
     ExtractedFeatureType,
     ExtractionMethod,
+    Index,
+    Ingestion,
     RelationshipType,
-    Citation,
 )
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.utils.extraction_utils import convert_to_pdf
-from src.utils.visualize_utils import visualize_page_results, group_entries_by_page
+from src.utils.visualize_utils import group_entries_by_page, visualize_page_results
 
 
 def _map_mineru_type(
@@ -551,8 +552,9 @@ async def main_mineru(
 
 
 if __name__ == "__main__":
-    from src.schemas.schemas import Scope, IngestionMethod, FileType
     import asyncio
+
+    from src.schemas.schemas import FileType, IngestionMethod, Scope
 
     test_ingestions = [
         # Ingestion(

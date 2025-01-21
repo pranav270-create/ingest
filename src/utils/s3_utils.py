@@ -1,8 +1,8 @@
-import os
 import asyncio
-import aioboto3
+import os
 from typing import Optional
 
+import aioboto3
 
 aws_access_key_id = os.environ.get("AWS_DATA_ACCESS_KEY")
 aws_secret_access_key = os.environ.get("AWS_DATA_SECRET_ACCESS_KEY")
@@ -55,15 +55,15 @@ async def upload_folder_async(
             file_path = os.path.join(root, file)
             # Get relative path and normalize separators
             relative_path = os.path.relpath(file_path, folder_path).replace(os.sep, '/')
-            
+
             # Combine prefix with relative path if prefix is provided
             s3_key = f"{prefix.rstrip('/')}/{relative_path}" if prefix else relative_path
-            
+
             task = asyncio.create_task(
                 upload_with_semaphore(file_path, s3_key)
             )
             tasks.append(task)
-    
+
     await asyncio.gather(*tasks)
 
 

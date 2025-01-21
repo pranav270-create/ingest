@@ -1,8 +1,9 @@
 import io
+
+import fitz
 import pandas as pd
 from docx import Document as DocxDocument
 from PIL import Image
-import fitz
 
 
 def convert_to_pdf(file_content: bytes, file_extension: str) -> bytes:

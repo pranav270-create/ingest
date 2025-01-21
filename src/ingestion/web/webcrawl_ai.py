@@ -1,25 +1,26 @@
-import os 
-import sys
-from pathlib import Path 
-import asyncio 
-from crawl4ai import AsyncWebCrawler 
-from crawl4ai.extraction_strategy import LLMExtractionStrategy, JsonCssExtractionStrategy, CosineStrategy
-from crawl4ai.chunking_strategy import RegexChunking
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
-from urllib.parse import urlparse
+import asyncio
+import os
 import random
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional
+from urllib.parse import urlparse
+
+from crawl4ai import AsyncWebCrawler
+from crawl4ai.chunking_strategy import RegexChunking
+from crawl4ai.extraction_strategy import CosineStrategy, JsonCssExtractionStrategy, LLMExtractionStrategy
+from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import ContentType, Entry, FileType, Ingestion, IngestionMethod, ExtractedFeatureType, ExtractionMethod, Scope
 from src.pipeline.registry.function_registry import FunctionRegistry
-from src.utils.datetime_utils import get_current_utc_datetime, parse_datetime
-from src.utils.ingestion_utils import update_ingestion_with_metadata
+from src.schemas.schemas import ContentType, FileType, Ingestion, IngestionMethod, Scope
+from src.utils.datetime_utils import get_current_utc_datetime
 
-class PageSummary(BaseModel): 
-    title: str = Field(..., description="Title of the page.") 
-    summary: str = Field(..., description="Summary of the page.") 
+
+class PageSummary(BaseModel):
+    title: str = Field(..., description="Title of the page.")
+    summary: str = Field(..., description="Summary of the page.")
     keywords: list = Field(..., description="Keywords assigned to the page.")
 
 class CrawlResult(BaseModel):
@@ -112,7 +113,7 @@ async def crawl_and_summarize(url, extraction_strategy):
 def create_ingestion(url, result, creator_name):
     current_time = get_current_utc_datetime()
     html_path = f"/tmp/{urlparse(url).netloc}-{random.randint(1000, 9999)}.html"
-    
+
     with open(html_path, "w") as f:
         f.write(result.html)
 
@@ -141,14 +142,14 @@ async def process_url(url, extraction_strategy, creator_name):
             return ingestion
         else:
             return None
-    except Exception as e:
+    except Exception:
         return None
 
 @FunctionRegistry.register("ingest", "webcrawl_ai")
 async def ingest(url_configs: List[Dict], added_metadata: Dict = {}) -> List[Ingestion]:
     api_token = os.getenv('OPENAI_API_KEY')
     extraction_strategy = create_llm_extraction_strategy(api_token)
-    
+
     async with AsyncWebCrawler(verbose=True) as crawler:
         async def process_url_with_crawler(url, creator_name):
             try:
@@ -194,5 +195,5 @@ if __name__ == "__main__":
     ingestions = asyncio.run(ingest(url_configs))
     for i, ingestion in enumerate(ingestions):
         # dump each to a json file
-        with open("/tmp/ingestion_{}.json".format(i), "w") as f:
+        with open(f"/tmp/ingestion_{i}.json", "w") as f:
             json.dump(ingestion.dict(), f, indent=2)

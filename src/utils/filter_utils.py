@@ -1,6 +1,6 @@
-from typing import Any, TypeVar, Tuple, List
+from typing import Any, List, Tuple, TypeVar
 
-from src.schemas.schemas import ExtractedFeatureType, EmbeddedFeatureType
+from src.schemas.schemas import EmbeddedFeatureType, ExtractedFeatureType
 
 T = TypeVar('T')
 
@@ -48,7 +48,7 @@ def filter_basemodels(basemodels: List[T], filter_params: dict[str, Any]) -> Tup
                 # Handle single string value
                 try:
                     matching_member = next(
-                        member for member in enum_class 
+                        member for member in enum_class
                         if member.value == value.lower()
                     )
                     processed_params[key] = matching_member

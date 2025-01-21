@@ -1,11 +1,12 @@
-from google_labs_html_chunker.html_chunker import HtmlChunker
 import sys
 from pathlib import Path
 
+from google_labs_html_chunker.html_chunker import HtmlChunker
+
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Entry, Ingestion, ExtractedFeatureType, ExtractionMethod
 from src.pipeline.registry.function_registry import FunctionRegistry
+from src.schemas.schemas import Entry, ExtractedFeatureType, ExtractionMethod, Ingestion
 from src.utils.datetime_utils import get_current_utc_datetime
 
 

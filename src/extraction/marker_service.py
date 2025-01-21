@@ -1,33 +1,33 @@
-import sys
-from pathlib import Path
-import modal
 import io
-from docx import Document as DocxDocument
-from PIL import Image, ImageDraw, ImageFont
-import fitz
-import os
 import json
+import os
+import sys
 import uuid
+from pathlib import Path
+
+import fitz
+import modal
+from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.schemas.schemas import (
-    Entry,
     ChunkLocation,
-    Index,
-    Ingestion,
+    Citation,
+    Entry,
     ExtractedFeatureType,
     ExtractionMethod,
-    Scope,
-    IngestionMethod,
     FileType,
+    Index,
+    Ingestion,
+    IngestionMethod,
     RelationshipType,
-    Citation,
+    Scope,
 )
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.utils.extraction_utils import convert_to_pdf
-from src.utils.visualize_utils import visualize_page_results, group_entries_by_page
+from src.utils.visualize_utils import group_entries_by_page, visualize_page_results
 
 
 def _map_marker_type(block_type: str) -> ExtractedFeatureType:

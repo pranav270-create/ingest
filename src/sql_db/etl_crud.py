@@ -4,10 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Optional, Union
 
-from sqlalchemy import and_, delete, inspect, select
+from sqlalchemy import and_, inspect, select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.schemas.schemas import Embedding, Upsert
@@ -460,7 +459,7 @@ async def create_entries(
     batch_size: int = 1000,
 ) -> EntryCreationResult:
     result = EntryCreationResult(
-        total_processed=len(data_list), new_entries=0, skipped_duplicates=0, 
+        total_processed=len(data_list), new_entries=0, skipped_duplicates=0,
         updated_entries=0, failed_entries=0, error_messages=[]
     )
 
@@ -558,7 +557,7 @@ async def create_entries(
             # Use insert().prefix_with('IGNORE') for MySQL or on_conflict_do_nothing() for PostgreSQL
             insert_stmt = await get_insert_stmt(session)
             stmt = insert_stmt(EntryRelationship.__table__).values(
-                [{'source_id': r.source_id, 'target_id': r.target_id, 'relationship_type': r.relationship_type} 
+                [{'source_id': r.source_id, 'target_id': r.target_id, 'relationship_type': r.relationship_type}
                  for r in relationships]
             )
             if session.get_bind().dialect.name == "mysql":

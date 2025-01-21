@@ -1,17 +1,18 @@
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-import sys
 from pathlib import Path
+from typing import Dict, List
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 sys.path.append(str(Path(__file__).parents[2]))
 
-from src.sql_db.etl_model import Entry as DBEntry
 from src.schemas.schemas import Entry, Ingestion
 from src.sql_db.database import get_async_db_session
+from src.sql_db.etl_model import Entry as DBEntry
 
 
 @dataclass
@@ -25,17 +26,17 @@ class ChunkComparison:
 async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[Entry]:
     """Get all entries for a given pipeline ID."""
     pipeline_id = int(pipeline_id)
-    
+
     query = select(DBEntry).where(DBEntry.pipeline_id == pipeline_id).options(
         selectinload(DBEntry.ingest)
     )
-    
+
     result = await session.execute(query)
     db_entries = result.scalars().all()
-    
+
     # Debug logging
     print(f"Found {len(db_entries)} entries for pipeline {pipeline_id}")
-    
+
     entries = []
     for db_entry in db_entries:
         try:
@@ -51,7 +52,7 @@ async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[
                 ingestion_date=db_entry.ingest.ingestion_date.isoformat() if db_entry.ingest.ingestion_date else None,
                 scope=db_entry.ingest.scope
             )
-            
+
             # Then create the Entry with the Ingestion object
             entry = Entry(
                 uuid=db_entry.uuid,
@@ -63,14 +64,14 @@ async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[
                 ingestion=ingest  # Use ingestion instead of ingest
             )
             entries.append(entry)
-            
+
             # Debug verification
             print(f"Created entry {entry.uuid} with ingestion: {entry.ingestion is not None}")
-            
+
         except Exception as e:
             print(f"Error creating entry: {e}")
             continue
-    
+
     return entries
 
 

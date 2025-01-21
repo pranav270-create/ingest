@@ -1,12 +1,12 @@
-import modal
-from modal import App, method
-import os
 import json
-from magic_pdf.data.data_reader_writer import FileBasedDataWriter, FileBasedDataReader
+import os
+
+import modal
+from magic_pdf.config.enums import SupportedPdfParseMethod
+from magic_pdf.data.data_reader_writer import FileBasedDataReader, FileBasedDataWriter
 from magic_pdf.data.dataset import PymuDocDataset
 from magic_pdf.model.doc_analyze_by_custom_model import doc_analyze
-from magic_pdf.config.enums import SupportedPdfParseMethod
-
+from modal import App, method
 
 app = App("mineru-modal")
 

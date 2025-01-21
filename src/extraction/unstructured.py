@@ -1,11 +1,12 @@
+import asyncio
+import json
+import os
+from pathlib import Path
+from typing import Dict, List
+
+import aiofiles
 import unstructured_client
 from unstructured_client.models import operations, shared
-import json
-import asyncio
-from pathlib import Path
-from typing import List, Dict
-import aiofiles
-import os
 
 
 async def process_single_file(

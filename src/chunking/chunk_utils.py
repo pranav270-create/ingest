@@ -1,22 +1,14 @@
-import re
 import sys
-from collections import defaultdict
+import uuid
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
 
 import spacy
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import BoundingBox, ChunkingMethod, Entry, Index
+from src.schemas.schemas import ChunkingMethod, Entry, ExtractedFeatureType
 from src.utils.datetime_utils import get_current_utc_datetime
-
-
-def custom_sent_tokenize(text):
-    # Split on periods followed by space or newline, question marks, or exclamation points
-    sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
-    return [s.strip() for s in sentences if s.strip()]
 
 
 @lru_cache(maxsize=1)
@@ -32,70 +24,108 @@ def spacy_tokenize(text):
     return sentences
 
 
-def entries_to_content(entries: list[Entry]) -> list[dict[str, Any]]:
-    """Convert document entries to content format for chunking."""
-    content = []
-    for entry in entries:
-        if entry.string:  # Only process entries with text content
-            # Ensure we capture all parsed feature types
-            feature_types = []
-            if entry.parsed_feature_type:
-                feature_types = [
-                    ft.value if hasattr(ft, 'value') else ft
-                    for ft in entry.parsed_feature_type
-                ]
-            # Get bounding boxes if they exist
-            bounding_boxes = []
-            if entry.bounding_box:
-                bounding_boxes = entry.bounding_box
-            content.append({
-                "text": entry.string,
-                "pages": [idx.primary for idx in entry.index_numbers] if entry.index_numbers else [],
-                "feature_types": feature_types,
-                "bounding_boxes": bounding_boxes
-            })
-    return content
-
-
-def create_index_numbers(chunks: list[dict[str, Any]]) -> list[list[Index]]:
-    page_chunk_count = defaultdict(int)
-    index_numbers = []
-    for chunk in chunks:
-        chunk_indices = []
-        for page in chunk["pages"]:
-            page_chunk_count[page] += 1
-            chunk_indices.append(Index(primary=page, secondary=page_chunk_count[page], tertiary=None))
-        index_numbers.append(chunk_indices)
-    return index_numbers
-
-
-def chunks_to_entries(entries: list[Entry], chunks: list[dict[str, Any]], strategy_type: str, chunking_metadata: dict = {}) -> list[Entry]:
+def filter_entries(entries: list[Entry]) -> tuple[list[Entry], list[Entry]]:
     """
-    Convert chunks back to Entry objects, preserving feature types and handling ingestion metadata.
+    Filter entries into text entries (with consolidated_feature_type COMBINED_TEXT) and others.
 
     Args:
-        document: Source document containing entries
-        chunks: List of chunk dictionaries containing text, pages, and feature types
-        strategy_type: Chunking strategy/method used
-        chunking_metadata: Additional metadata about the chunking process
+        entries: List of entries to filter
+
+    Returns:
+        Tuple of (text_entries, other_entries)
     """
-    # Handle ingestion metadata
+    combined_text_entries = []
+    other_entries = []
     for entry in entries:
-        if entry.ingestion:
-            ingestion = entry.ingestion
-            ingestion.chunking_method = ChunkingMethod(strategy_type)
+        if entry.consolidated_feature_type == ExtractedFeatureType.combined_text:
+            combined_text_entries.append(entry)
+        else:
+            other_entries.append(entry)
+    return combined_text_entries, other_entries
+
+
+def create_chunk_entry(
+    contributing_entries: list[Entry],
+    chunk_text: str,
+    chunking_metadata: dict = {}
+) -> Entry:
+    """
+    Create a new Entry object for a chunk, preserving necessary metadata from contributing entries.
+
+    Args:
+        contributing_entries: List of entries that contributed to this chunk
+        chunk_text: The text content of the chunk
+        chunking_metadata: Additional metadata about the chunking process
+
+    Returns:
+        A new Entry object containing the chunk and combined metadata
+    """
+    # Combine index_numbers from contributing entries
+    index_numbers = []
+    for entry in contributing_entries:
+        if entry.index_numbers:
+            index_numbers.extend(entry.index_numbers)
+
+    # Remove duplicate index_numbers while preserving order
+    index_numbers = list({(idx.primary, idx.secondary): idx for idx in index_numbers}.values())
+    # Sort index_numbers by primary then secondary
+    index_numbers.sort(key=lambda x: (x.primary, x.secondary))
+    # Get base entry for metadata
+    base_entry = contributing_entries[0] if contributing_entries else Entry()
+    # Combine keywords from all contributing entries
+    keywords = set()
+    for entry in contributing_entries:
+        if entry.keywords:
+            keywords.update(entry.keywords)
+    # Combine citations from all contributing entries
+    citations = []
+    seen_citations = set()
+    for entry in contributing_entries:
+        if entry.citations:
+            for citation in entry.citations:
+                citation_key = (citation.doi, citation.url, citation.text)
+                if citation_key not in seen_citations:
+                    citations.append(citation)
+                    seen_citations.add(citation_key)
+    # Set up ingestion metadata
+    ingestion = base_entry.ingestion
+    if ingestion:
+        ingestion.chunking_method = ChunkingMethod.DISTANCE
         ingestion.chunking_date = get_current_utc_datetime()
         ingestion.chunking_metadata = chunking_metadata
-
-    entries = []
-    for i, chunk in enumerate(chunks):
-        # Create a new Entry for each chunk
-        entry = Entry(
-            string=chunk["text"],
-            index_numbers=[Index(primary=page, secondary=i) for page in chunk["pages"]],
-            ingestion=ingestion,
-            parsed_feature_type=chunk.get("feature_types", []),  # Preserve feature types
-            bounding_box=[BoundingBox(left=0, top=0, width=0, height=0)]  # Default bounding box
-        )
-        entries.append(entry)
-    return entries
+    # Combine chunk_locations if present
+    chunk_locations = []
+    for entry in contributing_entries:
+        if entry.chunk_locations:
+            chunk_locations.extend(entry.chunk_locations)
+    # Calculate min and max primary index
+    min_primary_index = min((idx.primary for idx in index_numbers), default=None)
+    max_primary_index = max((idx.primary for idx in index_numbers), default=None)
+    # Combine added_featurization dictionaries
+    added_featurization = {}
+    for entry in contributing_entries:
+        if entry.added_featurization:
+            added_featurization.update(entry.added_featurization)
+    # Create new Entry with the chunk text and combined metadata
+    new_entry = Entry(
+        uuid=str(uuid.uuid4()),
+        string=chunk_text,
+        ingestion=ingestion,
+        index_numbers=index_numbers,
+        consolidated_feature_type=base_entry.consolidated_feature_type,
+        embedded_feature_type=base_entry.embedded_feature_type,
+        embedding_date=base_entry.embedding_date,
+        embedding_model=base_entry.embedding_model,
+        embedding_dimensions=base_entry.embedding_dimensions,
+        entry_title=base_entry.entry_title,
+        keywords=list(keywords) if keywords else None,
+        added_featurization=added_featurization if added_featurization else None,
+        citations=citations if citations else None,
+        chunk_locations=chunk_locations if chunk_locations else None,
+        min_primary_index=min_primary_index,
+        max_primary_index=max_primary_index,
+        chunk_index=None,  # This would need to be set by the calling function if needed
+        table_number=base_entry.table_number,
+        figure_number=base_entry.figure_number
+    )
+    return new_entry

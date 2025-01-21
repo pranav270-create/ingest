@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any, Optional
+
 sys.path.append(str(Path(__file__).parents[2]))
 
 from src.pipeline.registry.function_registry import FunctionRegistry

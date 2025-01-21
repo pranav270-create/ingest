@@ -10,7 +10,7 @@ from litellm import Router
 from src.llm_utils.model_lists import chat_model_list
 from src.pipeline.registry.function_registry import FunctionRegistry
 from src.pipeline.registry.prompt_registry import PromptRegistry
-from src.schemas.schemas import BaseModelListType, Ingestion, ExtractedFeatureType, EmbeddedFeatureType
+from src.schemas.schemas import BaseModelListType, Ingestion
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.utils.filter_utils import filter_basemodels
 

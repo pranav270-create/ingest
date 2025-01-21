@@ -1,13 +1,15 @@
 from pydantic import BaseModel, Field
+
 from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.prompts.base_prompt import BasePrompt
 from src.schemas.schemas import Entry
 
+
 @PromptRegistry.register("chunk_evaluation")
 class ChunkEvaluationPrompt(BasePrompt[Entry]):
     """Prompt for evaluating individual chunk quality."""
-    
+
     system_prompt = """
     You are an expert at evaluating text chunks for RAG systems.
     Your task is to rate the quality of individual text chunks.

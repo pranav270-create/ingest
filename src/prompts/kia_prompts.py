@@ -9,11 +9,12 @@ from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.schemas.schemas import ChunkEvaluation
 
+
 @PromptRegistry.register("LLM_chunk_rubric")
 class LLMChunkRubricPrompt:
     system_prompt = (
         "You are an assistant specialized in RAG tasks."
-        "The task is the following: given two chunkings of the same page, you will have to" 
+        "The task is the following: given two chunkings of the same page, you will have to"
         "determine which better preserves the meaning and structure of the original text?"
     )
 

@@ -1,18 +1,19 @@
+import json
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from typing import Any
-from datetime import datetime
-import json
+
 import boto3
 import fitz
+import matplotlib.pyplot as plt
 import trp
 from PIL import Image, ImageDraw, ImageFont
-import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from src.schemas.schemas import BoundingBox, ContentType, FileType, Index, Ingestion, Scope, Entry, IngestionMethod, ExtractedFeatureType
+from src.schemas.schemas import BoundingBox, ContentType, Entry, ExtractedFeatureType, FileType, Index, Ingestion, IngestionMethod, Scope
 
 
 def get_ingestion_data(pdf_path: str, scope: Scope, content_type: ContentType) -> dict[str, Any]:
@@ -61,10 +62,10 @@ def visualize_page_results(image_path: str, parsed_elements: list[Entry], output
     # Open the image
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
-    
+
     # Get image dimensions
     width, height = image.size
-    
+
     # Try to load a font, fall back to default if not available
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
@@ -87,28 +88,28 @@ def visualize_page_results(image_path: str, parsed_elements: list[Entry], output
         "key_value": "lime",
         "combined_text": "white"  # Won't be visible since bounding box is 0
     }
-    
+
     for element in parsed_elements:
         # Skip elements with zero bounding box (combined text)
         if element.bounding_box[0].width == 0 and element.bounding_box[0].height == 0:
             continue
-            
+
         # Convert relative coordinates to absolute pixels
         left = element.bounding_box[0].left * width
         top = element.bounding_box[0].top * height
         right = left + (element.bounding_box[0].width * width)
         bottom = top + (element.bounding_box[0].height * height)
-        
+
         # Get color based on block_type, default to white if not found
         color = colors.get(element.parsed_feature_type[0], "white")
-            
+
         # Draw rectangle
         draw.rectangle([left, top, right, bottom], outline=color, width=2)
-        
+
         # Add label with block type and text
         label = element.parsed_feature_type[0]
         draw.text((left, max(0, top-20)), label, fill=color, font=font)
-    
+
     # Display or save the result
     if output_path:
         image.save(output_path)
@@ -140,17 +141,17 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
     # dump to json for debugging
     with open(f"output_textract/output_{page_number}.json", "w") as f:
         json.dump(doc_pages, f, indent=2)
-    
+
     parsed_elements = []
-    
+
     for page in doc.pages:
         combined_text = ""
         element_index = 1
-        
+
         for block in page.blocks:
             bbox = block["Geometry"]["BoundingBox"]
             block_type = block["BlockType"].lower()  # Convert to lowercase for consistency
-            
+
             # Handle different block types
             if block_type in ["line", "word"]:
                 parsed_elements.append(
@@ -158,9 +159,9 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
                         string=block["Text"],
                         index_numbers=[Index(primary=page_number, secondary=element_index)],
                         bounding_box=[BoundingBox(
-                            left=bbox["Left"], 
-                            top=bbox["Top"], 
-                            width=bbox["Width"], 
+                            left=bbox["Left"],
+                            top=bbox["Top"],
+                            width=bbox["Width"],
                             height=bbox["Height"]
                         )],
                         parsed_feature_type=[block_type]
@@ -169,27 +170,27 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
                 if block_type == "line":
                     combined_text += block["Text"] + " "
                 element_index += 1
-            
+
             # Handle all LAYOUT types
             elif block_type.startswith("layout_"):
                 layout_type = block_type.replace("layout_", "")
                 display_text = block.get("Text", layout_type.upper())  # Use block text if available, otherwise type
-                
+
                 parsed_elements.append(
                     Entry(
                         string=display_text,
                         index_numbers=[Index(primary=page_number, secondary=element_index)],
                         bounding_box=[BoundingBox(
-                            left=bbox["Left"], 
-                            top=bbox["Top"], 
-                            width=bbox["Width"], 
+                            left=bbox["Left"],
+                            top=bbox["Top"],
+                            width=bbox["Width"],
                             height=bbox["Height"]
                         )],
                         parsed_feature_type=[layout_type]
                     )
                 )
                 element_index += 1
-        
+
         # Add combined text as a special entry
         parsed_elements.append(
             Entry(
@@ -199,11 +200,11 @@ def aws_extract_page_content(image_path: str, page_number: int) -> dict[str, Any
                 parsed_feature_type=[ExtractedFeatureType.COMBINED_TEXT]
             )
         )
-    
+
     # Visualize results
     output_path = f"output_textract/page_{page_number}_annotated.png"
     visualize_page_results(image_path, parsed_elements, output_path)
-    
+
     return parsed_elements
 
 

@@ -36,18 +36,18 @@ class LocalStorageBackend(StorageBackend):
         # Check if file is likely binary based on extension
         binary_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx']
         text_extensions = ['.json', '.jsonl', '.txt', '.csv']
-        
+
         is_binary = (
             any(file_path.lower().endswith(ext) for ext in binary_extensions) and
             not any(file_path.lower().endswith(ext) for ext in text_extensions)
         )
-        
+
         if is_binary:
             async with aiofiles.open(full_path, 'rb') as f:
                 return await f.read()
         else:
             # For text files (json, jsonl, txt, etc)
-            async with aiofiles.open(full_path, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(full_path, encoding='utf-8') as f:
                 return await f.read()
 
 

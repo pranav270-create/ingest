@@ -1,9 +1,10 @@
-import modal
 import os
-from modal import App, build, enter, method
+
+import modal
+from marker.config.parser import ConfigParser
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
-from marker.config.parser import ConfigParser
+from modal import App, build, enter, method
 
 app = App("marker-modal")
 MINUTES = 60  # seconds

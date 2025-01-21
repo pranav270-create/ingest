@@ -5,15 +5,7 @@ from typing import Optional
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 
-from src.schemas.schemas import (
-    Ingestion,
-    ContentType,
-    FileType,
-    IngestionMethod,
-    ExtractionMethod,
-    Scope,
-    ChunkingMethod
-)
+from src.schemas.schemas import ChunkingMethod, ContentType, ExtractionMethod, FileType, Ingestion, IngestionMethod, Scope
 
 
 def update_ingestion_with_metadata(ingestion: Ingestion, added_metadata: Optional[dict]) -> Ingestion:
@@ -47,7 +39,7 @@ def update_ingestion_with_metadata(ingestion: Ingestion, added_metadata: Optiona
                 try:
                     # Find the enum member whose value matches our input string
                     matching_member = next(
-                        member for member in enum_class 
+                        member for member in enum_class
                         if member.value == value.lower()
                     )
                     value = matching_member

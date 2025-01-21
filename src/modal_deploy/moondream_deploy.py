@@ -1,9 +1,9 @@
-from PIL import Image
-from transformers import AutoModel, AutoTokenizer
-import modal
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from modal import App, build, enter, method
 from io import BytesIO
+
+import modal
+from modal import App, build, enter, method
+from PIL import Image
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 app = App("moondream-modal")
 MINUTES = 60  # seconds

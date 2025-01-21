@@ -1,27 +1,18 @@
+import io
+import json
+import os
 import sys
+import uuid
 from pathlib import Path
+
 import fitz
 import modal
-import io
 from PIL import Image
-import os
-import uuid
-import json
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.pipeline.registry.function_registry import FunctionRegistry
-from src.schemas.schemas import (
-    Entry,
-    Index,
-    Ingestion,
-    ExtractionMethod,
-    Scope,
-    IngestionMethod,
-    FileType,
-    ChunkLocation,
-    ExtractedFeatureType
-)
+from src.schemas.schemas import ChunkLocation, Entry, ExtractedFeatureType, ExtractionMethod, FileType, Index, Ingestion, IngestionMethod, Scope
 from src.utils.datetime_utils import get_current_utc_datetime, parse_pdf_date
 
 

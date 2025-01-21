@@ -1,14 +1,13 @@
-from datetime import datetime, timezone
 from enum import Enum
 
 import numpy as np
+import umap
 from scipy.spatial import ConvexHull
 from sentence_transformers import SentenceTransformer
-import umap
 
 from src.pipeline.registry.function_registry import FunctionRegistry
-from src.schemas.schemas import ChunkingMethod, ContentType, Entry, FileType, Ingestion, ExtractionMethod, Scope
-import src.pipeline.pipeline
+from src.schemas.schemas import ChunkingMethod, ContentType, Entry, ExtractionMethod, Scope
+
 
 class ExtractionMethod(Enum):
     TEXTRACT = "textract"

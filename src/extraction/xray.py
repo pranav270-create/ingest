@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import urllib
+
 from groundx import Document, GroundX
 
 # Configure logging to show up in terminal

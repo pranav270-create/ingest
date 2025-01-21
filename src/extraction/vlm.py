@@ -1,16 +1,17 @@
 import sys
-from pathlib import Path
-from openai import AsyncOpenAI
 from base64 import b64encode
+from pathlib import Path
+
 import fitz
+from openai import AsyncOpenAI
 from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import Entry, Ingestion, ExtractionMethod
-from src.pipeline.registry.function_registry import FunctionRegistry
-from src.utils.datetime_utils import get_current_utc_datetime
 from src.llm_utils.utils import text_cost_parser
+from src.pipeline.registry.function_registry import FunctionRegistry
+from src.schemas.schemas import Entry, ExtractionMethod, Ingestion
+from src.utils.datetime_utils import get_current_utc_datetime
 
 client = AsyncOpenAI()
 

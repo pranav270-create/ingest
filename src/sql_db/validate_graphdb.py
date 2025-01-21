@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-import networkx as nx
 from pyvis.network import Network
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -148,8 +147,8 @@ async def visualize_pipeline_relationships(
 
 
 if __name__ == "__main__":
-    import asyncio
     import argparse
+    import asyncio
 
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Visualize entry relationships for a pipeline')

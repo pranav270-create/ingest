@@ -4,26 +4,28 @@ Produces a HTML Ingestion ready for parsing and an Image Entry ready for featuri
 """
 
 import asyncio
-import json
-import requests
-import logging
-import fitz
 import io
+import json
+import logging
 import random
+import sys
+from pathlib import Path
 from urllib.parse import urlparse, urlunparse
+
 import aiofiles
+import fitz
+import requests
 from crawlee.playwright_crawler import PlaywrightCrawler, PlaywrightCrawlingContext
 from crawlee.proxy_configuration import ProxyConfiguration
+
 # from crawlee.storages import KeyValueStore
 # from crawlee.storages import Dataset
 from fake_useragent import UserAgent
-import sys
-from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.schemas.schemas import ContentType, Entry, FileType, Ingestion, IngestionMethod, ExtractedFeatureType, ExtractionMethod, Scope
 from src.pipeline.registry.function_registry import FunctionRegistry
+from src.schemas.schemas import ContentType, Entry, ExtractedFeatureType, ExtractionMethod, FileType, Ingestion, IngestionMethod, Scope
 from src.utils.datetime_utils import get_current_utc_datetime, parse_datetime
 from src.utils.ingestion_utils import update_ingestion_with_metadata
 
@@ -210,7 +212,7 @@ async def run_crawler(config, write=None, visited_urls=None, lock=None):
             result = {}
             for attr in config.get('attributes', []):
                 result[attr] = await element.get_attribute(attr)
-            
+
             if 'extract' in config:
                 if config['extract'] == 'text':
                     result['text'] = await element.inner_text()
@@ -357,11 +359,11 @@ async def run_all_crawlers(url_configs, write=None):
     """
     all_ingestions = []
     tasks = []
-    
+
     # Shared visited_urls set and lock
     visited_urls = set()
     lock = asyncio.Lock()
-    
+
     for config in url_configs:
         tasks.append(run_crawler(config, write, visited_urls, lock))
 

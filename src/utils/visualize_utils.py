@@ -1,7 +1,9 @@
 import io
+from typing import Dict, List
+
 from PIL import Image, ImageDraw, ImageFont
+
 from src.schemas.schemas import ExtractedFeatureType
-from typing import Dict, List, Union
 
 # Define colors for each ExtractedFeatureType
 FEATURE_COLORS = {

@@ -1,14 +1,14 @@
+import asyncio
+import hashlib
+import io
 import mimetypes
 import os
 import sys
 from pathlib import Path
-import io
-import fitz  # PyMuPDF
-import hashlib
-import asyncio
-import aioboto3
-from botocore.exceptions import ClientError
 from typing import Union
+
+import aioboto3
+import fitz  # PyMuPDF
 
 sys.path.append(str(Path(__file__).parents[3]))
 
@@ -129,7 +129,7 @@ async def ingest_s3_folder(
 ) -> list[Ingestion]:
     all_ingestions = []
     prefixes = prefix if isinstance(prefix, list) else [prefix]
-    
+
     print(f"Starting ingestion with bucket: {bucket_name}")
     print(f"Prefixes to process: {prefixes}")
     print(f"File ending filter: {ending_with}")
@@ -172,7 +172,7 @@ async def ingest_s3_folder(
                         continue
 
                     print(f"Found {len(page['Contents'])} objects in current page")
-                    
+
                     for obj in page["Contents"]:
                         key = obj["Key"]
                         # Skip if it's just a folder marker or doesn't match ending

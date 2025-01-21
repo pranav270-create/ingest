@@ -8,17 +8,16 @@ import numpy as np
 import pandas as pd
 from openai import AsyncOpenAI
 from qdrant_client import AsyncQdrantClient
-from tqdm import tqdm
 from sqlalchemy.ext.asyncio import AsyncSession
+from tqdm import tqdm
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.llm_utils.utils import Provider
 from src.retrieval.retrieve_new import hybrid_retrieval
 from src.schemas.schemas import EmbeddedFeatureType
-from src.upsert.qdrant_utils import async_get_qdrant_client
 from src.sql_db.database import get_async_session
-from src.sql_db.etl_model import Entry
+from src.upsert.qdrant_utils import async_get_qdrant_client
 
 
 async def evaluate_batch(
