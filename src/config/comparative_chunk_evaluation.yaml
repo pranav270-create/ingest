@@ -1,5 +1,5 @@
 # Pipeline comparison settings
-pipeline_comparison:
+pipeline_evaluation:
   evaluation_mode: "comparative"
   evaluation_type: "VLM"
   pipeline_ids:
@@ -7,7 +7,7 @@ pipeline_comparison:
       name: "baseline"
       extraction: "SIMPLE"
       chunking: "SLIDING_WINDOW"
-    - id: 50
+    - id: 51
       name: "experimental"
       extraction: "MARKER"
       chunking: "SLIDING_WINDOW"

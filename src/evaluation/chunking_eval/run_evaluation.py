@@ -131,7 +131,7 @@ async def run_individual_evaluation(config: dict) -> List[Dict]:
 
 async def run_comparative_evaluation(config: dict):
     """Run comparative evaluation between pipelines."""
-    pipeline_config = config.get("pipeline_comparison", {})
+    pipeline_config = config.get("pipeline_evaluation", {})
     pipeline_configs = pipeline_config.get("pipeline_ids", [])
     evaluation_type = pipeline_config.get("evaluation_type", "LLM")
     elo_system = ELOSystem()
@@ -145,7 +145,7 @@ async def run_comparative_evaluation(config: dict):
             print(f"\nComparing Pipeline {pipeline_a['id']} vs Pipeline {pipeline_b['id']}")
 
             # Get chunks from both pipelines
-            comparisons = await compare_pipeline_chunks(str(pipeline_a["id"]), str(pipeline_b["id"]), filter_params=config.get("pipeline_comparison", {}).get("filter_params", {}))
+            comparisons = await compare_pipeline_chunks(str(pipeline_a["id"]), str(pipeline_b["id"]), filter_params=config.get("pipeline_evaluation", {}).get("filter_params", {}))
             # Flatten the dictionary of lists into a [ChunkComparison]
             comparisons_list = [comp for comps in comparisons.values() for comp in comps]
 
