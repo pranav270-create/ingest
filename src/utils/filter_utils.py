@@ -1,11 +1,12 @@
-from typing import Any, List, Tuple, TypeVar
+from typing import Any, Tuple, TypeVar
+from pydantic import BaseModel
 
 from src.schemas.schemas import EmbeddedFeatureType, ExtractedFeatureType
 
 T = TypeVar('T')
 
 
-def filter_basemodels(basemodels: List[T], filter_params: dict[str, Any]) -> Tuple[List[T], List[T]]:
+def filter_basemodels(basemodels: list[BaseModel], filter_params: dict[str, Any]) -> Tuple[list[BaseModel], list[BaseModel]]:
     """
     Filter basemodels based on provided field conditions.
     Returns tuple of (filtered_models, unfiltered_models)
@@ -22,6 +23,7 @@ def filter_basemodels(basemodels: List[T], filter_params: dict[str, Any]) -> Tup
         'embedded_feature_type': EmbeddedFeatureType,
     }
 
+    print(f"Filtering basemodels with params: {filter_params}")
     # Preprocess filter_params to convert string values to enums where needed
     processed_params = {}
     for key, value in filter_params.items():

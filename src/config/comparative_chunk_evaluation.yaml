@@ -1,6 +1,6 @@
 # Pipeline comparison settings
 pipeline_comparison:
-  enabled: true
+  evaluation_mode: "comparative"
   evaluation_type: "VLM"
   pipeline_ids:
     - id: 50

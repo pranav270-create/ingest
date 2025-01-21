@@ -61,6 +61,7 @@ async def featurize(
         if not models_to_process:
             return basemodels  # Return original list if no models match filter
     print(f"Number of models to process after filtering: {len(models_to_process)}")
+
     prompt = PromptRegistry.get(prompt_name)
 
     if prompt.has_data_model():

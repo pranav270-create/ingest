@@ -1,9 +1,7 @@
-import asyncio
 from pathlib import Path
 import numpy as np
 
-from src.evaluation.experimental.chunking_evaluation import ExtractionMethod
-from src.schemas.schemas import ChunkingMethod, Entry
+from src.schemas.schemas import Entry
 
 """
 Utility functions and helper classes for chunk evaluation.
@@ -47,7 +45,7 @@ def calculate_chunk_comparison_score(comp_a: int, comp_b: int) -> float:
         return comp_a / total
 
 
-def get_chunk_metrics(chunks: list) -> dict:
+def get_chunk_metrics(chunks: list[Entry]) -> dict:
     """Calculate metrics for a chunk set."""
     if not chunks:
         return {"count": 0, "avg_length": 0}
@@ -58,4 +56,3 @@ def get_chunk_metrics(chunks: list) -> dict:
         "avg_length": np.mean(lengths),
         "std_length": np.std(lengths),
     }
-

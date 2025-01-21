@@ -18,10 +18,10 @@ from typing import Dict, List
 from sentence_transformers import SentenceTransformer
 import umap
 from scipy.spatial import ConvexHull
-
-sys.path.append(str(Path(__file__).resolve().parents[2]))
-
 import yaml
+from pydantic import BaseModel
+
+sys.path.append(str(Path(__file__).resolve().parents[3]))
 
 from src.evaluation.chunking_eval.chunk_retrieval import compare_pipeline_chunks, get_single_pipeline_entries
 from src.evaluation.chunking_eval.elo_system import run_elo_analysis
@@ -30,15 +30,17 @@ from src.featurization.get_features import featurize
 from src.evaluation.chunking_eval.evaluation_utils import can_use_vlm
 from src.evaluation.chunking_eval.elo_system import ELOSystem
 from src.pipeline.storage_backend import StorageFactory
+from src.pipeline.registry.prompt_registry import PromptRegistry
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PromptRegistry.autodiscover("src.prompts.evaluation_prompts")
 
 
-async def run_evaluation_pipeline(config_path: str, eval_type: str = "comparative"):
+async def run_evaluation_pipeline(config_path: str):
     """Run evaluation pipeline based on config file."""
     # Resolve config path relative to project root
-    config_path = PROJECT_ROOT / "src" / "config" / config_path
+    config_path = PROJECT_ROOT / "src" / "config" / f"{config_path}.yaml"
 
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
@@ -46,15 +48,15 @@ async def run_evaluation_pipeline(config_path: str, eval_type: str = "comparativ
     with open(config_path) as f:
         config = yaml.safe_load(f)
 
-    if eval_type == "comparative":
+    if config.get("pipeline_evaluation", {}).get("evaluation_mode") == "comparative":
         results = await run_comparative_evaluation(config)
-    else:  # individual
+    elif config.get("pipeline_evaluation", {}).get("evaluation_mode") == "individual":
         results = await run_individual_evaluation(config)
+    else:
+        raise ValueError(f"Invalid evaluation mode: {config.get('pipeline_evaluation', {}).get('evaluation_mode')}")
 
-    # Save results if enabled
-    output_config = config.get("output", {})
-    if output_config.get("save_results"):
-        save_evaluation_results(results, output_config)
+    if config.get("output", {}).get("save_results"):
+        save_evaluation_results(results, config.get("output", {}))
 
 
 def calculate_chunk_metrics(chunks: list[Entry]) -> dict[str, float]:
@@ -101,28 +103,20 @@ def calculate_chunk_metrics(chunks: list[Entry]) -> dict[str, float]:
     return metrics
 
 
-
 async def run_individual_evaluation(config: dict) -> List[Dict]:
     """Run individual chunk quality evaluation."""
     pipeline_config = config.get("pipeline_evaluation", {})
-    if not pipeline_config.get("enabled"):
-        print("Pipeline evaluation not enabled in config")
-        return []
-
     pipeline_id = pipeline_config.get("pipeline_id")
     # Get entries from pipeline
-    entries = await get_single_pipeline_entries(str(pipeline_id))
+    entries = await get_single_pipeline_entries(str(pipeline_id), filter_params=config.get("pipeline_evaluation", {}).get("filter_params", {}))
     # Cast Entry to ChunkEvaluation type
-    chunk_evaluations = [ChunkEvaluation(**entry) for entry in entries]
+    chunk_evaluations = [ChunkEvaluation.model_validate(entry.model_dump()) for entry in entries]
     # Featurize chunks
     print(f"\nEvaluating {len(chunk_evaluations)} chunks from pipeline {pipeline_id}")
     results = await featurize(chunk_evaluations, "LLM_chunk_rubric", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}))
 
     # Print summary statistics
     if results:
-        # Populate the score field for each result
-        for r in results:
-            r.score = r.text_clarity + r.coherence + r.organization
         print("\nEvaluation Summary:")
         avg_clarity = sum(r.text_clarity for r in results) / len(results)
         avg_coherence = sum(r.coherence for r in results) / len(results)
@@ -138,10 +132,6 @@ async def run_individual_evaluation(config: dict) -> List[Dict]:
 async def run_comparative_evaluation(config: dict):
     """Run comparative evaluation between pipelines."""
     pipeline_config = config.get("pipeline_comparison", {})
-    if not pipeline_config.get("enabled"):
-        print("Pipeline comparison not enabled in config")
-        return []
-
     pipeline_configs = pipeline_config.get("pipeline_ids", [])
     evaluation_type = pipeline_config.get("evaluation_type", "LLM")
     elo_system = ELOSystem()
@@ -155,7 +145,7 @@ async def run_comparative_evaluation(config: dict):
             print(f"\nComparing Pipeline {pipeline_a['id']} vs Pipeline {pipeline_b['id']}")
 
             # Get chunks from both pipelines
-            comparisons = await compare_pipeline_chunks(str(pipeline_a["id"]), str(pipeline_b["id"]))
+            comparisons = await compare_pipeline_chunks(str(pipeline_a["id"]), str(pipeline_b["id"]), filter_params=config.get("pipeline_comparison", {}).get("filter_params", {}))
             # Flatten the dictionary of lists into a [ChunkComparison]
             comparisons_list = [comp for comps in comparisons.values() for comp in comps]
 
@@ -188,7 +178,7 @@ async def run_comparative_evaluation(config: dict):
     return all_results
 
 
-def save_evaluation_results(results: List[Dict], output_config: dict):
+def save_evaluation_results(results: list[BaseModel], output_config: dict):
     """Save evaluation results to file."""
     output_dir = Path(output_config.get("output_dir", "evaluation_results"))
     output_dir.mkdir(exist_ok=True)
@@ -197,13 +187,12 @@ def save_evaluation_results(results: List[Dict], output_config: dict):
     output_file = output_dir / f"evaluation_results_{timestamp}.json"
 
     with open(output_file, "w") as f:
-        json.dump(results, f, indent=2)
+        for result in results:
+            json.dump(result.model_dump(mode="json"), f, indent=2)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to evaluation config file")
-    parser.add_argument("--eval_type", choices=["comparative", "individual"], default="comparative", help="Type of evaluation to run")
     args = parser.parse_args()
-
-    asyncio.run(run_evaluation_pipeline(args.config, args.eval_type))
+    asyncio.run(run_evaluation_pipeline(args.config))

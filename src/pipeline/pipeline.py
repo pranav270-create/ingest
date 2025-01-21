@@ -25,6 +25,7 @@ class PipelineOrchestrator:
         FunctionRegistry.autodiscover("src.upsert")
 
         PromptRegistry.autodiscover("src.prompts")
+        PromptRegistry.autodiscover("src.prompts.evaluation_prompts")
         SchemaRegistry.autodiscover("src.schemas")
 
         with open(config_path) as f:

@@ -10,6 +10,24 @@ chat_model_list = [
             "rpm": 10000,
             "tpm": 10000000,
         },
+    },
+    {
+        "model_name": "gpt-4o",
+        "litellm_params": {
+            "model": "openai/gpt-4o",
+            "api_key": os.getenv("OPENAI_API_KEY"),
+            "rpm": 10000,
+            "tpm": 10000000,
+        },
+    },
+    {
+        "model_name": "claude-3-5-sonnet-20241022",
+        "litellm_params": {
+            "model": "anthropic/claude-3-5-sonnet-20241022",
+            "api_key": os.getenv("ANTHROPIC_API_KEY"),
+            "rpm": 4000,
+            "tpm": 40000,
+        },
     }
 ]
 

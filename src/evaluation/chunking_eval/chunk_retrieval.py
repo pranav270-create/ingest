@@ -14,6 +14,7 @@ sys.path.append(str(Path(__file__).parents[2]))
 from src.schemas.schemas import Entry, Ingestion, ChunkComparison
 from src.sql_db.database import get_async_db_session
 from src.sql_db.etl_model import Entry as DBEntry
+from src.utils.filter_utils import filter_basemodels
 
 
 async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[Entry]:
@@ -112,11 +113,13 @@ def find_overlapping_chunks(entries_a: list[Entry], entries_b: list[Entry]) -> l
     return comparisons
 
 
-async def compare_pipeline_chunks(pipeline_a: str, pipeline_b: str) -> Dict[str, list[ChunkComparison]]:
+async def compare_pipeline_chunks(pipeline_a: str, pipeline_b: str, filter_params: dict) -> Dict[str, list[ChunkComparison]]:
     """Compare chunks between two pipelines."""
     async for session in get_async_db_session():
         entries_a = await get_pipeline_entries(session, pipeline_a)
+        entries_a, _ = filter_basemodels(entries_a, filter_params)
         entries_b = await get_pipeline_entries(session, pipeline_b)
+        entries_b, _ = filter_basemodels(entries_b, filter_params)
 
         docs_a = group_entries_by_document(entries_a)
         docs_b = group_entries_by_document(entries_b)
@@ -128,7 +131,7 @@ async def compare_pipeline_chunks(pipeline_a: str, pipeline_b: str) -> Dict[str,
         return comparisons
 
 
-async def get_single_pipeline_entries(pipeline_id: str) -> list[Entry]:
+async def get_single_pipeline_entries(pipeline_id: str, filter_params: dict) -> list[Entry]:
     """Get entries from a single pipeline."""
     async for session in get_async_db_session():
         pipeline_id = int(pipeline_id)
@@ -168,7 +171,9 @@ async def get_single_pipeline_entries(pipeline_id: str) -> list[Entry]:
                 print(f"Error creating entry: {e}")
                 continue
 
-        return entries
+        filtered_entries, unfiltered_entries = filter_basemodels(entries, filter_params)
+        print(f"Filtered {len(filtered_entries)} entries from pipeline {pipeline_id}")
+        return filtered_entries
 
 
 async def inspect_pipeline_chunks(pipeline_id: str):

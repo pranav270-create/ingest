@@ -1,9 +1,10 @@
 from pydantic import BaseModel, Field
+import json
 
 from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.prompts.base_prompt import BasePrompt
-from src.schemas.schemas import Entry
+from src.schemas.schemas import Entry, ChunkEvaluation
 
 
 @PromptRegistry.register("LLM_chunk_rubric")
@@ -34,21 +35,25 @@ class ChunkRubricPrompt(BasePrompt[Entry]):
         explanation: str = Field(..., description="Brief explanation of ratings")
 
     @classmethod
-    async def format_prompt(cls, entry: Entry, read=None) -> list[dict[str, str]]:
+    async def format_prompt(cls, entry: ChunkEvaluation, read=None) -> list[dict[str, str]]:
         """Format the prompt as a list of message dictionaries."""
         return [{"role": "system", "content": cls.system_prompt}, {"role": "user", "content": cls.user_prompt.format(chunk=entry.string)}]
 
     @staticmethod
-    def parse_response(entry: Entry, response) -> Entry:
+    def parse_response(entry: ChunkEvaluation, response) -> ChunkEvaluation:
         text, _ = text_cost_parser(response)
         try:
             scores = ChunkRubricPrompt.DataModel.model_validate_json(text)
-            entry.evaluation_scores = {
-                "text_clarity": scores.text_clarity,
-                "coherence": scores.coherence,
-                "organization": scores.organization,
-                "explanation": scores.explanation,
-            }
+            entry.text_clarity = scores.text_clarity
+            entry.coherence = scores.coherence
+            entry.organization = scores.organization
+            entry.explanation = scores.explanation
+            entry.score = scores.text_clarity + scores.coherence + scores.organization
         except Exception as e:
-            entry.evaluation_scores = {"text_clarity": 0, "coherence": 0, "organization": 0, "error": f"Failed to parse response: {e}"}
+            print(f"Failed to parse response: {e}")
+            entry.text_clarity = 0
+            entry.coherence = 0
+            entry.organization = 0
+            entry.explanation = f"Failed to parse response: {e}"
+            entry.score = 0
         return entry

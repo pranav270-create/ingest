@@ -1,9 +1,11 @@
 # Individual pipeline evaluation settings
 pipeline_evaluation:
-  enabled: true
+  evaluation_mode: "individual"
   evaluation_type: "LLM"
   pipeline_id: 21  # Single pipeline to evaluate
-  model_name: "gpt-4o"
+  filter_params:
+    consolidated_feature_type: ["combined_text"]
+  model_name: "gpt-4o-mini"
   model_params:
     temperature: 0.0
     max_tokens: 1000
