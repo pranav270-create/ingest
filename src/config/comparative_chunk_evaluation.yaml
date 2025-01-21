@@ -7,10 +7,12 @@ pipeline_evaluation:
       name: "baseline"
       extraction: "SIMPLE"
       chunking: "SLIDING_WINDOW"
-    - id: 51
+    - id: 50
       name: "experimental"
       extraction: "MARKER"
       chunking: "SLIDING_WINDOW"
+  filter_params:
+    consolidated_feature_type: ["text", "combined_text"]
   model_name: "gpt-4o"
   model_params:
     temperature: 0.0

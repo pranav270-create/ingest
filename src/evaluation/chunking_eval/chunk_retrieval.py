@@ -56,10 +56,6 @@ async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[
                 ingestion=ingest,  # Use ingestion instead of ingest
             )
             entries.append(entry)
-
-            # Debug verification
-            print(f"Created entry {entry.uuid} with ingestion: {entry.ingestion is not None}")
-
         except Exception as e:
             print(f"Error creating entry: {e}")
             continue
