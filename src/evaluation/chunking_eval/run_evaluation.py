@@ -149,17 +149,11 @@ async def run_comparative_evaluation(config: dict):
             # Flatten the dictionary of lists into a [ChunkComparison]
             comparisons_list = [comp for comps in comparisons.values() for comp in comps]
 
-            if evaluation_type == "VLM":
-                # Use VLM evaluation if specified and possible
-                can_use_vlm_eval = all([can_use_vlm(comp.pipeline_a_chunks, comp.pipeline_b_chunks) for comp in comparisons_list])
-                if can_use_vlm_eval:
-                    try:
-                        all_results = await featurize(comparisons_list, "VLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}), read=storage_client.read)
-                    except Exception as e:
-                        print(f"\nVLM evaluation failed with error: {e}")
-                        all_results = await featurize(comparisons_list, "LLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}))
-                else:
-                    all_results = await featurize(comparisons_list, "LLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}))
+            actual_evaluation_type = "VLM" if evaluation_type == "VLM" and all([can_use_vlm(comp.chunks_a, comp.chunks_b) for comp in comparisons_list]) else "LLM"
+            if actual_evaluation_type == "VLM":
+                all_results = await featurize(comparisons_list, "VLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}), read=storage_client.read)
+            else:
+                all_results = await featurize(comparisons_list, "LLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}))
 
             for result in all_results:
                 pipeline_a = result.chunks_a[0].pipeline_id

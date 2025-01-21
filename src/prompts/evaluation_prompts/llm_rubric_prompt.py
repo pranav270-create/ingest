@@ -1,14 +1,13 @@
 from pydantic import BaseModel, Field
-import json
-
+from litellm import ModelResponse
 from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.prompts.base_prompt import BasePrompt
-from src.schemas.schemas import Entry, ChunkEvaluation
+from src.schemas.schemas import ChunkEvaluation
 
 
 @PromptRegistry.register("LLM_chunk_rubric")
-class ChunkRubricPrompt(BasePrompt[Entry]):
+class ChunkRubricPrompt(BasePrompt):
     """Prompt for evaluating individual chunk quality."""
 
     system_prompt = """
@@ -40,7 +39,7 @@ class ChunkRubricPrompt(BasePrompt[Entry]):
         return [{"role": "system", "content": cls.system_prompt}, {"role": "user", "content": cls.user_prompt.format(chunk=entry.string)}]
 
     @staticmethod
-    def parse_response(entry: ChunkEvaluation, response) -> ChunkEvaluation:
+    def parse_response(entry: ChunkEvaluation, response: ModelResponse) -> ChunkEvaluation:
         text, _ = text_cost_parser(response)
         try:
             scores = ChunkRubricPrompt.DataModel.model_validate_json(text)

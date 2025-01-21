@@ -1,17 +1,18 @@
 import sys
 from pathlib import Path
-
+from litellm import ModelResponse
 from pydantic import BaseModel, Field, ValidationError
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.llm_utils.utils import text_cost_parser
 from src.pipeline.registry.prompt_registry import PromptRegistry
+from src.prompts.base_prompt import BasePrompt
 from src.schemas.schemas import ChunkComparison
 
 
 @PromptRegistry.register("LLM_relative_evaluation")
-class LLMRelativeEvaluationPrompt:
+class LLMRelativeEvaluationPrompt(BasePrompt):
     system_prompt = (
         "You are an assistant specialized in RAG tasks."
         "The task is the following: given two chunkings of the same page, you will have to"
@@ -39,18 +40,16 @@ class LLMRelativeEvaluationPrompt:
         chunks_a_str = "\n".join([chunk.string for chunk in chunks_a])
         chunks_b = base_model.chunks_b
         chunks_b_str = "\n".join([chunk.string for chunk in chunks_b])
-        return cls.system_prompt, cls.user_prompt.format(chunks_a=chunks_a_str, chunks_b=chunks_b_str)
+        return [{"role": "system", "content": cls.system_prompt}, {"role": "user", "content": cls.user_prompt.format(chunks_a=chunks_a_str, chunks_b=chunks_b_str)}]
 
     @classmethod
-    def parse_response(cls, base_models: list[ChunkComparison], parsed_items: dict[str, ChunkComparison]) -> list[ChunkComparison]:
-        for i, base_model in enumerate(base_models):
-            model_response, cost = text_cost_parser(parsed_items.get(i))
-            print(model_response)
-            try:
-                model_response = cls.DataModel.model_validate_json(model_response)
-            except ValidationError as e:
-                print(f"Error validating model response: {e}")
-                raise e
-            base_model.winner = model_response.winner
-            base_model.reasoning = model_response.reasoning
-        return base_models
+    def parse_response(entry: ChunkComparison, response: ModelResponse) -> ChunkComparison:
+        text, _ = text_cost_parser(response)
+        try:
+            model_response = LLMRelativeEvaluationPrompt.DataModel.model_validate_json(text)
+            entry.winner = model_response.winner
+            entry.reasoning = model_response.reasoning
+        except Exception as e:
+            entry.winner = ""
+            entry.reasoning = f"Failed to parse response: {e}"
+        return entry

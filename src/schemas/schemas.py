@@ -534,7 +534,7 @@ class Embedding(Entry):
 class ChunkComparison(BaseModel):
     schema__: str = Field(default="ChunkComparison", alias="schema__")
     document_title: str
-    page_range: tuple[int, int]
+    page_range: tuple[Optional[int], Optional[int]]
     chunks_a: list[Entry]
     chunks_b: list[Entry]
     winner: Optional[str] = None

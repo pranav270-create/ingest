@@ -1,7 +1,5 @@
 import base64
-import json
 from typing import Any
-
 from litellm import ModelResponse
 from pydantic import BaseModel, Field
 
@@ -61,8 +59,7 @@ class VLMELOPrompt(BasePrompt):
     def parse_response(vlm_evaluation: ChunkEvaluation, response: ModelResponse) -> ChunkEvaluation:
         # extract vlm evaluation data
         text, _ = text_cost_parser(response)
-        winner = json.loads(text).get("winner", "")
-        reasoning = json.loads(text).get("reasoning", "")
-        vlm_evaluation.winner = winner
-        vlm_evaluation.reasoning = reasoning
+        scores = VLMELOPrompt.DataModel.model_validate_json(text)
+        vlm_evaluation.winner = scores.winner
+        vlm_evaluation.reasoning = scores.reasoning
         return vlm_evaluation
