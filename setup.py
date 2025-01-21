@@ -66,6 +66,7 @@ setup(
             "pytest",
             "pytest-asyncio",
             "black",
+            "ruff",
             "isort",
             "mypy",
             "mkdocs",
