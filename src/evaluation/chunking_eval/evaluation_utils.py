@@ -15,18 +15,13 @@ Contains shared functionality used across different evaluation methods:
 def can_use_vlm(chunks_a: list[Entry], chunks_b: list[Entry]) -> bool:
     """Check if VLM evaluation is possible for these chunks."""
     # Check if chunks have locations
-    has_locations_a = all(hasattr(chunk, "chunk_locations") and chunk.chunk_locations for chunk in chunks_a)
-    has_locations_b = all(hasattr(chunk, "chunk_locations") and chunk.chunk_locations for chunk in chunks_b)
+    has_locations_a = all(chunk.chunk_locations for chunk in chunks_a)
+    has_locations_b = all(chunk.chunk_locations for chunk in chunks_b)
 
     if not (has_locations_a and has_locations_b):
         return False
 
-    # Check if all referenced pages exist
-    page_paths_a = [loc.page_file_path for chunk in chunks_a for loc in chunk.chunk_locations]
-    page_paths_b = [loc.page_file_path for chunk in chunks_b for loc in chunk.chunk_locations]
-
-    all_paths = set(page_paths_a + page_paths_b)
-    return all(Path(path).exists() for path in all_paths)
+    return True
 
 
 def calculate_chunk_comparison_score(comp_a: int, comp_b: int) -> float:

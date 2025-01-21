@@ -150,6 +150,7 @@ async def run_comparative_evaluation(config: dict):
             comparisons_list = [comp for comps in comparisons.values() for comp in comps]
 
             actual_evaluation_type = "VLM" if evaluation_type == "VLM" and all([can_use_vlm(comp.chunks_a, comp.chunks_b) for comp in comparisons_list]) else "LLM"
+            print(f"Actual evaluation type: {actual_evaluation_type}")
             if actual_evaluation_type == "VLM":
                 all_results = await featurize(comparisons_list, "VLM_relative_evaluation", config.get("model_name", "gpt-4o"), model_params=config.get("model_params", {}), read=storage_client.read)
             else:

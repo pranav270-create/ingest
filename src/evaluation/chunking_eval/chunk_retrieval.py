@@ -11,10 +11,32 @@ from sqlalchemy.orm import selectinload
 
 sys.path.append(str(Path(__file__).parents[2]))
 
-from src.schemas.schemas import Entry, Ingestion, ChunkComparison
+from src.schemas.schemas import Entry, Ingestion, ChunkComparison, ChunkLocation, BoundingBox, ExtractedFeatureType, Index
 from src.sql_db.database import get_async_db_session
 from src.sql_db.etl_model import Entry as DBEntry
 from src.utils.filter_utils import filter_basemodels
+
+
+def parse_chunk_locations(chunk_locations: str) -> list[ChunkLocation]:
+    """Parse chunk_locations from a string to a list of ChunkLocation objects."""
+    if isinstance(chunk_locations, str):
+        import json
+        locations_data = json.loads(chunk_locations)
+    else:
+        locations_data = chunk_locations
+
+    if not locations_data:
+        return []
+
+    chunks = []
+    for location in locations_data:
+        index = Index(**location["index"])
+        bounding_box = BoundingBox(**location["bounding_box"])
+        extracted_feature_type = ExtractedFeatureType(location["extracted_feature_type"])
+        page_file_path = location["page_file_path"]
+        extracted_file_path = location["extracted_file_path"]
+        chunks.append(ChunkLocation(index=index, bounding_box=bounding_box, extracted_feature_type=extracted_feature_type, page_file_path=page_file_path, extracted_file_path=extracted_file_path))
+    return chunks
 
 
 async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[Entry]:
@@ -45,16 +67,17 @@ async def get_pipeline_entries(session: AsyncSession, pipeline_id: str) -> list[
                 ingestion_date=db_entry.ingest.ingestion_date.isoformat() if db_entry.ingest.ingestion_date else None,
                 scope=db_entry.ingest.scope,
             )
-
+            chunk_locations = parse_chunk_locations(db_entry.chunk_locations)
             # Then create the Entry with the Ingestion object
             entry = Entry(
                 uuid=db_entry.uuid,
                 string=db_entry.string,
+                chunk_locations=chunk_locations,
                 consolidated_feature_type=db_entry.consolidated_feature_type,
-                pipeline_id=db_entry.pipeline_id,
                 min_primary_index=db_entry.min_primary_index,
                 max_primary_index=db_entry.max_primary_index,
-                ingestion=ingest,  # Use ingestion instead of ingest
+                chunk_index=db_entry.chunk_index,
+                ingestion=ingest,
             )
             entries.append(entry)
         except Exception as e:
@@ -152,14 +175,16 @@ async def get_single_pipeline_entries(pipeline_id: str, filter_params: dict) -> 
                     scope=db_entry.ingest.scope,
                 )
 
+                chunk_locations = parse_chunk_locations(db_entry.chunk_locations)
                 # Then create the Entry with the Ingestion object
                 entry = Entry(
                     uuid=db_entry.uuid,
                     string=db_entry.string,
+                    chunk_locations=chunk_locations,
                     consolidated_feature_type=db_entry.consolidated_feature_type,
-                    pipeline_id=db_entry.pipeline_id,
                     min_primary_index=db_entry.min_primary_index,
                     max_primary_index=db_entry.max_primary_index,
+                    chunk_index=db_entry.chunk_index,
                     ingestion=ingest,
                 )
                 entries.append(entry)
@@ -169,7 +194,6 @@ async def get_single_pipeline_entries(pipeline_id: str, filter_params: dict) -> 
                 continue
 
         filtered_entries, unfiltered_entries = filter_basemodels(entries, filter_params)
-        print(f"Filtered {len(filtered_entries)} entries from pipeline {pipeline_id}")
         return filtered_entries
 
 

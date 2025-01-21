@@ -1,7 +1,7 @@
 # Pipeline comparison settings
 pipeline_evaluation:
   evaluation_mode: "comparative"
-  evaluation_type: "LLM"
+  evaluation_type: "VLM"
   pipeline_ids:
     - id: 50
       name: "baseline"
@@ -12,7 +12,7 @@ pipeline_evaluation:
       extraction: "MARKER"
       chunking: "SLIDING_WINDOW"
   filter_params:
-    consolidated_feature_type: ["text", "combined_text"]
+    consolidated_feature_type: ["combined_text"]
   model_name: "gpt-4o-mini"
   model_params:
     temperature: 0.0
