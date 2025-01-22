@@ -28,6 +28,24 @@ chat_model_list = [
             "rpm": 4000,
             "tpm": 40000,
         },
+    },
+    {
+        "model_name": "deepseek-chat",
+        "litellm_params": {
+            "model": "deepseek/deepseek-chat",
+            "api_key": os.getenv("DEEPSEEK_API_KEY"),
+            "rpm": 10000,
+            "tpm": 10000000,
+        },
+    },
+    {
+        "model_name": "deepseek-reasoner",
+        "litellm_params": {
+            "model": "deepseek/deepseek-reasoner",
+            "api_key": os.getenv("DEEPSEEK_API_KEY"),
+            "rpm": 10000,
+            "tpm": 10000000,
+        },
     }
 ]
 

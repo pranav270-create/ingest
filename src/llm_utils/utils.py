@@ -10,7 +10,7 @@ from litellm import completion_cost
 
 class Provider(str, Enum):
     OPENAI = "openai"
-    VERTEXAI = "vertex_ai" # vertexai for instructor, vertex_ai for litellm
+    VERTEXAI = "vertex_ai"  # vertexai for instructor, vertex_ai for litellm
     ANTHROPIC = "anthropic"
     ANYSCALE = "anyscale"
     GROQ = "groq"
@@ -62,6 +62,9 @@ model_mapping: dict[str, ModelSpec] = {
     "text-embedding-3-small": ModelSpec(Provider.OPENAI, 8192, EmbedUsage(0.02 * 1e-6), RateLimit(5000, 5000000)),  # dim 1536
     "text-embedding-3-large": ModelSpec(Provider.OPENAI, 8192, EmbedUsage(0.13 * 1e-6), RateLimit(5000, 5000000)),  # dim 3072
     "text-embedding-ada-002": ModelSpec(Provider.OPENAI, 8192, EmbedUsage(0.1 * 1e-6), RateLimit(5000, 5000000)),  # dim 3072
+    # deepseek
+    "deepseek-chat": ModelSpec(Provider.DEEPSEEK, 64000, ChatUsage(0.14 * 1e-6, 0.28 * 1e-6), RateLimit(1000, 1000000)),
+    "deepseek-reasoner": ModelSpec(Provider.DEEPSEEK, 64000, ChatUsage(0.55 * 1e-6, 2.19 * 1e-6), RateLimit(1000, 1000000)),
     # core gpt 4 models
     "gpt-4o": ModelSpec(
         Provider.OPENAI,

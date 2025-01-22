@@ -19,25 +19,25 @@ stages:
         input: Ingestion
         return: Entry
 
-  - name: chunk
-    functions:
-      - name: sliding_window
-        input: Ingestion
-        return: Entry
-        params:
-          chunk_size: 500
-          overlap: 50
-
-  # - name: featurize
+  # - name: chunk
   #   functions:
-  #     - name: featurize_model
-  #       input: Entry
+  #     - name: sliding_window
+  #       input: Ingestion
   #       return: Entry
   #       params:
-  #         prompt_name: "describe_image"
-  #         model_name: "gpt-4o-mini"
-  #         filter_params:
-  #           consolidated_feature_type: ["figure", "picture", "table", "complexregion"]
+  #         chunk_size: 500
+  #         overlap: 50
+
+  - name: featurize
+    functions:
+      - name: featurize_model
+        input: Entry
+        return: Entry
+        params:
+          prompt_name: "describe_image"
+          model_name: "deepseek-chat"
+          filter_params:
+            consolidated_feature_type: ["figure", "picture", "table", "complexregion"]
 
   # - name: embed
   #   functions:
