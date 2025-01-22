@@ -35,7 +35,7 @@ stages:
         return: Entry
         params:
           prompt_name: "describe_image"
-          model_name: "deepseek-chat"
+          model_name: "claude-3-5-sonnet-20241022"
           filter_params:
             consolidated_feature_type: ["figure", "picture", "table", "complexregion"]
 
@@ -71,7 +71,7 @@ stages:
 
 
 pipeline:
-  description: "pranav_marker_test"
+  description: "pranav_marker_claude"
   collection_name: "test_collection_pranav"
   pipeline_id: 50
   resume_from_step: 2

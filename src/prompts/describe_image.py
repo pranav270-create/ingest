@@ -35,6 +35,12 @@ class DescribeImagePrompt(BasePrompt):
     1. A detailed description of its contents
     2. A concise caption that captures the essence of the image
 
+    Please respond in the following JSON format:
+    {
+        "description": "A detailed description of the image contents",
+        "caption": "A concise caption summarizing the image"
+    }
+
     Image to Analyze:
     """
 

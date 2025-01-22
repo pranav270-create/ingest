@@ -13,6 +13,7 @@ from src.pipeline.registry.prompt_registry import PromptRegistry
 from src.schemas.schemas import BaseModelListType, Ingestion
 from src.utils.datetime_utils import get_current_utc_datetime
 from src.utils.filter_utils import filter_basemodels
+from src.llm_utils.utils import Provider, model_mapping
 
 router = Router(
     model_list=chat_model_list,
@@ -65,7 +66,11 @@ async def featurize(
     prompt = PromptRegistry.get(prompt_name)
 
     if prompt.has_data_model():
-        model_params["response_format"] = prompt.DataModel
+        provider = model_mapping[model_name].provider
+        if provider == Provider.DEEPSEEK:
+            model_params["response_format"] = {"type": "json_object"}
+        else:
+            model_params["response_format"] = prompt.DataModel
 
     if not update_metadata:
         for base_model in models_to_process:
