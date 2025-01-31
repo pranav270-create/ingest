@@ -235,7 +235,7 @@ async def test(questions: list[str]):
     sparse_model_name = "bm25"
     qdrant_collection = "test_collection_pranav"
     feature_types = [EmbeddedFeatureType.TEXT]
-    filters = None
+    filters = [[FieldCondition(key="pipeline_id", match=MatchValue(value=50))]]
     limit = 3
     search_results, _ = await hybrid_retrieval(
         qdrant_client,

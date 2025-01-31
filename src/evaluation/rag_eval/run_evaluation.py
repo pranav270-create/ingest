@@ -75,8 +75,7 @@ async def run_rag_evaluation(config: dict) -> List[Dict]:
     sparse_model_name = "bm25"
     qdrant_collection = "test_collection_pranav"
     feature_types = [EmbeddedFeatureType.TEXT]
-    # TODO: Add filters by the pipeline id
-    filters = [FieldCondition(key="pipeline_id", match=MatchValue(value=pipeline_id))]
+    filters = [[FieldCondition(key="pipeline_id", match=MatchValue(value=pipeline_id))]]
     limit = 10
     search_results, _ = await hybrid_retrieval(
         qdrant_client,
