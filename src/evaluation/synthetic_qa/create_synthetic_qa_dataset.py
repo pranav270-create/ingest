@@ -21,7 +21,7 @@ async def get_entries(
     """Get entries from SQL database filtered by collection_name and optionally pipeline_id"""
     query = select(
         Entry.id,
-        Entry.unique_identifier,
+        Entry.uuid,
         Entry.string,
         Entry.synthetic_questions
     ).where(

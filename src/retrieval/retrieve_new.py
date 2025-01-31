@@ -13,11 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
+sys.path.append(str(Path(__file__).resolve().parents[3]))
 
 from src.llm_utils.utils import Provider
 from src.retrieval.embed_text import async_embed_text
 from src.schemas.schemas import EmbeddedFeatureType, FormattedScoredPoints, Ingestion
-from src.sql_db.database import get_async_session
 from src.sql_db.etl_model import Entry
 from src.upsert.qdrant_utils import get_bm25_model
 
@@ -76,12 +76,12 @@ async def format_scored_points(
         points_per_query.append(points)
 
     # Fetch all raw texts in a single query
-    stmt = select(Entry.unique_identifier, Entry.string, Entry.index_numbers).where(Entry.unique_identifier.in_(all_unique_ids))
-    result = session.execute(stmt)
+    stmt = select(Entry.uuid, Entry.string, Entry.chunk_locations).where(Entry.uuid.in_(all_unique_ids))
+    result = await session.execute(stmt)
     id_to_raw_text = {
-        row.unique_identifier: {
+        row.uuid: {
             "text": row.string,
-            "index_numbers": json.loads(row.index_numbers) if row.index_numbers else [],
+            "chunk_locations": json.loads(row.chunk_locations) if row.chunk_locations else [],
         }
         for row in result.fetchall()
     }
@@ -93,10 +93,10 @@ async def format_scored_points(
             raw_data = id_to_raw_text.get(point.id)
             if raw_data:
                 point.raw_text = raw_data["text"]
-                point.index = raw_data["index_numbers"]  # Update the index from SQL
+                point.chunk_locations = raw_data["chunk_locations"]  # Update the index from SQL
                 filtered_points.append(point)
                 all_points_dict[point.id].raw_text = raw_data["text"]
-                all_points_dict[point.id].index = raw_data["index_numbers"]  # Update in the dict too
+                all_points_dict[point.id].chunk_locations = raw_data["chunk_locations"]  # Update in the dict too
         if filtered_points:
             filtered_points_per_query.append(filtered_points)
 
@@ -223,10 +223,9 @@ async def search_vector_db(
 
 async def test(questions: list[str]):
     import os
-
     from openai import AsyncOpenAI
-
     from src.upsert.qdrant_utils import async_get_qdrant_client
+    from src.sql_db.database import get_async_db_session
 
     qdrant_client = await async_get_qdrant_client(timeout=1000)
     embed_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -234,7 +233,7 @@ async def test(questions: list[str]):
     provider = Provider.OPENAI
     embedding_dimensions = 512
     sparse_model_name = "bm25"
-    qdrant_collection = "bridgewater_full"
+    qdrant_collection = "test_collection_pranav"
     feature_types = [EmbeddedFeatureType.TEXT]
     filters = None
     limit = 3
@@ -251,14 +250,13 @@ async def test(questions: list[str]):
         filters,
         limit,
     )
-    for session in get_async_session():
+    async for session in get_async_db_session():
         formatted_context = await format_scored_points(session, search_results, threshold=0.4)
     return formatted_context
 
 
 if __name__ == "__main__":
     import asyncio
-
     questions = ["what is the best protein power to be taking?"]
     formatted_context = asyncio.run(test(questions))
     print(formatted_context)

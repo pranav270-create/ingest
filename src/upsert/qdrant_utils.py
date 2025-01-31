@@ -5,7 +5,7 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-from fastembed.sparse.bm25 import Bm25
+from fastembed import SparseTextEmbedding
 from qdrant_client import AsyncQdrantClient, QdrantClient, models
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http.models import UpdateStatus
@@ -173,7 +173,7 @@ def get_bm25_model(sparse_model_name: str):
     """
     Returns a Bm25 model initialized with the specified sparse model name.
     """
-    return Bm25(f"Qdrant/{sparse_model_name}")
+    return SparseTextEmbedding(model_name=f"Qdrant/{sparse_model_name}")
 
 
 def batch_update_points(

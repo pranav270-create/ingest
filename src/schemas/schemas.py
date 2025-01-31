@@ -557,7 +557,7 @@ class FormattedScoredPoints(BaseModel):
     ingestion: Optional[Ingestion] = None
     raw_text: str = ""
     score: float
-    index: Optional[Any] = None
+    chunk_locations: Optional[Any] = None
     title: str = ""
     date: str = ""
     rerank_score: Optional[float] = 0.0
