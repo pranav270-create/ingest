@@ -250,13 +250,15 @@ async def test(questions: list[str]):
         filters,
         limit,
     )
-    async for session in get_async_db_session():
-        formatted_context = await format_scored_points(session, search_results, threshold=0.4)
-    return formatted_context
+    print(search_results)
+    # async for session in get_async_db_session():
+    #     formatted_context = await format_scored_points(session, search_results, threshold=0.4)
+    # return formatted_context
+    return search_results
 
 
 if __name__ == "__main__":
     import asyncio
     questions = ["what is the best protein power to be taking?"]
     formatted_context = asyncio.run(test(questions))
-    print(formatted_context)
+    # print(formatted_context)
