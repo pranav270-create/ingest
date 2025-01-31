@@ -39,25 +39,25 @@ stages:
           filter_params:
             consolidated_feature_type: ["figure", "picture", "table", "complexregion"]
 
-  # - name: embed
-  #   functions:
-  #     - name: embed
-  #       input: Entry
-  #       return: Embedding
-  #       params:
-  #         model_name: "openai"
-  #         dimensions: 512
+  - name: embed
+    functions:
+      - name: embed
+        input: Entry
+        return: Embedding
+        params:
+          model_name: "openai"
+          dimensions: 512
 
-  # - name: upsert
-  #   functions:
-  #     - name: upsert_embeddings
-  #       input: Embedding
-  #       return: Upsert
-  #       params:
-  #         collection_name: "test_collection_pranav"
-  #         dense_model_name: "text-embedding-3-large"
-  #         sparse_model_name: "bm25"
-  #         dimensions: 512
+  - name: upsert
+    functions:
+      - name: upsert_embeddings
+        input: Embedding
+        return: Upsert
+        params:
+          collection_name: "test_collection_pranav"
+          dense_model_name: "text-embedding-3-large"
+          sparse_model_name: "bm25"
+          dimensions: 512
 
   - name: upsert
     functions:
