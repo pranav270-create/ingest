@@ -173,21 +173,128 @@ async def upload_documents(
             await upload_single_file_async(session, doc_path, bucket_name, s3_key)
             logging.info(f"Uploaded document: {s3_key}")
 
-async def download_vidore(file: str):
-    # TODO: read in file
-    pass
+async def download_vidore(s3_uri: str, temp_dir: str = "temp_vidore_download") -> tuple[pd.DataFrame, str]:
+    """
+    Download and process a ViDoRe dataset and its images from S3
+    
+    Args:
+        s3_uri: S3 URI in format 's3://bucket-name/path/to/file.parquet'
+        temp_dir: Directory to store temporary files and images
+        
+    Returns:
+        tuple[pd.DataFrame, str]: (Processed dataframe, Path to images directory)
+    """
+    # Parse S3 URI
+    bucket_name = s3_uri.split('/')[2]
+    s3_key = '/'.join(s3_uri.split('/')[3:])
+    dataset_name = s3_key.split('/')[1]  # Assumes path format: vidore/dataset_name/...
+    
+    # Create temporary directories
+    os.makedirs(temp_dir, exist_ok=True)
+    images_dir = os.path.join(temp_dir, f"{dataset_name}_images")
+    os.makedirs(images_dir, exist_ok=True)
+    
+    temp_file = os.path.join(temp_dir, f"{dataset_name}_questions.parquet")
+    
+    try:
+        # Download from S3
+        session = aioboto3.Session()
+        async with session.client(
+            "s3",
+            aws_access_key_id=os.environ.get("AWS_DATA_ACCESS_KEY"),
+            aws_secret_access_key=os.environ.get("AWS_DATA_SECRET_ACCESS_KEY"),
+            region_name=os.environ.get("S3_DATA_REGION", "us-west-1"),
+        ) as s3:
+            # Download parquet file
+            await s3.download_file(bucket_name, s3_key, temp_file)
+            
+            # Read parquet file
+            df = pd.read_parquet(temp_file)
+            
+            # Download associated images
+            image_prefix = f"vidore/{dataset_name}/images/"
+            try:
+                # List all objects with the image prefix
+                paginator = s3.get_paginator('list_objects_v2')
+                async for page in paginator.paginate(Bucket=bucket_name, Prefix=image_prefix):
+                    if 'Contents' in page:
+                        for obj in page['Contents']:
+                            image_key = obj['Key']
+                            image_filename = os.path.basename(image_key)
+                            local_image_path = os.path.join(images_dir, image_filename)
+                            
+                            # Download image
+                            await s3.download_file(
+                                bucket_name,
+                                image_key,
+                                local_image_path
+                            )
+                            logging.info(f"Downloaded image: {image_filename}")
+                
+                logging.info(f"Downloaded all images to: {images_dir}")
+                
+            except Exception as e:
+                logging.error(f"Error downloading images: {str(e)}")
+                # Continue even if image download fails
+        
+        # Ensure standard columns exist
+        required_cols = ['query', 'document_id']
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(f"Missing required columns in {dataset_name}. Found: {df.columns.tolist()}")
+        
+        logging.info(f"Downloaded and processed {dataset_name} dataset with {len(df)} rows")
+        return df, images_dir
+        
+    except Exception as e:
+        logging.error(f"Error downloading/processing file: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":
     import argparse
-
-    parser = argparse.ArgumentParser(description="Upload ViDoRe datasets to S3")
-    parser.add_argument("--temp_dir", type=str, default="temp_vidore", help="Temporary directory for processing")
-    parser.add_argument("--bucket", type=str, default="astralis-data-4170a4f6", help="Target S3 bucket")
-    parser.add_argument("--prefix", type=str, default="vidore", help="S3 prefix")
-    parser.add_argument("--max_concurrency", type=int, default=10, help="Maximum concurrent uploads")
-    parser.add_argument("--docs_base_path", type=str, required=False, help="Base path containing document directories for each dataset")
-
+    
+    parser = argparse.ArgumentParser(description='Upload or Download ViDoRe datasets to/from S3')
+    parser.add_argument('--mode', type=str, required=True, choices=['upload', 'download'],
+                       help='Mode of operation: upload datasets to S3 or download from S3')
+    
+    # Upload-specific arguments
+    parser.add_argument('--temp_dir', type=str, default="temp_vidore",
+                       help='Temporary directory for processing')
+    parser.add_argument('--bucket', type=str, default="astralis-data-4170a4f6",
+                       help='Target S3 bucket')
+    parser.add_argument('--prefix', type=str, default='vidore',
+                       help='S3 prefix')
+    parser.add_argument('--max_concurrency', type=int, default=10,
+                       help='Maximum concurrent uploads')
+    
+    # Download-specific arguments
+    parser.add_argument('--s3_uri', type=str,
+                       help='S3 URI for download (e.g., s3://bucket-name/vidore/dataset/file.parquet)')
+    parser.add_argument('--cleanup', action='store_true',
+                       help='Clean up temporary directory after processing')
+    
     args = parser.parse_args()
-
-    asyncio.run(upload_vidore_to_s3(temp_dir=args.temp_dir, bucket_name=args.bucket, prefix=args.prefix, max_concurrency=args.max_concurrency))
+    
+    if args.mode == 'upload':
+        if not any(var in os.environ for var in ['AWS_DATA_ACCESS_KEY', 'AWS_DATA_SECRET_ACCESS_KEY']):
+            raise ValueError("AWS credentials not found in environment variables")
+        
+        asyncio.run(upload_vidore_to_s3(
+            temp_dir=args.temp_dir,
+            bucket_name=args.bucket,
+            prefix=args.prefix,
+            max_concurrency=args.max_concurrency
+        ))
+        
+    else:  # download mode
+        if not args.s3_uri:
+            raise ValueError("--s3_uri is required for download mode")
+            
+        df, images_dir = asyncio.run(download_vidore(args.s3_uri, args.temp_dir))
+        print(f"Downloaded dataset shape: {df.shape}")
+        print(f"Columns: {df.columns.tolist()}")
+        print(f"Images downloaded to: {images_dir}")
+        
+        if args.cleanup:
+            shutil.rmtree(args.temp_dir)
+            print(f"Cleaned up temporary directory: {args.temp_dir}")
