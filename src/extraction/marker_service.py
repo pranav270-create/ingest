@@ -557,7 +557,11 @@ async def main_marker(
             ingestion.extracted_document_file_path = f"{base_path}_marker.json"
 
         try:
-            file_content = await read(ingestion.file_path)
+            if read:
+                file_content = await read(ingestion.file_path)
+            else:
+                with open(ingestion.file_path, "rb") as f:
+                    file_content = f.read()
             # Ensure we have bytes for PDF processing
             if not isinstance(file_content, bytes):
                 print(f"Warning: File content is not bytes, converting from {type(file_content)}")
