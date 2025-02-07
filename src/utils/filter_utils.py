@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 from src.schemas.schemas import EmbeddedFeatureType, ExtractedFeatureType
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def filter_basemodels(basemodels: list[BaseModel], filter_params: dict[str, Any]) -> Tuple[list[BaseModel], list[BaseModel]]:
@@ -19,8 +19,8 @@ def filter_basemodels(basemodels: list[BaseModel], filter_params: dict[str, Any]
     """
     # Map of field names to their enum classes
     enum_fields = {
-        'consolidated_feature_type': ExtractedFeatureType,
-        'embedded_feature_type': EmbeddedFeatureType,
+        "consolidated_feature_type": ExtractedFeatureType,
+        "embedded_feature_type": EmbeddedFeatureType,
     }
 
     print(f"Filtering basemodels with params: {filter_params}")
@@ -35,10 +35,7 @@ def filter_basemodels(basemodels: list[BaseModel], filter_params: dict[str, Any]
                 for v in value:
                     if isinstance(v, str):
                         try:
-                            matching_member = next(
-                                member for member in enum_class
-                                if member.value == v.lower()
-                            )
+                            matching_member = next(member for member in enum_class if member.value == v.lower())
                             processed_values.append(matching_member)
                         except StopIteration:
                             valid_values = [member.value for member in enum_class]
@@ -49,10 +46,7 @@ def filter_basemodels(basemodels: list[BaseModel], filter_params: dict[str, Any]
             elif isinstance(value, str):
                 # Handle single string value
                 try:
-                    matching_member = next(
-                        member for member in enum_class
-                        if member.value == value.lower()
-                    )
+                    matching_member = next(member for member in enum_class if member.value == value.lower())
                     processed_params[key] = matching_member
                 except StopIteration:
                     valid_values = [member.value for member in enum_class]

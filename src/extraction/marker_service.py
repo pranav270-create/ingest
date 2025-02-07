@@ -866,7 +866,6 @@ async def main_marker(
 if __name__ == "__main__":
     import asyncio
     import json
-
     test_ingestions = [
         # Ingestion(
         #     scope=Scope.INTERNAL,  # Required

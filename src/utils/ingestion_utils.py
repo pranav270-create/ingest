@@ -23,12 +23,12 @@ def update_ingestion_with_metadata(ingestion: Ingestion, added_metadata: Optiona
 
     # Map of field names to their enum classes
     enum_fields = {
-        'content_type': ContentType,
-        'file_type': FileType,
-        'ingestion_method': IngestionMethod,
-        'extraction_method': ExtractionMethod,
-        'scope': Scope,
-        'chunking_method': ChunkingMethod
+        "content_type": ContentType,
+        "file_type": FileType,
+        "ingestion_method": IngestionMethod,
+        "extraction_method": ExtractionMethod,
+        "scope": Scope,
+        "chunking_method": ChunkingMethod,
     }
 
     for key, value in added_metadata.items():
@@ -38,10 +38,7 @@ def update_ingestion_with_metadata(ingestion: Ingestion, added_metadata: Optiona
                 enum_class = enum_fields[key]
                 try:
                     # Find the enum member whose value matches our input string
-                    matching_member = next(
-                        member for member in enum_class
-                        if member.value == value.lower()
-                    )
+                    matching_member = next(member for member in enum_class if member.value == value.lower())
                     value = matching_member
                 except StopIteration:
                     valid_values = [member.value for member in enum_class]

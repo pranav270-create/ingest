@@ -1,0 +1,39 @@
+# Pipeline comparison settings
+pipeline_evaluation:
+  evaluation_mode: "comparative"
+  evaluation_type: "VLM"
+  pipeline_ids:
+    - id: 50
+      name: "baseline"
+      extraction: "SIMPLE"
+      chunking: "SLIDING_WINDOW"
+    - id: 50
+      name: "experimental"
+      extraction: "MARKER"
+      chunking: "SLIDING_WINDOW"
+  filter_params:
+    consolidated_feature_type: ["combined_text"]
+  model_name: "gpt-4o-mini"
+  model_params:
+    temperature: 0.0
+    max_tokens: 1000
+
+# ELO rating settings
+elo:
+  enabled: true
+  initial_rating: 1500
+  k_factor: 32
+  ratings_file: "chunking_elo_ratings.json"
+  history_file: "chunking_elo_history.csv"
+
+# Output settings
+output:
+  save_results: true
+  output_dir: "evaluation_results"
+  metrics:
+    - "quality_scores"
+    - "elo_ratings" 
+
+storage:
+  storage_type: "s3"
+  bucket_name: "astralis-data-4170a4f6"
