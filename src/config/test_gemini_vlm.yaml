@@ -1,0 +1,32 @@
+pipeline:
+  name: test_gemini_vlm
+  description: Test pipeline for Gemini VLM extraction
+  
+  storage:
+    type: local
+    config:
+      base_dir: data/test_gemini_vlm
+      
+  steps:
+    - name: extract
+      method: gemini_vlm
+      config:
+        visualize: true  # Save visualization of extracted regions
+    
+    - name: chunk  # Optional chunking step if you want to compare with other methods
+      method: by_semantic  # This will use the chunks from Gemini
+      config:
+        min_chunk_size: 250
+        max_chunk_size: 1000
+        
+  input:
+    type: local_file
+    config:
+      file_patterns: 
+        - "data/input/*.pdf"  
+        
+  output:
+    type: local
+    config:
+      save_intermediates: true  
+      output_dir: data/output 

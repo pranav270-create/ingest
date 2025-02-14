@@ -143,6 +143,7 @@ class ExtractionMethod(str, Enum):
     WHISPER = "whisper"
     BS4 = "bs4"
     GOOGLE_LABS_HTML_CHUNKER = "google_labs_html_chunker"
+    GEMINI_VLM = "gemini_vlm"
     NONE = "none"
 
 
